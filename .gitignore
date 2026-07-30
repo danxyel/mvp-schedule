@@ -1,0 +1,36 @@
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Variables de entorno (NUNCA subir a git)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Base de datos local
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# Node (frontend)
+node_modules/
+dist/
+.next/
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,32 @@
+# MVP Schedule v2.2 — dependencias Python
+# Instalar con: pip install -r requirements.txt
+
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Base de datos
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10      # driver PostgreSQL para Windows
+
+# Validación
+pydantic[email]==2.10.3
+
+# Autenticación JWT
+pyjwt==2.10.1
+
+# Timezone (Python 3.9+ incluye zoneinfo, pero este backport es más completo)
+tzdata==2024.2
+
+# Tareas programadas (para limpiar holds expirados)
+apscheduler==3.10.4
+
+# Variables de entorno
+python-dotenv==1.0.1
+
+# Generación de PDFs (recibos)
+weasyprint==62.3
+
+# Utilidades
+python-multipart==0.0.12     # para form data en FastAPI
+httpx==0.28.1                # cliente HTTP async (tests y webhooks)

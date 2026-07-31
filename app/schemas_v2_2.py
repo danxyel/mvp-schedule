@@ -168,6 +168,21 @@ class CancelarReservaIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class PagoLocalIn(BaseModel):
+    metodo: str = Field(
+        "efectivo",
+        pattern=r"^(efectivo|transferencia)$",
+        description="Método de cobro presencial del staff",
+    )
+    monto: Optional[Decimal] = Field(
+        default=None,
+        ge=0,
+        description="Monto cobrado. Si se omite se usa el precio de la reserva.",
+    )
+    referencia: Optional[str] = Field(default=None, max_length=255)
+    model_config = ConfigDict(extra="forbid")
+
+
 # ============================================================
 # SALIDA — PÚBLICA
 # ============================================================

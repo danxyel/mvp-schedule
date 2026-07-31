@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/reservas/{folio}/pago-local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar Pago Local */
+        post: operations["registrar_pago_local_api_v2__tenant_slug__admin_reservas__folio__pago_local_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/servicios": {
         parameters: {
             query?: never;
@@ -821,6 +838,22 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** PagoLocalIn */
+        PagoLocalIn: {
+            /**
+             * Metodo
+             * @description Método de cobro presencial del staff
+             * @default efectivo
+             */
+            metodo: string;
+            /**
+             * Monto
+             * @description Monto cobrado. Si se omite se usa el precio de la reserva.
+             */
+            monto?: number | string | null;
+            /** Referencia */
+            referencia?: string | null;
         };
         /** ReagendarSesionIn */
         ReagendarSesionIn: {
@@ -1878,6 +1911,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReservasAdminPaginadasOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    registrar_pago_local_api_v2__tenant_slug__admin_reservas__folio__pago_local_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folio: string;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagoLocalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
                 };
             };
             /** @description Validation Error */

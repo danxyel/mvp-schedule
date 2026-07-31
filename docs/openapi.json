@@ -759,6 +759,74 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/reservas/{folio}/pago-local": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Registrar Pago Local",
+        "operationId": "registrar_pago_local_api_v2__tenant_slug__admin_reservas__folio__pago_local_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "folio",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 32,
+              "title": "Folio"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoLocalIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/servicios": {
       "get": {
         "tags": [
@@ -2954,6 +3022,48 @@
           "offset"
         ],
         "title": "PaginacionOut"
+      },
+      "PagoLocalIn": {
+        "properties": {
+          "metodo": {
+            "type": "string",
+            "pattern": "^(efectivo|transferencia)$",
+            "title": "Metodo",
+            "description": "Método de cobro presencial del staff",
+            "default": "efectivo"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto",
+            "description": "Monto cobrado. Si se omite se usa el precio de la reserva."
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PagoLocalIn"
       },
       "ReagendarSesionIn": {
         "properties": {

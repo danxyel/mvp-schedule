@@ -20,9 +20,10 @@ from app.dependencies import (
 )
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
-    RolUsuario, EstadoSesion, EstadoReserva, ESTADOS_SESION_ACTIVA, PlanTenant,
+    RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
+    ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
-    TipoBloqueo,
+    TipoBloqueo, utcnow,
 )
 from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaCreateResponse, ReagendarSesionIn,
@@ -30,6 +31,7 @@ from app.schemas_v2_2 import (
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
+    PagoLocalIn,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -656,6 +658,70 @@ def listar_reservas_admin(
     return ReservasAdminPaginadasOut(
         items=items,
         paginacion=PaginacionOut(total=total, limit=limit, offset=offset),
+    )
+
+
+# ============================================================
+# ADMIN — REGISTRO DE PAGO LOCAL
+# ============================================================
+@router.post("/admin/reservas/{folio}/pago-local", response_model=OperacionOut)
+def registrar_pago_local(
+    payload: PagoLocalIn,
+    folio: str = Path(..., min_length=8, max_length=32),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    r = db.execute(
+        select(Reserva).where(Reserva.tenant_id == tenant.id, Reserva.folio == folio)
+    ).scalar_one_or_none()
+
+    if r is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+
+    if r.estado in (EstadoReserva.CANCELADA, EstadoReserva.NO_SHOW):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No se puede registrar un pago en una reserva cancelada",
+        )
+    if r.estado_pago == EstadoPagoReserva.COMPLETADO:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "La reserva ya tiene el pago registrado",
+        )
+    if r.estado_pago == EstadoPagoReserva.REEMBOLSADO:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "El pago de esta reserva fue reembolsado",
+        )
+
+    r.estado_pago = EstadoPagoReserva.COMPLETADO
+    r.pagado_en = utcnow()
+    r.metodo_pago_usado = MetodoPagoUsado(payload.metodo)
+    r.hold_expira_en = None
+    if payload.monto is not None:
+        r.precio_final = payload.monto
+    if r.estado == EstadoReserva.EN_ESPERA:
+        r.estado = EstadoReserva.CONFIRMADA
+
+    svc.actualizar_estado_sesion(db, r.sesion_id, tenant.id)
+
+    svc.registrar_bitacora(
+        db, tenant.id, "reserva", r.id, "pago_local",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "folio": folio,
+            "metodo": payload.metodo,
+            "monto": str(payload.monto) if payload.monto is not None else str(r.precio_final),
+            "referencia": payload.referencia,
+        },
+    )
+
+    db.commit()
+    return OperacionOut(
+        ok=True,
+        mensaje="Pago registrado",
+        detalle={"folio": folio, "metodo_pago_usado": payload.metodo},
     )
 
 

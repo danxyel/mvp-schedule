@@ -112,7 +112,8 @@ function getHoraMin(utcString, timezone) {
 }
 
 function errorMensaje(err) {
-  return err?.mensaje ?? err?.message ?? JSON.stringify(err)
+  if (err?.detail && typeof err.detail === 'string') return err.detail
+  return err?.mensaje ?? err?.detail?.mensaje ?? err?.message ?? JSON.stringify(err)
 }
 
 function Badge({ value, map, labelMap }) {
@@ -601,6 +602,11 @@ function ReservasTab({ tenantSlug, token }) {
   const [accionError, setAccionError] = useState(null)
   const [checkinFolio, setCheckinFolio] = useState(null)
   const [selectedFolio, setSelectedFolio] = useState(null)
+  const [pagoFolio, setPagoFolio] = useState(null)
+  const [pagoMetodo, setPagoMetodo] = useState('efectivo')
+  const [pagoMonto, setPagoMonto] = useState('')
+  const [pagoReferencia, setPagoReferencia] = useState('')
+  const [pagoEnviando, setPagoEnviando] = useState(false)
 
   const fetchReservas = useCallback(async () => {
     const query = {
@@ -670,6 +676,59 @@ function ReservasTab({ tenantSlug, token }) {
       return
     }
     setItems((prev) => prev.map((r) => (r.folio === folio ? { ...r, estado: 'completada' } : r)))
+  }
+
+  const abrirPago = (folio) => {
+    const reserva = items.find((r) => r.folio === folio)
+    setPagoFolio(folio)
+    setPagoMetodo('efectivo')
+    setPagoMonto('')
+    setPagoReferencia('')
+    setAccionError(null)
+    setSelectedFolio(reserva ? folio : null)
+  }
+
+  const registrarPagoLocal = async () => {
+    if (!pagoFolio) return
+    setPagoEnviando(true)
+    setAccionError(null)
+    const body = { metodo: pagoMetodo }
+    if (pagoMonto !== '') {
+      const monto = Number(pagoMonto)
+      if (!Number.isFinite(monto) || monto < 0) {
+        setAccionError({ detail: 'El monto debe ser un número mayor o igual a cero' })
+        setPagoEnviando(false)
+        return
+      }
+      body.monto = monto
+    }
+    if (pagoReferencia.trim() !== '') body.referencia = pagoReferencia.trim()
+    const { error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/admin/reservas/{folio}/pago-local',
+      {
+        params: { path: { tenant_slug: tenantSlug, folio: pagoFolio } },
+        body,
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setPagoEnviando(false)
+    if (fetchErr) {
+      setAccionError(fetchErr)
+      return
+    }
+    setItems((prev) =>
+      prev.map((r) =>
+        r.folio === pagoFolio
+          ? {
+              ...r,
+              estado_pago: 'completado',
+              estado: r.estado === 'en_espera' ? 'confirmada' : r.estado,
+              precio_final: body.monto ?? r.precio_final,
+            }
+          : r,
+      ),
+    )
+    setPagoFolio(null)
   }
 
   const timezone = items[0]?.timezone ?? 'America/Mexico_City'
@@ -896,6 +955,18 @@ function ReservasTab({ tenantSlug, token }) {
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
+                  {r.estado_pago === 'pendiente' &&
+                    r.estado !== 'cancelada' &&
+                    r.estado !== 'no_show' && (
+                      <button
+                        type="button"
+                        onClick={() => abrirPago(r.folio)}
+                        disabled={pagoFolio !== null}
+                        className="mr-2 rounded-lg border border-green-600 px-2.5 py-1 text-xs font-medium text-green-700 transition hover:bg-green-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Registrar pago
+                      </button>
+                    )}
                   {r.estado === 'confirmada' && (
                     <button
                       type="button"
@@ -946,6 +1017,83 @@ function ReservasTab({ tenantSlug, token }) {
           >
             Siguiente &rarr;
           </button>
+        </div>
+      )}
+
+      {pagoFolio && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="mb-3 text-base font-semibold text-gray-900">Registrar pago local</h3>
+            <p className="mb-4 font-mono text-xs text-gray-500">{pagoFolio}</p>
+
+            <label className="mb-1 block text-xs font-medium text-gray-600">Método de cobro</label>
+            <div className="mb-3 flex gap-2">
+              {['efectivo', 'transferencia'].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPagoMetodo(m)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                    pagoMetodo === m
+                      ? 'border-green-600 bg-green-600 text-white'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {m === 'efectivo' ? 'Efectivo' : 'Transferencia'}
+                </button>
+              ))}
+            </div>
+
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Monto (opcional, usa el precio de la reserva si se omite)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={pagoMonto}
+              onChange={(e) => setPagoMonto(e.target.value)}
+              placeholder="Ej. 1500.00"
+              className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-green-500"
+            />
+
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Referencia (opcional)
+            </label>
+            <input
+              type="text"
+              value={pagoReferencia}
+              onChange={(e) => setPagoReferencia(e.target.value)}
+              placeholder="Ej. Ticket #123, SPEI folio"
+              maxLength={255}
+              className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-green-500"
+            />
+
+            {accionError && (
+              <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {errorMensaje(accionError)}
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPagoFolio(null)}
+                disabled={pagoEnviando}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={registrarPagoLocal}
+                disabled={pagoEnviando}
+                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {pagoEnviando ? 'Registrando...' : 'Confirmar pago'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

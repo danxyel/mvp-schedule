@@ -18,7 +18,7 @@ from fastapi import FastAPI, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import verificar_conexion
-from app.router_v2_2 import router
+from app.router_v2_2 import router, superadmin_router
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -72,10 +72,12 @@ app.add_middleware(
 
 from fastapi import Body
 from app.dependencies import crear_token
-from app.models_v2_2 import Usuario
+from app.models_v2_2 import Usuario, UsuarioTenant
 from app.database import get_db
 from sqlalchemy.orm import Session
 import bcrypt
+
+_ROL_RANK = {"cliente": 0, "asesor": 1, "admin": 2, "superadmin": 3}
 
 @app.post("/auth/login", tags=["Auth"])
 def login(
@@ -88,9 +90,22 @@ def login(
     if usuario is None or usuario.es_invitado:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email o contraseña incorrectos")
     token = crear_token(usuario.id)
-    return {"token": token, "usuario_id": usuario.id, "nombre": usuario.nombre}
+
+    membresias = db.query(UsuarioTenant).filter(
+        UsuarioTenant.usuario_id == usuario.id,
+        UsuarioTenant.activo.is_(True),
+    ).all()
+    rol = "cliente"
+    if membresias:
+        rol = max(
+            (m.rol.value for m in membresias),
+            key=lambda v: _ROL_RANK.get(v, -1),
+        )
+
+    return {"token": token, "usuario_id": usuario.id, "nombre": usuario.nombre, "rol": rol}
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 app.include_router(router)
+app.include_router(superadmin_router)
 
 
 # ── Health check ─────────────────────────────────────────────────────────────

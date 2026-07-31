@@ -7,7 +7,7 @@ import logging
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -19,7 +19,7 @@ from app.dependencies import (
 )
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
-    RolUsuario, EstadoSesion, EstadoReserva, ESTADOS_SESION_ACTIVA,
+    RolUsuario, EstadoSesion, EstadoReserva, ESTADOS_SESION_ACTIVA, PlanTenant,
 )
 from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaCreateResponse, ReagendarSesionIn,
@@ -27,6 +27,7 @@ from app.schemas_v2_2 import (
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
+    TenantCreate, TenantAdminOut, TenantUpdate,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -71,6 +72,23 @@ def requiere_admin(
     m = _membresia(db, tenant.id, usuario.id)
     if m is None or m.rol not in (RolUsuario.ADMIN, RolUsuario.SUPERADMIN):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requiere permisos de administrador")
+    return m
+
+
+def requiere_superadmin(
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+) -> UsuarioTenant:
+    """Exige rol SUPERADMIN en cualquier tenant. No depende de {tenant_slug}."""
+    m = db.execute(
+        select(UsuarioTenant).where(
+            UsuarioTenant.usuario_id == usuario.id,
+            UsuarioTenant.rol == RolUsuario.SUPERADMIN,
+            UsuarioTenant.activo.is_(True),
+        )
+    ).scalars().first()
+    if m is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Requiere permisos de superadministrador")
     return m
 
 
@@ -771,3 +789,126 @@ def completar_sesion_endpoint(
         mensaje="Sesión completada",
         detalle={"completadas": completadas, "no_shows": no_shows},
     )
+
+
+# ============================================================
+# SUPERADMIN — GESTIÓN DE TENANTS (sin {tenant_slug} en la ruta)
+# ============================================================
+superadmin_router = APIRouter(prefix="/api/v2/superadmin", tags=["Superadmin"])
+
+
+def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
+    return TenantAdminOut(
+        id=t.id,
+        slug=t.slug,
+        nombre=t.nombre,
+        activo=t.activo,
+        plan=t.plan.value if hasattr(t.plan, "value") else t.plan,
+        timezone=t.timezone,
+        moneda=t.moneda,
+        max_asesores=t.max_asesores,
+        max_servicios=t.max_servicios,
+        max_clientes=t.max_clientes,
+        max_reservas_mes=t.max_reservas_mes,
+        creado_en=t.creado_en,
+        total_usuarios=total_usuarios,
+    )
+
+
+@superadmin_router.get("/tenants", response_model=List[TenantAdminOut])
+def listar_tenants(
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: UsuarioTenant = Depends(requiere_superadmin),
+):
+    cond = []
+    if activo is not None:
+        cond.append(Tenant.activo.is_(activo))
+
+    filas = db.execute(
+        select(
+            Tenant,
+            func.count(UsuarioTenant.id).label("total_usuarios"),
+        )
+        .outerjoin(UsuarioTenant, UsuarioTenant.tenant_id == Tenant.id)
+        .where(*cond)
+        .group_by(Tenant.id)
+        .order_by(Tenant.creado_en.desc())
+        .limit(limit).offset(offset)
+    ).all()
+
+    return [
+        _tenant_admin_out(t, total)
+        for t, total in filas
+    ]
+
+
+@superadmin_router.post("/tenants", response_model=TenantAdminOut, status_code=status.HTTP_201_CREATED)
+def crear_tenant(
+    body: TenantCreate,
+    db: Session = Depends(get_db),
+    _: UsuarioTenant = Depends(requiere_superadmin),
+):
+    existe = db.execute(
+        select(Tenant).where(Tenant.slug == body.slug)
+    ).scalar_one_or_none()
+    if existe is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Ya existe un tenant con slug '{body.slug}'")
+
+    t = Tenant(
+        slug=body.slug,
+        nombre=body.nombre,
+        plan=PlanTenant(body.plan),
+        timezone=body.timezone,
+        moneda=body.moneda,
+        max_asesores=body.max_asesores,
+        max_servicios=body.max_servicios,
+        max_clientes=body.max_clientes,
+        max_reservas_mes=body.max_reservas_mes,
+    )
+    db.add(t)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Ya existe un tenant con slug '{body.slug}'")
+    db.refresh(t)
+
+    return _tenant_admin_out(t, 0)
+
+
+@superadmin_router.patch("/tenants/{tenant_id}", response_model=TenantAdminOut)
+def actualizar_tenant(
+    tenant_id: int = Path(..., gt=0),
+    body: TenantUpdate = Body(...),
+    db: Session = Depends(get_db),
+    _: UsuarioTenant = Depends(requiere_superadmin),
+):
+    t = db.get(Tenant, tenant_id)
+    if t is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant no encontrado")
+
+    cambios = body.model_dump(exclude_unset=True)
+    if not cambios:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se enviaron campos para actualizar")
+
+    nuevo_slug = cambios.get("slug")
+    if nuevo_slug is not None and nuevo_slug != t.slug:
+        existe = db.execute(
+            select(Tenant).where(Tenant.slug == nuevo_slug, Tenant.id != tenant_id)
+        ).scalar_one_or_none()
+        if existe is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"Ya existe un tenant con slug '{nuevo_slug}'")
+
+    if "plan" in cambios:
+        cambios["plan"] = PlanTenant(cambios["plan"])
+
+    for campo, valor in cambios.items():
+        setattr(t, campo, valor)
+
+    db.commit()
+    db.refresh(t)
+
+    return _tenant_admin_out(t)

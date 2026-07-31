@@ -5,6 +5,7 @@ import FlujReserva from './components/FlujReserva'
 import MisReservas from './components/MisReservas'
 import DetalleReserva from './components/DetalleReserva'
 import PanelAdmin from './components/admin/PanelAdmin'
+import GestionTenants from './components/superadmin/GestionTenants'
 
 const NAV = [
   { key: 'calendario', label: 'Calendario' },
@@ -72,7 +73,10 @@ function App() {
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
           <span className="text-sm font-bold text-gray-700">MVP Schedule</span>
           <div className="flex gap-1">
-            {NAV.map(({ key, label }) => (
+            {(usuario?.rol === 'superadmin'
+              ? [...NAV, { key: 'superadmin', label: 'Tenants' }]
+              : NAV
+            ).map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
@@ -136,6 +140,8 @@ function App() {
             token={token}
             onVolver={handleVolver}
           />
+        ) : vista === 'superadmin' ? (
+          <GestionTenants token={token} onVolver={() => setVista('calendario')} />
         ) : (
           <CalendarioDisponibilidad
             tenantSlug="simal"

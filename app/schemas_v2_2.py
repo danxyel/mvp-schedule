@@ -349,3 +349,47 @@ class ReservasAdminPaginadasOut(BaseModel):
 class SesionesPaginadasOut(BaseModel):
     items: List[SesionListOut]
     paginacion: PaginacionOut
+
+
+# ============================================================
+# SUPERADMIN — TENANTS
+# ============================================================
+class TenantCreate(BaseModel):
+    slug: str = Field(..., min_length=2, max_length=64, pattern=r"^[a-z0-9-]+$")
+    nombre: str = Field(..., min_length=2, max_length=255)
+    plan: str = Field("starter", pattern=r"^(starter|pro|enterprise)$")
+    timezone: str = Field("America/Mexico_City", min_length=1, max_length=64)
+    moneda: str = Field("MXN", min_length=3, max_length=3)
+    max_asesores: int = Field(5, ge=0)
+    max_servicios: int = Field(10, ge=1)
+    max_clientes: int = Field(500, ge=1)
+    max_reservas_mes: int = Field(1000, ge=1)
+
+
+class TenantAdminOut(BaseModel):
+    id: int
+    slug: str
+    nombre: str
+    activo: bool
+    plan: str
+    timezone: str
+    moneda: str
+    max_asesores: int
+    max_servicios: int
+    max_clientes: int
+    max_reservas_mes: int
+    creado_en: datetime
+    total_usuarios: int = 0
+
+
+class TenantUpdate(BaseModel):
+    activo: Optional[bool] = None
+    nombre: Optional[str] = Field(None, min_length=2, max_length=255)
+    slug: Optional[str] = Field(None, min_length=2, max_length=64, pattern=r"^[a-z0-9-]+$")
+    plan: Optional[str] = Field(None, pattern=r"^(starter|pro|enterprise)$")
+    timezone: Optional[str] = Field(None, min_length=1, max_length=64)
+    moneda: Optional[str] = Field(None, min_length=3, max_length=3)
+    max_asesores: Optional[int] = Field(None, ge=0)
+    max_servicios: Optional[int] = Field(None, ge=1)
+    max_clientes: Optional[int] = Field(None, ge=1)
+    max_reservas_mes: Optional[int] = Field(None, ge=1)

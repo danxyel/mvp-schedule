@@ -10,6 +10,7 @@ OpenAPI disponible en:
 """
 
 import logging
+from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 from contextlib import asynccontextmanager
@@ -119,6 +120,48 @@ def login(
         "rol": rol,
         "tenant_slug": tenant_slug,
         "tenant_nombre": tenant_nombre,
+    }
+
+
+@app.post("/auth/register", tags=["Auth"])
+def register(
+    email: str = Body(...),
+    password: str = Body(...),
+    nombre: str = Body(...),
+    telefono: Optional[str] = Body(None),
+    db: Session = Depends(get_db),
+):
+    from fastapi import HTTPException, status
+    from sqlalchemy.exc import IntegrityError
+
+    email_norm = email.strip().lower()
+    if db.query(Usuario).filter_by(email=email_norm).first() is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
+
+    hash_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    usuario = Usuario(
+        email=email_norm,
+        password_hash=hash_pw,
+        es_invitado=False,
+        nombre=nombre.strip(),
+        telefono=telefono or None,
+    )
+    try:
+        db.add(usuario)
+        db.commit()
+        db.refresh(usuario)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
+
+    token = crear_token(usuario.id)
+    return {
+        "token": token,
+        "usuario_id": usuario.id,
+        "nombre": usuario.nombre,
+        "rol": "cliente",
+        "tenant_slug": None,
+        "tenant_nombre": None,
     }
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 app.include_router(router)

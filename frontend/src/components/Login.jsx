@@ -3,7 +3,7 @@ import createClient from 'openapi-fetch'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onIrARegistro }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -110,6 +110,17 @@ export default function Login({ onLogin }) {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+
+        <p className="mt-4 text-center text-sm text-gray-600">
+          ¿No tienes cuenta?{' '}
+          <button
+            type="button"
+            onClick={onIrARegistro}
+            className="font-medium text-blue-600 transition hover:text-blue-700"
+          >
+            Regístrate
+          </button>
+        </p>
       </div>
     </div>
   )

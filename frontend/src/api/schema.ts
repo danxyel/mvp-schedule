@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register */
+        post: operations["register_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/servicios": {
         parameters: {
             query?: never;
@@ -408,6 +425,17 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** Body_register_auth_register_post */
+        Body_register_auth_register_post: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Nombre */
+            nombre: string;
+            /** Telefono */
+            telefono?: string | null;
         };
         /**
          * CanalEnum
@@ -1146,6 +1174,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["Body_login_auth_login_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_auth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_register_auth_register_post"];
             };
         };
         responses: {

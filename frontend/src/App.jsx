@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Login from './components/Login'
+import Registro from './components/Registro'
 import SeleccionServicio from './components/SeleccionServicio'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
 import FlujReserva from './components/FlujReserva'
@@ -38,6 +39,7 @@ function App() {
     if (rol === 'admin' || rol === 'asesor') return 'panel-admin'
     return 'servicios'
   })
+  const [mostrarRegistro, setMostrarRegistro] = useState(false)
   const [servicioSeleccionado, setServicioSeleccionado] = useState(null)
   const [slotSeleccionado, setSlotSeleccionado] = useState(null)
   const [folioSeleccionado, setFolioSeleccionado] = useState(null)
@@ -120,7 +122,10 @@ function App() {
   }
 
   if (!token) {
-    return <Login onLogin={handleLogin} />
+    if (mostrarRegistro) {
+      return <Registro onRegistro={handleLogin} onVolverALogin={() => setMostrarRegistro(false)} />
+    }
+    return <Login onLogin={handleLogin} onIrARegistro={() => setMostrarRegistro(true)} />
   }
 
   let brand = 'MVP Schedule'

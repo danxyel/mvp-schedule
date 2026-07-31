@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import verificar_conexion
@@ -70,6 +70,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi import Body
+from app.dependencies import crear_token
+from app.models_v2_2 import Usuario
+from app.database import get_db
+from sqlalchemy.orm import Session
+import bcrypt
+
+@app.post("/auth/login", tags=["Auth"])
+def login(
+    email: str = Body(...),
+    password: str = Body(...),
+    db: Session = Depends(get_db),
+):
+    from fastapi import HTTPException, status
+    usuario = db.query(Usuario).filter_by(email=email).first()
+    if usuario is None or usuario.es_invitado:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email o contraseña incorrectos")
+    token = crear_token(usuario.id)
+    return {"token": token, "usuario_id": usuario.id, "nombre": usuario.nombre}
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 app.include_router(router)
 

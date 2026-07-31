@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Login from './components/Login'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
 import FlujReserva from './components/FlujReserva'
 import MisReservas from './components/MisReservas'
@@ -10,9 +11,27 @@ const NAV = [
 ]
 
 function App() {
+  const [token, setToken] = useState(null)
+  const [usuario, setUsuario] = useState(null)
   const [vista, setVista] = useState('calendario')
   const [slotSeleccionado, setSlotSeleccionado] = useState(null)
   const [folioSeleccionado, setFolioSeleccionado] = useState(null)
+
+  const handleLogin = (nuevoToken, nuevoUsuario) => {
+    setToken(nuevoToken)
+    setUsuario(nuevoUsuario)
+    setSlotSeleccionado(null)
+    setFolioSeleccionado(null)
+    setVista('calendario')
+  }
+
+  const handleLogout = () => {
+    setToken(null)
+    setUsuario(null)
+    setSlotSeleccionado(null)
+    setFolioSeleccionado(null)
+    setVista('calendario')
+  }
 
   const handleSlotSelect = (slot) => {
     setSlotSeleccionado(slot)
@@ -34,10 +53,14 @@ function App() {
     setVista('mis-reservas')
   }
 
+  if (!token) {
+    return <Login onLogin={handleLogin} />
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
           <span className="text-sm font-bold text-gray-700">MVP Schedule</span>
           <div className="flex gap-1">
             {NAV.map(({ key, label }) => (
@@ -58,6 +81,18 @@ function App() {
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">
+              {usuario?.nombre ?? 'Usuario'}
+            </span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </div>
       </header>
 
@@ -75,14 +110,14 @@ function App() {
         ) : vista === 'mis-reservas' ? (
           <MisReservas
             tenantSlug="simal"
-            token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzg1NDUyMDc1LCJleHAiOjE3ODU1Mzg0NzV9.sAHXL4ZZXfZLegoKCIx8PJwGxVCuisijDGE37AX8lhc"
+            token={token}
             onVerDetalle={handleVerDetalle}
           />
         ) : vista === 'detalle' && folioSeleccionado ? (
           <DetalleReserva
             tenantSlug="simal"
             folio={folioSeleccionado}
-            token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzg1NDUyMDc1LCJleHAiOjE3ODU1Mzg0NzV9.sAHXL4ZZXfZLegoKCIx8PJwGxVCuisijDGE37AX8lhc"
+            token={token}
             onVolver={handleVolverDeDetalle}
             onCancelada={handleVolverDeDetalle}
           />

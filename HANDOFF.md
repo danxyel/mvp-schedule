@@ -338,3 +338,5 @@ npx openapi-typescript ..\docs\openapi.json -o src\api\schema.ts
 | EXCLUDE USING gist para traslape | Constraint en DB — no depende de que el código recuerde bloquear. |
 | Superadmin sin membresía por tenant | Accede a cualquier tenant sin crear fila en usuario_tenants. |
 | Navegación por rol en App.jsx | Una sola app, rutas protegidas por rol en frontend. |
+| `.gitattributes` con `text=auto eol=lf` (CRLF solo en `.ps1`) | Los diffs de línea completa (CRLF/LF) en `main.py`, `AGENTS.md`, `openapi.json` estaban escondiendo cambios reales. Se normalizó todo a LF el 2026-07-31. |
+| `PROMPT_MAESTRO.md` queda fuera de git a propósito | Es un snapshot local del prompt de sesión, se desactualiza rápido. Este HANDOFF.md es la única fuente de verdad — no confiar en `PROMPT_MAESTRO.md` para saber el estado del proyecto. |

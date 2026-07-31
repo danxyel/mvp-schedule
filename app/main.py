@@ -72,6 +72,7 @@ app.add_middleware(
 )
 
 from fastapi import Body
+from pydantic import EmailStr
 from app.dependencies import crear_token
 from app.models_v2_2 import Usuario, UsuarioTenant, Tenant
 from app.database import get_db
@@ -79,6 +80,32 @@ from sqlalchemy.orm import Session
 import bcrypt
 
 _ROL_RANK = {"cliente": 0, "asesor": 1, "admin": 2, "superadmin": 3}
+
+
+def _resolver_membresia(db: Session, usuario_id: int):
+    """Devuelve (rol, tenant_slug, tenant_nombre) según la mejor membresía activa del usuario.
+
+    Compartido por /auth/login y /auth/register para que ambos devuelvan
+    exactamente el mismo rol/tenant — antes /auth/register siempre devolvía
+    "cliente" aunque el usuario ya tuviera una membresía como asesor/admin.
+    """
+    membresias = db.query(UsuarioTenant).filter(
+        UsuarioTenant.usuario_id == usuario_id,
+        UsuarioTenant.activo.is_(True),
+    ).all()
+    rol = "cliente"
+    tenant_slug = None
+    tenant_nombre = None
+    if membresias:
+        mejor = max(membresias, key=lambda m: _ROL_RANK.get(m.rol.value, -1))
+        rol = mejor.rol.value
+        if rol != "superadmin":
+            tenant = db.get(Tenant, mejor.tenant_id)
+            if tenant is not None:
+                tenant_slug = tenant.slug
+                tenant_nombre = tenant.nombre
+    return rol, tenant_slug, tenant_nombre
+
 
 @app.post("/auth/login", tags=["Auth"])
 def login(
@@ -96,22 +123,7 @@ def login(
     ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email o contraseña incorrectos")
     token = crear_token(usuario.id)
-
-    membresias = db.query(UsuarioTenant).filter(
-        UsuarioTenant.usuario_id == usuario.id,
-        UsuarioTenant.activo.is_(True),
-    ).all()
-    rol = "cliente"
-    tenant_slug = None
-    tenant_nombre = None
-    if membresias:
-        mejor = max(membresias, key=lambda m: _ROL_RANK.get(m.rol.value, -1))
-        rol = mejor.rol.value
-        if rol != "superadmin":
-            tenant = db.get(Tenant, mejor.tenant_id)
-            if tenant is not None:
-                tenant_slug = tenant.slug
-                tenant_nombre = tenant.nombre
+    rol, tenant_slug, tenant_nombre = _resolver_membresia(db, usuario.id)
 
     return {
         "token": token,
@@ -125,9 +137,9 @@ def login(
 
 @app.post("/auth/register", tags=["Auth"])
 def register(
-    email: str = Body(...),
-    password: str = Body(...),
-    nombre: str = Body(...),
+    email: EmailStr = Body(...),
+    password: str = Body(..., min_length=8),
+    nombre: str = Body(..., min_length=1),
     telefono: Optional[str] = Body(None),
     db: Session = Depends(get_db),
 ):
@@ -135,33 +147,53 @@ def register(
     from sqlalchemy.exc import IntegrityError
 
     email_norm = email.strip().lower()
-    if db.query(Usuario).filter_by(email=email_norm).first() is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
+    nombre_norm = nombre.strip()
+    if not nombre_norm:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El nombre es obligatorio")
 
     hash_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    usuario = Usuario(
-        email=email_norm,
-        password_hash=hash_pw,
-        es_invitado=False,
-        nombre=nombre.strip(),
-        telefono=telefono or None,
-    )
-    try:
-        db.add(usuario)
-        db.commit()
-        db.refresh(usuario)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
+    existente = db.query(Usuario).filter_by(email=email_norm).first()
+
+    if existente is not None:
+        # Caso especial: un admin ya invitó a este email (POST /admin/usuarios/invitar).
+        # Ese usuario existe como placeholder (es_invitado=True, sin password_hash) y
+        # hoy no tenía ninguna forma de activarse — este es el fix.
+        if existente.es_invitado and not existente.password_hash:
+            existente.password_hash = hash_pw
+            existente.nombre = nombre_norm
+            if telefono:
+                existente.telefono = telefono
+            existente.es_invitado = False
+            db.commit()
+            db.refresh(existente)
+            usuario = existente
+        else:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
+    else:
+        usuario = Usuario(
+            email=email_norm,
+            password_hash=hash_pw,
+            es_invitado=False,
+            nombre=nombre_norm,
+            telefono=telefono or None,
+        )
+        try:
+            db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
 
     token = crear_token(usuario.id)
+    rol, tenant_slug, tenant_nombre = _resolver_membresia(db, usuario.id)
     return {
         "token": token,
         "usuario_id": usuario.id,
         "nombre": usuario.nombre,
-        "rol": "cliente",
-        "tenant_slug": None,
-        "tenant_nombre": None,
+        "rol": rol,
+        "tenant_slug": tenant_slug,
+        "tenant_nombre": tenant_nombre,
     }
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 app.include_router(router)

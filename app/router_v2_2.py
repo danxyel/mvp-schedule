@@ -910,7 +910,7 @@ def invitar_usuario(
     rol: str = Body(...),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     if rol not in _ROLES_VINCULABLES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Rol inválido")
@@ -941,6 +941,14 @@ def invitar_usuario(
 
     ut = UsuarioTenant(tenant_id=tenant.id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
     db.add(ut)
+    db.flush()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "usuario_tenant", ut.id, "invitar",
+        usuario_id=staff.usuario_id,
+        detalles={"email": email_norm, "rol": rol},
+    )
+
     try:
         db.commit()
     except IntegrityError:
@@ -951,13 +959,28 @@ def invitar_usuario(
     return _usuario_admin_out(ut)
 
 
+def _admins_activos_restantes(db: Session, tenant_id: int, excluir_ut_id: int) -> int:
+    """Cuenta admins activos del tenant sin contar a `excluir_ut_id`.
+
+    Se usa para bloquear operaciones que dejarían el tenant sin ningún admin.
+    """
+    return db.execute(
+        select(func.count()).select_from(UsuarioTenant).where(
+            UsuarioTenant.tenant_id == tenant_id,
+            UsuarioTenant.rol == RolUsuario.ADMIN,
+            UsuarioTenant.activo.is_(True),
+            UsuarioTenant.id != excluir_ut_id,
+        )
+    ).scalar_one()
+
+
 @router.patch("/admin/usuarios/{ut_id}/rol", response_model=UsuarioAdminOut)
 def cambiar_rol_usuario(
     ut_id: int = Path(..., gt=0),
     rol: str = Body(..., embed=True),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     if rol not in _ROLES_VINCULABLES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Rol inválido")
@@ -968,7 +991,23 @@ def cambiar_rol_usuario(
     if ut.rol == RolUsuario.SUPERADMIN:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No se puede cambiar el rol de un superadmin")
 
-    ut.rol = _ROLES_VINCULABLES[rol]
+    rol_nuevo = _ROLES_VINCULABLES[rol]
+    if ut.rol == RolUsuario.ADMIN and rol_nuevo != RolUsuario.ADMIN:
+        if _admins_activos_restantes(db, tenant.id, ut.id) == 0:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "No puedes quitar el rol de admin al único admin activo del tenant",
+            )
+
+    rol_anterior = ut.rol.value
+    ut.rol = rol_nuevo
+
+    svc.registrar_bitacora(
+        db, tenant.id, "usuario_tenant", ut.id, "cambiar_rol",
+        usuario_id=staff.usuario_id,
+        detalles={"ut_id": ut_id, "rol_anterior": rol_anterior, "rol_nuevo": rol_nuevo.value},
+    )
+
     db.commit()
     return _usuario_admin_out(ut)
 
@@ -978,14 +1017,27 @@ def desvincular_usuario(
     ut_id: int = Path(..., gt=0),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     ut = _usuario_tenant_admin(db, tenant.id, ut_id)
     if ut is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
 
+    if ut.rol == RolUsuario.ADMIN and _admins_activos_restantes(db, tenant.id, ut.id) == 0:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No puedes desvincular al único admin activo del tenant",
+        )
+
     ut.activo = False
     ut.desvinculado_en = datetime.now(timezone.utc)
+
+    svc.registrar_bitacora(
+        db, tenant.id, "usuario_tenant", ut.id, "desvincular",
+        usuario_id=staff.usuario_id,
+        detalles={"ut_id": ut_id, "rol": ut.rol.value},
+    )
+
     db.commit()
     return OperacionOut(ok=True, mensaje="Usuario desvinculado", detalle={"ut_id": ut_id})
 
@@ -1033,7 +1085,7 @@ def crear_horario_asesor(
     hora_fin: time = Body(...),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     _asesor_admin(db, tenant.id, ut_id)
     if not 0 <= dia_semana <= 6:
@@ -1051,6 +1103,14 @@ def crear_horario_asesor(
         activo=True,
     )
     db.add(h)
+    db.flush()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "horario_disponibilidad", h.id, "crear",
+        usuario_id=staff.usuario_id,
+        detalles={"ut_id": ut_id, "dia_semana": dia_semana, "hora_inicio": str(hora_inicio), "hora_fin": str(hora_fin)},
+    )
+
     try:
         db.commit()
     except IntegrityError:
@@ -1066,7 +1126,7 @@ def eliminar_horario_asesor(
     h_id: int = Path(..., gt=0),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     _asesor_admin(db, tenant.id, ut_id)
     h = db.execute(
@@ -1079,6 +1139,12 @@ def eliminar_horario_asesor(
     ).scalar_one_or_none()
     if h is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Horario no encontrado")
+
+    svc.registrar_bitacora(
+        db, tenant.id, "horario_disponibilidad", h.id, "eliminar",
+        usuario_id=staff.usuario_id,
+        detalles={"ut_id": ut_id, "h_id": h_id},
+    )
 
     db.delete(h)
     db.commit()
@@ -1124,7 +1190,7 @@ def asignar_servicio_asesor(
     duracion_custom_min: Optional[int] = Body(None),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     _asesor_admin(db, tenant.id, ut_id)
     servicio = db.execute(
@@ -1141,6 +1207,14 @@ def asignar_servicio_asesor(
         activo=True,
     )
     db.add(a)
+    db.flush()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "asesor_servicio", a.id, "asignar",
+        usuario_id=staff.usuario_id,
+        detalles={"ut_id": ut_id, "servicio_id": servicio_id},
+    )
+
     try:
         db.commit()
     except IntegrityError:
@@ -1164,7 +1238,7 @@ def desasignar_servicio_asesor(
     s_id: int = Path(..., gt=0),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     _asesor_admin(db, tenant.id, ut_id)
     a = db.execute(
@@ -1175,6 +1249,12 @@ def desasignar_servicio_asesor(
     ).scalar_one_or_none()
     if a is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asignación no encontrada")
+
+    svc.registrar_bitacora(
+        db, tenant.id, "asesor_servicio", a.id, "desasignar",
+        usuario_id=staff.usuario_id,
+        detalles={"ut_id": ut_id, "s_id": s_id, "servicio_id": a.servicio_id},
+    )
 
     db.delete(a)
     db.commit()
@@ -1208,7 +1288,7 @@ def crear_bloqueo_admin(
     body: BloqueoCreate,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     if body.entidad_tipo not in _ENTIDADES_BLOQUEO:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "entidad_tipo inválido")
@@ -1225,6 +1305,19 @@ def crear_bloqueo_admin(
         tipo=TipoBloqueo(body.tipo.value),
     )
     db.add(b)
+    db.flush()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "horario_bloqueo", b.id, "crear",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "entidad_tipo": body.entidad_tipo,
+            "entidad_id": body.entidad_id,
+            "fecha_inicio": body.fecha_inicio.isoformat(),
+            "fecha_fin": body.fecha_fin.isoformat(),
+        },
+    )
+
     try:
         db.commit()
     except IntegrityError:
@@ -1239,7 +1332,7 @@ def eliminar_bloqueo_admin(
     b_id: int = Path(..., gt=0),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
+    staff: UsuarioTenant = Depends(requiere_admin),
 ):
     b = db.execute(
         select(HorarioBloqueo).where(
@@ -1249,6 +1342,12 @@ def eliminar_bloqueo_admin(
     ).scalar_one_or_none()
     if b is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bloqueo no encontrado")
+
+    svc.registrar_bitacora(
+        db, tenant.id, "horario_bloqueo", b.id, "eliminar",
+        usuario_id=staff.usuario_id,
+        detalles={"b_id": b_id, "entidad_tipo": b.entidad_tipo, "entidad_id": b.entidad_id},
+    )
 
     db.delete(b)
     db.commit()

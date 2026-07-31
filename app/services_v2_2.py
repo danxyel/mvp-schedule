@@ -5,6 +5,7 @@ v2.2.1: hash determinista, buffers en disponibilidad, respuestas_formulario,
 """
 
 import hashlib
+import html
 import re
 import uuid
 import random
@@ -1058,6 +1059,17 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
     fecha = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
     fin = _fecha_email(sesion.fecha_hora_fin, sesion.timezone)
 
+    # Escapar todo lo que puede venir de un campo editable por el usuario
+    # (nombre de cliente, servicio, tenant, sede, asesor) antes de meterlo
+    # en el HTML del correo — si no, un nombre tipo "<img src=x onerror=...>"
+    # se interpreta como markup dentro del email.
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+    usuario_nombre_html = html.escape(usuario.nombre or "")
+    servicio_nombre_html = html.escape(servicio.nombre or "")
+    asesor_html = html.escape(asesor) if asesor else None
+    sede_nombre_html = html.escape(sede.nombre) if sede is not None else None
+    meet_url_html = html.escape(sesion.meet_url) if sesion.meet_url else None
+
     fila_precio = ""
     if reserva.precio_final is not None:
         fila_precio = (
@@ -1071,18 +1083,18 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
         meet_html = (
             f'<p style="margin:12px 0 0;font-size:14px;color:#111827;">'
             f'Tu sesión es en línea. Únete con este enlace:</p>'
-            f'<p style="margin:4px 0 0;"><a href="{sesion.meet_url}" '
-            f'style="color:#2563eb;font-weight:600;">{sesion.meet_url}</a></p>'
+            f'<p style="margin:4px 0 0;"><a href="{meet_url_html}" '
+            f'style="color:#2563eb;font-weight:600;">{meet_url_html}</a></p>'
         )
 
     sede_html = ""
     if sede is not None:
         sede_html = (
             f'<tr><td style="padding:6px 0;color:#6b7280;">Lugar</td>'
-            f'<td style="padding:6px 0;text-align:right;color:#111827;">{sede.nombre}</td></tr>'
+            f'<td style="padding:6px 0;text-align:right;color:#111827;">{sede_nombre_html}</td></tr>'
         )
 
-    html = f"""\
+    cuerpo_html = f"""\
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;">
   <tr>
     <td style="padding:24px 16px;">
@@ -1090,22 +1102,22 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
         <tr>
           <td style="background-color:#1e3a5f;padding:20px 24px;">
             <h1 style="margin:0;color:#ffffff;font-size:18px;font-family:Arial,sans-serif;">
-              {tenant.nombre} — Reserva confirmada
+              {tenant_nombre_html} — Reserva confirmada
             </h1>
           </td>
         </tr>
         <tr>
           <td style="padding:24px;font-family:Arial,sans-serif;">
             <p style="margin:0 0 16px;font-size:15px;color:#111827;">
-              Hola {usuario.nombre}, tu reserva está confirmada:
+              Hola {usuario_nombre_html}, tu reserva está confirmada:
             </p>
-            <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">{servicio.nombre}</p>
+            <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">{servicio_nombre_html}</p>
             <p style="margin:4px 0 16px;font-size:15px;color:#4b5563;">
               {fecha}{' — ' + fin if fin and fin != fecha else ''}
             </p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
               <tr><td style="padding:6px 0;color:#6b7280;">Asesor</td>
-                  <td style="padding:6px 0;text-align:right;color:#111827;">{asesor or 'Por asignar'}</td></tr>
+                  <td style="padding:6px 0;text-align:right;color:#111827;">{asesor_html or 'Por asignar'}</td></tr>
               <tr><td style="padding:6px 0;color:#6b7280;">Modalidad</td>
                   <td style="padding:6px 0;text-align:right;color:#111827;">{servicio.modalidad.value}</td></tr>
               {sede_html}
@@ -1148,7 +1160,7 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
     msg["From"] = f'{cfg.get("from_name") or tenant.nombre} <{cfg.get("from_email")}>'
     msg["To"] = usuario.email
     msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
-    msg.attach(MIMEText(html, "html", "utf-8"))
+    msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
 
     port = int(cfg.get("port") or (465 if cfg.get("ssl") else 587))
     user = cfg.get("user")

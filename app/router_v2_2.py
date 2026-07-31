@@ -21,7 +21,8 @@ from app.dependencies import (
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
     RolUsuario, EstadoSesion, EstadoReserva, ESTADOS_SESION_ACTIVA, PlanTenant,
-    TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio,
+    TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
+    TipoBloqueo,
 )
 from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaCreateResponse, ReagendarSesionIn,
@@ -32,6 +33,7 @@ from app.schemas_v2_2 import (
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
+    BloqueoCreate, BloqueoOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -1111,6 +1113,80 @@ def desasignar_servicio_asesor(
     db.delete(a)
     db.commit()
     return OperacionOut(ok=True, mensaje="Servicio desasignado", detalle={"s_id": s_id})
+
+
+# ============================================================
+# BLOQUEOS
+# ============================================================
+_ENTIDADES_BLOQUEO = {"asesor", "recurso", "sede", "global"}
+
+
+@router.get("/admin/bloqueos", response_model=List[BloqueoOut])
+def listar_bloqueos_admin(
+    asesor_id: Optional[int] = Query(None, gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    cond = [HorarioBloqueo.tenant_id == tenant.id]
+    if asesor_id is not None:
+        cond.append(HorarioBloqueo.entidad_tipo == "asesor")
+        cond.append(HorarioBloqueo.entidad_id == asesor_id)
+    filas = db.execute(select(HorarioBloqueo).where(*cond)).scalars().all()
+    filas = sorted(filas, key=lambda b: b.fecha_inicio, reverse=True)
+    return [BloqueoOut.model_validate(b) for b in filas]
+
+
+@router.post("/admin/bloqueos", response_model=BloqueoOut, status_code=status.HTTP_201_CREATED)
+def crear_bloqueo_admin(
+    body: BloqueoCreate,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    if body.entidad_tipo not in _ENTIDADES_BLOQUEO:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "entidad_tipo inválido")
+    if body.entidad_tipo == "asesor":
+        _asesor_admin(db, tenant.id, body.entidad_id)
+
+    b = HorarioBloqueo(
+        tenant_id=tenant.id,
+        entidad_tipo=body.entidad_tipo,
+        entidad_id=body.entidad_id,
+        fecha_inicio=body.fecha_inicio,
+        fecha_fin=body.fecha_fin,
+        motivo=body.motivo,
+        tipo=TipoBloqueo(body.tipo.value),
+    )
+    db.add(b)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El bloqueo no es válido")
+    db.refresh(b)
+    return BloqueoOut.model_validate(b)
+
+
+@router.delete("/admin/bloqueos/{b_id}", response_model=OperacionOut)
+def eliminar_bloqueo_admin(
+    b_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    b = db.execute(
+        select(HorarioBloqueo).where(
+            HorarioBloqueo.id == b_id,
+            HorarioBloqueo.tenant_id == tenant.id,
+        )
+    ).scalar_one_or_none()
+    if b is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bloqueo no encontrado")
+
+    db.delete(b)
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Bloqueo eliminado", detalle={"b_id": b_id})
 
 
 

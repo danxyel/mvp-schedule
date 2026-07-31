@@ -399,6 +399,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/bloqueos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Bloqueos Admin */
+        get: operations["listar_bloqueos_admin_api_v2__tenant_slug__admin_bloqueos_get"];
+        put?: never;
+        /** Crear Bloqueo Admin */
+        post: operations["crear_bloqueo_admin_api_v2__tenant_slug__admin_bloqueos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/bloqueos/{b_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Eliminar Bloqueo Admin */
+        delete: operations["eliminar_bloqueo_admin_api_v2__tenant_slug__admin_bloqueos__b_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/reservas/{folio}/checkin": {
         parameters: {
             query?: never;
@@ -573,6 +608,58 @@ export interface components {
             duracion_custom_min?: number | null;
             /** Activo */
             activo: boolean;
+        };
+        /** BloqueoCreate */
+        BloqueoCreate: {
+            /**
+             * Entidad Tipo
+             * @default asesor
+             */
+            entidad_tipo: string;
+            /** Entidad Id */
+            entidad_id?: number | null;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+            /**
+             * Fecha Fin
+             * Format: date-time
+             */
+            fecha_fin: string;
+            /** Motivo */
+            motivo?: string | null;
+            /** @default personal */
+            tipo: components["schemas"]["TipoBloqueoEnum"];
+        };
+        /** BloqueoOut */
+        BloqueoOut: {
+            /** Id */
+            id: number;
+            /** Entidad Tipo */
+            entidad_tipo?: string | null;
+            /** Entidad Id */
+            entidad_id?: number | null;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+            /**
+             * Fecha Fin
+             * Format: date-time
+             */
+            fecha_fin: string;
+            /** Motivo */
+            motivo?: string | null;
+            /** Tipo */
+            tipo: string;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
         };
         /** Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post */
         Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post: {
@@ -1363,6 +1450,11 @@ export interface components {
          * @enum {string}
          */
         TipoAgendaEnum: "individual" | "grupal" | "recurrente";
+        /**
+         * TipoBloqueoEnum
+         * @enum {string}
+         */
+        TipoBloqueoEnum: "vacaciones" | "feriado" | "mantenimiento" | "personal" | "otro";
         /** UsuarioAdminOut */
         UsuarioAdminOut: {
             /** Id */
@@ -2278,6 +2370,106 @@ export interface operations {
             path: {
                 ut_id: number;
                 s_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_bloqueos_admin_api_v2__tenant_slug__admin_bloqueos_get: {
+        parameters: {
+            query?: {
+                asesor_id?: number | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BloqueoOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_bloqueo_admin_api_v2__tenant_slug__admin_bloqueos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BloqueoCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BloqueoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    eliminar_bloqueo_admin_api_v2__tenant_slug__admin_bloqueos__b_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                b_id: number;
                 tenant_slug: string;
             };
             cookie?: never;

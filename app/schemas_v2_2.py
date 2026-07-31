@@ -527,3 +527,49 @@ class AsesorServicioOut(BaseModel):
     duracion_custom_min: Optional[int] = None
     activo: bool
     model_config = ConfigDict(from_attributes=True)
+
+
+class TipoBloqueoEnum(str, Enum):
+    VACACIONES = "vacaciones"
+    FERIADO = "feriado"
+    MANTENIMIENTO = "mantenimiento"
+    PERSONAL = "personal"
+    OTRO = "otro"
+
+
+class BloqueoCreate(BaseModel):
+    entidad_tipo: str = "asesor"
+    entidad_id: Optional[int] = Field(None, gt=0)
+    fecha_inicio: datetime
+    fecha_fin: datetime
+    motivo: Optional[str] = Field(None, max_length=255)
+    tipo: TipoBloqueoEnum = TipoBloqueoEnum.PERSONAL
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("fecha_inicio", "fecha_fin")
+    @classmethod
+    def _exigir_aware(cls, v: datetime, info):
+        return exigir_aware(v, info.field_name)
+
+    @model_validator(mode="after")
+    def _validar(self):
+        if self.entidad_tipo == "global":
+            if self.entidad_id is not None:
+                raise ValueError("Un bloqueo global no lleva entidad_id")
+        elif self.entidad_id is None:
+            raise ValueError("entidad_id es obligatorio para este entidad_tipo")
+        if self.fecha_fin <= self.fecha_inicio:
+            raise ValueError("fecha_fin debe ser posterior a fecha_inicio")
+        return self
+
+
+class BloqueoOut(BaseModel):
+    id: int
+    entidad_tipo: Optional[str] = None
+    entidad_id: Optional[int] = None
+    fecha_inicio: datetime
+    fecha_fin: datetime
+    motivo: Optional[str] = None
+    tipo: str
+    creado_en: datetime
+    model_config = ConfigDict(from_attributes=True)

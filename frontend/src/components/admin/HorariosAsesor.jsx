@@ -13,6 +13,45 @@ const DIAS = [
   'Domingo',
 ]
 
+const TIPOS_BLOQUEO = [
+  { value: 'personal', label: 'Personal' },
+  { value: 'vacaciones', label: 'Vacaciones' },
+  { value: 'feriado', label: 'Día feriado' },
+  { value: 'mantenimiento', label: 'Mantenimiento' },
+  { value: 'otro', label: 'Otro' },
+]
+
+const TIPO_BADGE = {
+  personal: 'border-blue-200 bg-blue-100 text-blue-700',
+  vacaciones: 'border-purple-200 bg-purple-100 text-purple-700',
+  feriado: 'border-amber-200 bg-amber-100 text-amber-700',
+  mantenimiento: 'border-gray-200 bg-gray-100 text-gray-600',
+  otro: 'border-gray-200 bg-gray-100 text-gray-600',
+}
+
+function getLocalOffset() {
+  const offset = -new Date().getTimezoneOffset()
+  const sign = offset >= 0 ? '+' : '-'
+  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')
+  const mins = String(Math.abs(offset) % 60).padStart(2, '0')
+  return `${sign}${hours}:${mins}`
+}
+
+function conOffset(valor) {
+  return `${valor}:00${getLocalOffset()}`
+}
+
+function formatFecha(utcString) {
+  return new Date(utcString).toLocaleString('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
 function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
@@ -55,11 +94,19 @@ export default function HorariosAsesor({ asesor, tenantSlug, token, onClose }) {
     Object.fromEntries(DIAS.map((_, d) => [d, { inicio: '09:00', fin: '18:00' }])),
   )
   const [guardando, setGuardando] = useState(null)
+  const [bloqueos, setBloqueos] = useState([])
+  const [bloqueoForm, setBloqueoForm] = useState({
+    fecha_inicio: '',
+    fecha_fin: '',
+    motivo: '',
+    tipo: 'personal',
+  })
+  const [guardandoBloqueo, setGuardandoBloqueo] = useState(false)
 
   const cargar = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const [rH, rS, rA] = await Promise.all([
+    const [rH, rS, rA, rB] = await Promise.all([
       client.GET('/api/v2/{tenant_slug}/admin/asesores/{ut_id}/horarios', {
         params: { path: { tenant_slug: tenantSlug, ut_id: asesor.id } },
         headers: { Authorization: `Bearer ${token}` },
@@ -72,15 +119,23 @@ export default function HorariosAsesor({ asesor, tenantSlug, token, onClose }) {
         params: { path: { tenant_slug: tenantSlug, ut_id: asesor.id } },
         headers: { Authorization: `Bearer ${token}` },
       }),
+      client.GET('/api/v2/{tenant_slug}/admin/bloqueos', {
+        params: {
+          path: { tenant_slug: tenantSlug },
+          query: { asesor_id: asesor.id },
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     ])
-    if (rH.error || rS.error || rA.error) {
-      setError(errorMensaje(rH.error ?? rS.error ?? rA.error))
+    if (rH.error || rS.error || rA.error || rB.error) {
+      setError(errorMensaje(rH.error ?? rS.error ?? rA.error ?? rB.error))
       setLoading(false)
       return
     }
     setHorarios(rH.data ?? [])
     setServicios((rS.data ?? []).filter((s) => s.activo))
     setAsignaciones(rA.data ?? [])
+    setBloqueos(rB.data ?? [])
     setHoras((prev) => {
       const next = { ...prev }
       for (const h of rH.data ?? []) {
@@ -238,6 +293,65 @@ export default function HorariosAsesor({ asesor, tenantSlug, token, onClose }) {
     setAsignaciones((prev) => [...prev, data])
   }
 
+  const crearBloqueo = async (e) => {
+    e.preventDefault()
+    if (guardandoBloqueo) return
+    if (!bloqueoForm.fecha_inicio || !bloqueoForm.fecha_fin) {
+      setAccionError('Define la fecha de inicio y fin del bloqueo')
+      return
+    }
+    if (bloqueoForm.fecha_inicio >= bloqueoForm.fecha_fin) {
+      setAccionError('La fecha de fin debe ser posterior a la de inicio')
+      return
+    }
+    setGuardandoBloqueo(true)
+    setAccionError(null)
+    const { data, error: fetchErr, response } = await client.POST(
+      '/api/v2/{tenant_slug}/admin/bloqueos',
+      {
+        params: { path: { tenant_slug: tenantSlug } },
+        body: {
+          entidad_tipo: 'asesor',
+          entidad_id: asesor.id,
+          fecha_inicio: conOffset(bloqueoForm.fecha_inicio),
+          fecha_fin: conOffset(bloqueoForm.fecha_fin),
+          motivo: bloqueoForm.motivo.trim() || null,
+          tipo: bloqueoForm.tipo,
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setGuardandoBloqueo(false)
+    if (fetchErr) {
+      setAccionError(
+        response?.status === 422
+          ? 'Bloqueo inválido. Revisa fechas y horario.'
+          : errorMensaje(fetchErr),
+      )
+      return
+    }
+    setBloqueos((prev) => [data, ...prev])
+    setBloqueoForm({ fecha_inicio: '', fecha_fin: '', motivo: '', tipo: 'personal' })
+  }
+
+  const eliminarBloqueo = async (b) => {
+    setGuardandoBloqueo(true)
+    setAccionError(null)
+    const { error: fetchErr } = await client.DELETE(
+      '/api/v2/{tenant_slug}/admin/bloqueos/{b_id}',
+      {
+        params: { path: { tenant_slug: tenantSlug, b_id: b.id } },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setGuardandoBloqueo(false)
+    if (fetchErr) {
+      setAccionError(errorMensaje(fetchErr))
+      return
+    }
+    setBloqueos((prev) => prev.filter((x) => x.id !== b.id))
+  }
+
   return (
     <Modal title={`Configuración de ${asesor.nombre}`} onClose={onClose}>
       {loading ? (
@@ -347,6 +461,122 @@ export default function HorariosAsesor({ asesor, tenantSlug, token, onClose }) {
                   )
                 })}
               </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-gray-900">Bloqueos</h4>
+            <p className="mb-3 text-xs text-gray-500">
+              Impide reservas en un rango de fechas puntual (vacaciones,
+              feriados, ausencias).
+            </p>
+            <form onSubmit={crearBloqueo} className="mb-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Inicio *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={bloqueoForm.fecha_inicio}
+                    onChange={(e) =>
+                      setBloqueoForm((prev) => ({ ...prev, fecha_inicio: e.target.value }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Fin *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={bloqueoForm.fecha_fin}
+                    onChange={(e) =>
+                      setBloqueoForm((prev) => ({ ...prev, fecha_fin: e.target.value }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Tipo
+                  </label>
+                  <select
+                    value={bloqueoForm.tipo}
+                    onChange={(e) =>
+                      setBloqueoForm((prev) => ({ ...prev, tipo: e.target.value }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                  >
+                    {TIPOS_BLOQUEO.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Motivo
+                  </label>
+                  <input
+                    type="text"
+                    value={bloqueoForm.motivo}
+                    onChange={(e) =>
+                      setBloqueoForm((prev) => ({ ...prev, motivo: e.target.value }))
+                    }
+                    placeholder="Opcional"
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={guardandoBloqueo}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {guardandoBloqueo ? 'Guardando...' : 'Agregar bloqueo'}
+              </button>
+            </form>
+
+            {bloqueos.length === 0 ? (
+              <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-4 text-center text-sm text-gray-500">
+                No hay bloqueos para este asesor.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {bloqueos.map((b) => (
+                  <li
+                    key={b.id}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                        TIPO_BADGE[b.tipo] ?? 'border-gray-200 bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {b.tipo}
+                    </span>
+                    <span className="font-medium text-gray-800">
+                      {formatFecha(b.fecha_inicio)} a {formatFecha(b.fecha_fin)}
+                    </span>
+                    {b.motivo && <span className="text-gray-500">— {b.motivo}</span>}
+                    <button
+                      type="button"
+                      disabled={guardandoBloqueo}
+                      onClick={() => eliminarBloqueo(b)}
+                      className="ml-auto rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Eliminar
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 

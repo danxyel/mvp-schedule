@@ -45,6 +45,52 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/servicios": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Servicios Publicos",
+        "operationId": "listar_servicios_publicos_api_v2__tenant_slug__servicios_get",
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServicioPublicOut"
+                  },
+                  "title": "Response Listar Servicios Publicos Api V2  Tenant Slug  Servicios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/servicios/{servicio_id}/disponibilidad": {
       "get": {
         "tags": [
@@ -2814,6 +2860,80 @@
         "type": "object",
         "title": "ServicioAdminUpdate",
         "description": "PATCH parcial. `activo` NO se edita aquí: se usa activar/desactivar."
+      },
+      "ServicioPublicOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "tipo_agenda": {
+            "$ref": "#/components/schemas/TipoAgendaEnum"
+          },
+          "modalidad": {
+            "$ref": "#/components/schemas/ModalidadEnum"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "title": "Duracion Minutos"
+          },
+          "cupo_maximo": {
+            "type": "integer",
+            "title": "Cupo Maximo"
+          },
+          "precio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "imagen_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imagen Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "tipo_agenda",
+          "modalidad",
+          "duracion_minutos",
+          "cupo_maximo",
+          "moneda"
+        ],
+        "title": "ServicioPublicOut"
       },
       "SesionAdminOut": {
         "properties": {

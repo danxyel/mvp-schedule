@@ -29,7 +29,7 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
-    ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut,
+    ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -162,6 +162,24 @@ def _sesion_list_out(s: Sesion) -> SesionListOut:
         asesor=_asesor_out(s),
         sede=SedeOut.model_validate(s.sede) if s.sede else None,
     )
+
+
+# ============================================================
+# SERVICIOS PÚBLICOS
+# ============================================================
+@router.get("/servicios", response_model=List[ServicioPublicOut])
+def listar_servicios_publicos(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    servicios = db.execute(
+        select(Servicio).where(
+            Servicio.tenant_id == tenant.id,
+            Servicio.activo.is_(True),
+            Servicio.visible_web.is_(True),
+        ).order_by(Servicio.nombre.asc()).limit(20)
+    ).scalars().all()
+    return servicios
 
 
 # ============================================================

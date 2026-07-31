@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/servicios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Servicios Publicos */
+        get: operations["listar_servicios_publicos_api_v2__tenant_slug__servicios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/servicios/{servicio_id}/disponibilidad": {
         parameters: {
             query?: never;
@@ -817,6 +834,27 @@ export interface components {
             /** Visible Web */
             visible_web?: boolean | null;
         };
+        /** ServicioPublicOut */
+        ServicioPublicOut: {
+            /** Id */
+            id: number;
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion?: string | null;
+            tipo_agenda: components["schemas"]["TipoAgendaEnum"];
+            modalidad: components["schemas"]["ModalidadEnum"];
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Cupo Maximo */
+            cupo_maximo: number;
+            /** Precio */
+            precio?: string | null;
+            /** Moneda */
+            moneda: string;
+            /** Imagen Url */
+            imagen_url?: string | null;
+        };
         /** SesionAdminOut */
         SesionAdminOut: {
             /** Id */
@@ -1118,6 +1156,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_servicios_publicos_api_v2__tenant_slug__servicios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicioPublicOut"][];
                 };
             };
             /** @description Validation Error */

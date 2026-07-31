@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Login from './components/Login'
+import SeleccionServicio from './components/SeleccionServicio'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
 import FlujReserva from './components/FlujReserva'
 import MisReservas from './components/MisReservas'
@@ -35,8 +36,9 @@ function App() {
     const rol = u ? JSON.parse(u).rol : null
     if (rol === 'superadmin') return 'tenants'
     if (rol === 'admin' || rol === 'asesor') return 'panel-admin'
-    return 'calendario'
+    return 'servicios'
   })
+  const [servicioSeleccionado, setServicioSeleccionado] = useState(null)
   const [slotSeleccionado, setSlotSeleccionado] = useState(null)
   const [folioSeleccionado, setFolioSeleccionado] = useState(null)
 
@@ -45,6 +47,7 @@ function App() {
     setUsuario(nuevoUsuario)
     setTenantSlug(nuevoUsuario.tenant_slug)
     setTenantNombre(nuevoUsuario.tenant_nombre)
+    setServicioSeleccionado(null)
     setSlotSeleccionado(null)
     setFolioSeleccionado(null)
     persistirSesion({
@@ -55,7 +58,7 @@ function App() {
     })
     if (nuevoUsuario.rol === 'superadmin') setVista('tenants')
     else if (nuevoUsuario.rol === 'admin' || nuevoUsuario.rol === 'asesor') setVista('panel-admin')
-    else setVista('calendario')
+    else setVista('servicios')
   }
 
   const handleLogout = () => {
@@ -63,9 +66,10 @@ function App() {
     setUsuario(null)
     setTenantSlug(null)
     setTenantNombre(null)
+    setServicioSeleccionado(null)
     setSlotSeleccionado(null)
     setFolioSeleccionado(null)
-    setVista('calendario')
+    setVista('servicios')
     persistirSesion({ token: null, usuario: null, tenantSlug: null, tenantNombre: null })
   }
 
@@ -73,8 +77,15 @@ function App() {
     setTenantSlug(slug)
     setTenantNombre(nombre)
     persistirSesion({ token, usuario, tenantSlug: slug, tenantNombre: nombre })
+    setServicioSeleccionado(null)
     setSlotSeleccionado(null)
     setVista('panel-admin')
+  }
+
+  const handleSeleccionarServicio = (servicio) => {
+    setServicioSeleccionado(servicio)
+    setSlotSeleccionado(null)
+    setVista('calendario')
   }
 
   const handleSlotSelect = (slot) => {
@@ -103,7 +114,9 @@ function App() {
 
   const handleNav = (key) => {
     setSlotSeleccionado(null)
-    setVista(key)
+    if (key === 'servicios') setServicioSeleccionado(null)
+    if (key === 'calendario' && !servicioSeleccionado) setVista('servicios')
+    else setVista(key)
   }
 
   if (!token) {
@@ -127,6 +140,7 @@ function App() {
     ]
   } else {
     navItems = [
+      { key: 'servicios', label: '← Servicios' },
       { key: 'calendario', label: 'Calendario' },
       { key: 'mis-reservas', label: 'Mis Reservas' },
     ]
@@ -169,14 +183,14 @@ function App() {
       </header>
 
       <main className="flex justify-center p-4">
-        {vista === 'reserva' && slotSeleccionado ? (
+        {vista === 'reserva' && slotSeleccionado && servicioSeleccionado ? (
           <FlujReserva
             tenantSlug={tenantSlug}
-            servicioId={1}
+            servicioId={servicioSeleccionado.id}
             slot={slotSeleccionado}
-            servicioNombre="Consultoría Individual"
-            precio={1500}
-            moneda="MXN"
+            servicioNombre={servicioSeleccionado.nombre}
+            precio={servicioSeleccionado.precio}
+            moneda={servicioSeleccionado.moneda}
             onVolver={handleVolver}
           />
         ) : vista === 'mis-reservas' ? (
@@ -201,10 +215,12 @@ function App() {
           />
         ) : vista === 'panel-admin' || vista === 'tenants' ? (
           <GestionTenants token={token} onEntrarTenant={handleEntrarTenant} />
+        ) : vista === 'servicios' || (vista === 'calendario' && !servicioSeleccionado) ? (
+          <SeleccionServicio tenantSlug={tenantSlug} onSeleccionar={handleSeleccionarServicio} />
         ) : (
           <CalendarioDisponibilidad
             tenantSlug={tenantSlug}
-            servicioId={1}
+            servicioId={servicioSeleccionado.id}
             onSlotSelect={handleSlotSelect}
           />
         )}

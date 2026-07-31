@@ -457,6 +457,20 @@ class ServicioAdminUpdate(BaseModel):
         return self
 
 
+class ServicioPublicOut(BaseModel):
+    id: int
+    nombre: str
+    descripcion: Optional[str] = None
+    tipo_agenda: TipoAgendaEnum
+    modalidad: ModalidadEnum
+    duracion_minutos: int
+    cupo_maximo: int
+    precio: Optional[Decimal] = None
+    moneda: str
+    imagen_url: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ServicioAdminOut(BaseModel):
     id: int
     sede_id: Optional[int] = None

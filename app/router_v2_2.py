@@ -564,11 +564,11 @@ def listar_reservas_admin(
     reservas = db.execute(
         select(Reserva)
         .join(Sesion, Sesion.id == Reserva.sesion_id)
-        .options(
-            joinedload(Reserva.sesion),
-            joinedload(Reserva.servicio),
-            joinedload(Reserva.creado_por),
-        )
+          .options(
+              joinedload(Reserva.sesion).joinedload(Sesion.asesor),
+              joinedload(Reserva.servicio),
+              joinedload(Reserva.creado_por),
+          )
         .where(*cond)
         .order_by(Sesion.fecha_hora_inicio.desc())
         .limit(limit).offset(offset)
@@ -577,6 +577,7 @@ def listar_reservas_admin(
     items = []
     for r in reservas:
         s = r.sesion
+        asesor = s.asesor if s and s.asesor else None
         items.append(ReservaAdminListOut(
             id=r.id,
             folio=r.folio,
@@ -590,6 +591,12 @@ def listar_reservas_admin(
             timezone=s.timezone,
             precio_final=r.precio_final,
             moneda=r.moneda,
+            asesor=AsesorPublicOut(
+                id=asesor.id,
+                nombre=asesor.nombre,
+                avatar_url=asesor.avatar_url,
+                bio=asesor.bio,
+            ) if asesor else None,
         ))
 
     return ReservasAdminPaginadasOut(

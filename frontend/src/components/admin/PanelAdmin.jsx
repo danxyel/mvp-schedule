@@ -57,6 +57,19 @@ const FILTROS_ESTADO = [
 const LIMIT = 10
 const LIMIT_RESERVAS = 50
 
+const INICIO_MIN = 8 * 60
+const FIN_MIN = 20 * 60
+const DURACION_MIN = FIN_MIN - INICIO_MIN
+const HORAS = Array.from({ length: 12 }, (_, i) => 8 + i)
+
+const TIMELINE_COLORS = {
+  confirmada: 'border-blue-700 bg-blue-500 text-white',
+  completada: 'border-green-700 bg-green-500 text-white',
+  cancelada: 'border-gray-500 bg-gray-400 text-white',
+  en_espera: 'border-yellow-600 bg-yellow-400 text-gray-800',
+  no_show: 'border-red-700 bg-red-500 text-white',
+}
+
 function formatFechaHora(utcString, timezone) {
   return new Intl.DateTimeFormat('es-MX', {
     day: 'numeric',
@@ -547,6 +560,34 @@ function SesionesTab({ tenantSlug, token }) {
   )
 }
 
+function minutosDelDia(utcString, timezone) {
+  const parts = new Intl.DateTimeFormat('es-MX', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: timezone,
+  }).formatToParts(new Date(utcString))
+  const get = (t) => parseInt(parts.find((p) => p.type === t)?.value, 10) || 0
+  return get('hour') * 60 + get('minute')
+}
+
+function ahoraEn(timezone) {
+  const parts = new Intl.DateTimeFormat('es-MX', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: timezone,
+  }).formatToParts(new Date())
+  const get = (t) => parts.find((p) => p.type === t)?.value
+  return {
+    fecha: `${get('year')}-${get('month')}-${get('day')}`,
+    minutos: parseInt(get('hour'), 10) * 60 + parseInt(get('minute'), 10),
+  }
+}
+
 function ReservasTab({ tenantSlug, token }) {
   const [fecha, setFecha] = useState(() => toDateInputValue(new Date()))
   const [estado, setEstado] = useState('todas')
@@ -557,6 +598,7 @@ function ReservasTab({ tenantSlug, token }) {
   const [error, setError] = useState(null)
   const [accionError, setAccionError] = useState(null)
   const [checkinFolio, setCheckinFolio] = useState(null)
+  const [selectedFolio, setSelectedFolio] = useState(null)
 
   const fetchReservas = useCallback(async () => {
     const query = {
@@ -589,11 +631,13 @@ function ReservasTab({ tenantSlug, token }) {
   const cambiarFecha = (nuevaFecha) => {
     setFecha(nuevaFecha)
     setOffset(0)
+    setSelectedFolio(null)
   }
 
   const cambiarEstado = (nuevoEstado) => {
     setEstado(nuevoEstado)
     setOffset(0)
+    setSelectedFolio(null)
   }
 
   const irPagina = (nuevaOffset) => {
@@ -625,12 +669,41 @@ function ReservasTab({ tenantSlug, token }) {
     setItems((prev) => prev.map((r) => (r.folio === folio ? { ...r, estado: 'completada' } : r)))
   }
 
+  const timezone = items[0]?.timezone ?? 'America/Mexico_City'
+  const ahora = ahoraEn(timezone)
+  const mostrarLineaAhora = ahora.fecha === fecha && ahora.minutos >= INICIO_MIN && ahora.minutos <= FIN_MIN
+  const ahoraPct = Math.max(Math.min(((ahora.minutos - INICIO_MIN) / DURACION_MIN) * 100, 100), 0)
+  const ahoraLabel = `${String(Math.floor(ahora.minutos / 60)).padStart(2, '0')}:${String(
+    ahora.minutos % 60,
+  ).padStart(2, '0')}`
+
+  const carriles = items.reduce((acc, r) => {
+    const asesor = r.asesor ?? { id: 'sin-asignar', nombre: 'Sin asignar' }
+    let carril = acc.find((c) => c.asesor.id === asesor.id)
+    if (!carril) {
+      carril = { asesor, items: [] }
+      acc.push(carril)
+    }
+    carril.items.push(r)
+    return acc
+  }, [])
+  carriles.sort((a, b) => a.asesor.nombre.localeCompare(b.asesor.nombre))
+  carriles.forEach((c) =>
+    c.items.sort((a, b) => a.fecha_hora_inicio.localeCompare(b.fecha_hora_inicio)),
+  )
+
+  const visibles = selectedFolio ? items.filter((r) => r.folio === selectedFolio) : items
+
   if (loading) {
     return (
-      <div className="animate-pulse space-y-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-12 rounded-lg bg-gray-100" />
-        ))}
+      <div className="animate-pulse space-y-4">
+        <div className="h-10 w-full max-w-xs rounded-lg bg-gray-100" />
+        <div className="hidden h-40 rounded-lg bg-gray-100 md:block" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-12 rounded-lg bg-gray-100" />
+          ))}
+        </div>
       </div>
     )
   }
@@ -679,6 +752,102 @@ function ReservasTab({ tenantSlug, token }) {
         </label>
       </div>
 
+      {items.length > 0 && (
+        <div className="mb-4 hidden md:block">
+          <div className="mb-2 flex text-xs font-medium text-gray-600">
+            <div className="w-28 shrink-0 pr-3">Asesor</div>
+            <div className="flex flex-1 items-center justify-between">
+              <span className="text-center">Agenda {fecha}</span>
+              {mostrarLineaAhora && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600">
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
+                  Ahora {ahoraLabel}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex">
+            <div className="w-28 shrink-0 pr-3" />
+            <div className="relative flex-1">
+              <div className="grid grid-cols-12">
+                {HORAS.map((h) => (
+                  <div key={h} className="relative text-[10px] text-gray-400">
+                    <span className="absolute -top-0.5 left-0">
+                      {`${String(h).padStart(2, '0')}:00`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {carriles.map((carril) => (
+              <div key={carril.asesor.id} className="flex items-stretch">
+                <div className="flex w-28 shrink-0 items-center pr-3 text-xs font-medium text-gray-700">
+                  <span className="truncate">{carril.asesor.nombre}</span>
+                </div>
+                <div className="relative h-12 flex-1 rounded-lg border border-gray-100 bg-gray-50/60">
+                  {HORAS.map((h) => (
+                    <div
+                      key={h}
+                      className="absolute bottom-0 top-0 border-l border-gray-200"
+                      style={{ left: `${((h - INICIO_MIN / 60) / (FIN_MIN / 60 - INICIO_MIN / 60)) * 100}%` }}
+                    />
+                  ))}
+                  {carril.items.map((r) => {
+                    const inicio = minutosDelDia(r.fecha_hora_inicio, r.timezone)
+                    const fin = minutosDelDia(r.fecha_hora_fin, r.timezone)
+                    const left = Math.min(Math.max(((inicio - INICIO_MIN) / DURACION_MIN) * 100, 0), 95)
+                    const width = Math.min(
+                      Math.max(((fin - inicio) / DURACION_MIN) * 100, 3.5),
+                      100 - left,
+                    )
+                    const activo = r.folio === selectedFolio
+                    return (
+                      <button
+                        key={r.folio}
+                        type="button"
+                        onClick={() => setSelectedFolio(activo ? null : r.folio)}
+                        title={`${formatHora(r.fecha_hora_inicio, r.timezone)} – ${formatHora(
+                          r.fecha_hora_fin,
+                          r.timezone,
+                        )} · ${r.nombre_cliente ?? ''} · ${RESERVA_LABEL[r.estado] ?? r.estado}`}
+                        className={`absolute bottom-1 top-1 overflow-hidden rounded-md border px-1.5 text-left text-[10px] font-medium leading-tight transition ${
+                          TIMELINE_COLORS[r.estado] ?? 'border-gray-500 bg-gray-400 text-white'
+                        } ${activo ? 'ring-2 ring-blue-400 ring-offset-1' : 'hover:brightness-110'}`}
+                        style={{ left: `${left}%`, width: `${width}%` }}
+                      >
+                        <span className="block truncate">{r.nombre_cliente ?? r.folio}</span>
+                      </button>
+                    )
+                  })}
+                  {mostrarLineaAhora && (
+                    <div
+                      className="pointer-events-none absolute bottom-0 top-0 w-px bg-red-500"
+                      style={{ left: `${ahoraPct}%` }}
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {selectedFolio && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+          <span className="text-sm text-blue-800">Mostrando detalle de reserva</span>
+          <span className="font-mono text-xs text-blue-700">{selectedFolio}</span>
+          <button
+            type="button"
+            onClick={() => setSelectedFolio(null)}
+            className="ml-auto rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-blue-700"
+          >
+            Mostrar todas
+          </button>
+        </div>
+      )}
+
       {accionError && (
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {errorMensaje(accionError)}
@@ -689,30 +858,31 @@ function ReservasTab({ tenantSlug, token }) {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-4 py-3 font-medium">Folio</th>
-              <th className="px-4 py-3 font-medium">Cliente</th>
-              <th className="px-4 py-3 font-medium">Servicio</th>
               <th className="px-4 py-3 font-medium">Hora</th>
+              <th className="px-4 py-3 font-medium">Cliente</th>
               <th className="px-4 py-3 font-medium">Estado</th>
               <th className="hidden px-4 py-3 font-medium sm:table-cell">Pago</th>
-              <th className="px-4 py-3 text-right font-medium">Acciones</th>
+              <th className="px-4 py-3 text-right font-medium">Check-in</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map((r) => (
-              <tr key={r.folio} className="transition hover:bg-gray-50">
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-600">
-                  {r.folio}
+            {visibles.map((r) => (
+              <tr
+                key={r.folio}
+                className={`transition hover:bg-gray-50 ${
+                  r.folio === selectedFolio ? 'bg-blue-50' : ''
+                }`}
+              >
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                  {formatHora(r.fecha_hora_inicio, r.timezone)}
+                  <span className="text-gray-400"> – </span>
+                  <span className="text-gray-400">{formatHora(r.fecha_hora_fin, r.timezone)}</span>
                 </td>
                 <td className="px-4 py-3">
                   <p className="text-gray-700">{r.nombre_cliente ?? '—'}</p>
                   <p className="hidden text-xs text-gray-400 sm:block">
                     {r.email_cliente ?? ''}
                   </p>
-                </td>
-                <td className="px-4 py-3 text-gray-700">{r.servicio_nombre ?? '—'}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                  {formatHora(r.fecha_hora_inicio, r.timezone)}
                 </td>
                 <td className="px-4 py-3">
                   <Badge value={r.estado} map={RESERVA_BADGE} labelMap={RESERVA_LABEL} />
@@ -743,7 +913,7 @@ function ReservasTab({ tenantSlug, token }) {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
                   No hay reservas para este día.
                 </td>
               </tr>

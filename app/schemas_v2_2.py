@@ -278,6 +278,7 @@ class ReservaAdminListOut(BaseModel):
     timezone: str
     precio_final: Optional[Decimal] = None
     moneda: str = "MXN"
+    asesor: Optional[AsesorPublicOut] = None
 
 
 # ============================================================

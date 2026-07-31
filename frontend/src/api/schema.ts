@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/servicios/{servicio_id}/disponibilidad": {
         parameters: {
             query?: never;
@@ -140,6 +157,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/reservas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Reservas Admin */
+        get: operations["listar_reservas_admin_api_v2__tenant_slug__admin_reservas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/servicios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Servicios Admin */
+        get: operations["listar_servicios_admin_api_v2__tenant_slug__admin_servicios_get"];
+        put?: never;
+        /** Crear Servicio Admin */
+        post: operations["crear_servicio_admin_api_v2__tenant_slug__admin_servicios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/servicios/{servicio_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Desactivar Servicio Admin */
+        delete: operations["desactivar_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__delete"];
+        options?: never;
+        head?: never;
+        /** Actualizar Servicio Admin */
+        patch: operations["actualizar_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/activar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activar Servicio Admin */
+        post: operations["activar_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__activar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/reservas/{folio}/checkin": {
         parameters: {
             query?: never;
@@ -208,6 +295,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/superadmin/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Tenants */
+        get: operations["listar_tenants_api_v2_superadmin_tenants_get"];
+        put?: never;
+        /** Crear Tenant */
+        post: operations["crear_tenant_api_v2_superadmin_tenants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/tenants/{tenant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Actualizar Tenant */
+        patch: operations["actualizar_tenant_api_v2_superadmin_tenants__tenant_id__patch"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -262,6 +384,13 @@ export interface components {
             avatar_url?: string | null;
             /** Bio */
             bio?: string | null;
+        };
+        /** Body_login_auth_login_post */
+        Body_login_auth_login_post: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
         };
         /**
          * CanalEnum
@@ -357,6 +486,41 @@ export interface components {
             nueva_sede_id?: number | null;
             /** Motivo */
             motivo?: string | null;
+        };
+        /** ReservaAdminListOut */
+        ReservaAdminListOut: {
+            /** Id */
+            id: number;
+            /** Folio */
+            folio: string;
+            estado: components["schemas"]["EstadoReservaEnum"];
+            estado_pago: components["schemas"]["EstadoPagoEnum"];
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Email Cliente */
+            email_cliente?: string | null;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Inicio
+             * Format: date-time
+             */
+            fecha_hora_inicio: string;
+            /**
+             * Fecha Hora Fin
+             * Format: date-time
+             */
+            fecha_hora_fin: string;
+            /** Timezone */
+            timezone: string;
+            /** Precio Final */
+            precio_final?: string | null;
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
+            asesor?: components["schemas"]["AsesorPublicOut"] | null;
         };
         /** ReservaCreate */
         ReservaCreate: {
@@ -483,6 +647,12 @@ export interface components {
              */
             creado_en: string;
         };
+        /** ReservasAdminPaginadasOut */
+        ReservasAdminPaginadasOut: {
+            /** Items */
+            items: components["schemas"]["ReservaAdminListOut"][];
+            paginacion: components["schemas"]["PaginacionOut"];
+        };
         /** SedeOut */
         SedeOut: {
             /** Id */
@@ -499,6 +669,153 @@ export interface components {
             telefono?: string | null;
             /** Timezone */
             timezone: string;
+        };
+        /** ServicioAdminIn */
+        ServicioAdminIn: {
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion?: string | null;
+            /** Categoria */
+            categoria?: string | null;
+            /**
+             * Color
+             * @default #3b82f6
+             */
+            color: string;
+            /** Slug */
+            slug?: string | null;
+            /** @default individual */
+            tipo_agenda: components["schemas"]["TipoAgendaEnum"];
+            /** @default virtual */
+            modalidad: components["schemas"]["ModalidadEnum"];
+            /**
+             * Duracion Minutos
+             * @default 60
+             */
+            duracion_minutos: number;
+            /**
+             * Buffer Antes Min
+             * @default 0
+             */
+            buffer_antes_min: number;
+            /**
+             * Buffer Despues Min
+             * @default 0
+             */
+            buffer_despues_min: number;
+            /**
+             * Cupo Minimo
+             * @default 1
+             */
+            cupo_minimo: number;
+            /**
+             * Cupo Maximo
+             * @default 1
+             */
+            cupo_maximo: number;
+            /** Precio */
+            precio?: number | string | null;
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
+            /**
+             * Pago Requerido
+             * @default true
+             */
+            pago_requerido: boolean;
+            /**
+             * Visible Web
+             * @default true
+             */
+            visible_web: boolean;
+        };
+        /** ServicioAdminOut */
+        ServicioAdminOut: {
+            /** Id */
+            id: number;
+            /** Sede Id */
+            sede_id?: number | null;
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion?: string | null;
+            /** Categoria */
+            categoria?: string | null;
+            /** Color */
+            color: string;
+            /** Slug */
+            slug?: string | null;
+            tipo_agenda: components["schemas"]["TipoAgendaEnum"];
+            modalidad: components["schemas"]["ModalidadEnum"];
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Buffer Antes Min */
+            buffer_antes_min: number;
+            /** Buffer Despues Min */
+            buffer_despues_min: number;
+            /** Cupo Minimo */
+            cupo_minimo: number;
+            /** Cupo Maximo */
+            cupo_maximo: number;
+            /** Precio */
+            precio?: string | null;
+            /** Moneda */
+            moneda: string;
+            /** Pago Requerido */
+            pago_requerido: boolean;
+            /** Visible Web */
+            visible_web: boolean;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Actualizado En
+             * Format: date-time
+             */
+            actualizado_en: string;
+        };
+        /**
+         * ServicioAdminUpdate
+         * @description PATCH parcial. `activo` NO se edita aquí: se usa activar/desactivar.
+         */
+        ServicioAdminUpdate: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Descripcion */
+            descripcion?: string | null;
+            /** Categoria */
+            categoria?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Slug */
+            slug?: string | null;
+            tipo_agenda?: components["schemas"]["TipoAgendaEnum"] | null;
+            modalidad?: components["schemas"]["ModalidadEnum"] | null;
+            /** Duracion Minutos */
+            duracion_minutos?: number | null;
+            /** Buffer Antes Min */
+            buffer_antes_min?: number | null;
+            /** Buffer Despues Min */
+            buffer_despues_min?: number | null;
+            /** Cupo Minimo */
+            cupo_minimo?: number | null;
+            /** Cupo Maximo */
+            cupo_maximo?: number | null;
+            /** Precio */
+            precio?: number | string | null;
+            /** Moneda */
+            moneda?: string | null;
+            /** Pago Requerido */
+            pago_requerido?: boolean | null;
+            /** Visible Web */
+            visible_web?: boolean | null;
         };
         /** SesionAdminOut */
         SesionAdminOut: {
@@ -658,6 +975,111 @@ export interface components {
             /** Motivo No Disponible */
             motivo_no_disponible?: string | null;
         };
+        /** TenantAdminOut */
+        TenantAdminOut: {
+            /** Id */
+            id: number;
+            /** Slug */
+            slug: string;
+            /** Nombre */
+            nombre: string;
+            /** Activo */
+            activo: boolean;
+            /** Plan */
+            plan: string;
+            /** Timezone */
+            timezone: string;
+            /** Moneda */
+            moneda: string;
+            /** Max Asesores */
+            max_asesores: number;
+            /** Max Servicios */
+            max_servicios: number;
+            /** Max Clientes */
+            max_clientes: number;
+            /** Max Reservas Mes */
+            max_reservas_mes: number;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Total Usuarios
+             * @default 0
+             */
+            total_usuarios: number;
+        };
+        /** TenantCreate */
+        TenantCreate: {
+            /** Slug */
+            slug: string;
+            /** Nombre */
+            nombre: string;
+            /**
+             * Plan
+             * @default starter
+             */
+            plan: string;
+            /**
+             * Timezone
+             * @default America/Mexico_City
+             */
+            timezone: string;
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
+            /**
+             * Max Asesores
+             * @default 5
+             */
+            max_asesores: number;
+            /**
+             * Max Servicios
+             * @default 10
+             */
+            max_servicios: number;
+            /**
+             * Max Clientes
+             * @default 500
+             */
+            max_clientes: number;
+            /**
+             * Max Reservas Mes
+             * @default 1000
+             */
+            max_reservas_mes: number;
+        };
+        /** TenantUpdate */
+        TenantUpdate: {
+            /** Activo */
+            activo?: boolean | null;
+            /** Nombre */
+            nombre?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Plan */
+            plan?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+            /** Moneda */
+            moneda?: string | null;
+            /** Max Asesores */
+            max_asesores?: number | null;
+            /** Max Servicios */
+            max_servicios?: number | null;
+            /** Max Clientes */
+            max_clientes?: number | null;
+            /** Max Reservas Mes */
+            max_reservas_mes?: number | null;
+        };
+        /**
+         * TipoAgendaEnum
+         * @enum {string}
+         */
+        TipoAgendaEnum: "individual" | "grupal" | "recurrente";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -676,6 +1098,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_login_auth_login_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     disponibilidad_por_dia_api_v2__tenant_slug__servicios__servicio_id__disponibilidad_get: {
         parameters: {
             query: {
@@ -935,6 +1390,213 @@ export interface operations {
             };
         };
     };
+    listar_reservas_admin_api_v2__tenant_slug__admin_reservas_get: {
+        parameters: {
+            query?: {
+                /** @description Filtra por fecha de la sesión (default: hoy) */
+                fecha?: string | null;
+                /** @description Filtra por estado de reserva (ej. confirmada) */
+                estado?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservasAdminPaginadasOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_servicios_admin_api_v2__tenant_slug__admin_servicios_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por estado activo */
+                activo?: boolean | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicioAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_servicio_admin_api_v2__tenant_slug__admin_servicios_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicioAdminIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desactivar_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicioAdminUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServicioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activar_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__activar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     checkin_reserva_api_v2__tenant_slug__reservas__folio__checkin_post: {
         parameters: {
             query?: never;
@@ -1058,6 +1720,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_tenants_api_v2_superadmin_tenants_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por estado activo */
+                activo?: boolean | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_tenant_api_v2_superadmin_tenants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_tenant_api_v2_superadmin_tenants__tenant_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantAdminOut"];
                 };
             };
             /** @description Validation Error */

@@ -69,7 +69,7 @@ function Modal({ title, onClose, children, maxWidth = 'max-w-lg' }) {
   )
 }
 
-export default function GestionTenants({ token, onVolver }) {
+export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -313,13 +313,15 @@ export default function GestionTenants({ token, onVolver }) {
     <div className="mx-auto max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Gestión de Tenants</h2>
-        <button
-          type="button"
-          onClick={onVolver}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Volver
-        </button>
+        {onVolver && (
+          <button
+            type="button"
+            onClick={onVolver}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Volver
+          </button>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -362,7 +364,14 @@ export default function GestionTenants({ token, onVolver }) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {tenants.map((t) => (
-              <tr key={t.id} className="transition hover:bg-gray-50">
+              <tr
+                key={t.id}
+                onClick={() => onEntrarTenant?.(t.slug, t.nombre)}
+                className={`cursor-pointer transition hover:bg-blue-50 ${
+                  toggleLoadingId === t.id ? 'opacity-60' : ''
+                }`}
+                title="Entrar al tenant"
+              >
                 <td className="px-4 py-3 text-gray-700">{t.nombre}</td>
                 <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-600">
                   {t.slug}
@@ -388,7 +397,10 @@ export default function GestionTenants({ token, onVolver }) {
                   <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => abrirEditar(t)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        abrirEditar(t)
+                      }}
                       className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                     >
                       Editar
@@ -398,7 +410,10 @@ export default function GestionTenants({ token, onVolver }) {
                       role="switch"
                       aria-checked={t.activo}
                       disabled={toggleLoadingId === t.id}
-                      onClick={() => alternarEstado(t)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        alternarEstado(t)
+                      }}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                         t.activo ? 'bg-green-500' : 'bg-gray-300'
                       } disabled:cursor-not-allowed disabled:opacity-50`}

@@ -31,7 +31,13 @@ export default function Login({ onLogin }) {
         return
       }
 
-      const usuario = { usuario_id: data.usuario_id, nombre: data.nombre, rol: data.rol }
+      const usuario = {
+        usuario_id: data.usuario_id,
+        nombre: data.nombre,
+        rol: data.rol,
+        tenant_slug: data.tenant_slug ?? null,
+        tenant_nombre: data.tenant_nombre ?? null,
+      }
       onLogin(data.token, usuario)
     } catch {
       setError('No se pudo conectar al servidor')

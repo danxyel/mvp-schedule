@@ -20,6 +20,7 @@ from app.dependencies import (
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
     RolUsuario, EstadoSesion, EstadoReserva, ESTADOS_SESION_ACTIVA, PlanTenant,
+    TipoAgenda, Modalidad,
 )
 from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaCreateResponse, ReagendarSesionIn,
@@ -28,6 +29,7 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
+    ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -53,11 +55,24 @@ def _membresia(db: Session, tenant_id: int, usuario_id: int) -> Optional[Usuario
     ).scalar_one_or_none()
 
 
+def _superadmin_en_algun_tenant(db: Session, usuario_id: int) -> Optional[UsuarioTenant]:
+    return db.execute(
+        select(UsuarioTenant).where(
+            UsuarioTenant.usuario_id == usuario_id,
+            UsuarioTenant.rol == RolUsuario.SUPERADMIN,
+            UsuarioTenant.activo.is_(True),
+        )
+    ).scalars().first()
+
+
 def requiere_staff(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     usuario: Usuario = Depends(get_current_user),
 ) -> UsuarioTenant:
+    superadmin = _superadmin_en_algun_tenant(db, usuario.id)
+    if superadmin:
+        return superadmin
     m = _membresia(db, tenant.id, usuario.id)
     if m is None or m.rol not in (RolUsuario.ASESOR, RolUsuario.ADMIN, RolUsuario.SUPERADMIN):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requiere permisos de personal")
@@ -69,6 +84,9 @@ def requiere_admin(
     tenant: Tenant = Depends(get_current_tenant),
     usuario: Usuario = Depends(get_current_user),
 ) -> UsuarioTenant:
+    superadmin = _superadmin_en_algun_tenant(db, usuario.id)
+    if superadmin:
+        return superadmin
     m = _membresia(db, tenant.id, usuario.id)
     if m is None or m.rol not in (RolUsuario.ADMIN, RolUsuario.SUPERADMIN):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requiere permisos de administrador")
@@ -80,19 +98,15 @@ def requiere_superadmin(
     usuario: Usuario = Depends(get_current_user),
 ) -> UsuarioTenant:
     """Exige rol SUPERADMIN en cualquier tenant. No depende de {tenant_slug}."""
-    m = db.execute(
-        select(UsuarioTenant).where(
-            UsuarioTenant.usuario_id == usuario.id,
-            UsuarioTenant.rol == RolUsuario.SUPERADMIN,
-            UsuarioTenant.activo.is_(True),
-        )
-    ).scalars().first()
+    m = _superadmin_en_algun_tenant(db, usuario.id)
     if m is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Requiere permisos de superadministrador")
     return m
 
 
 def _es_staff(db: Session, tenant_id: int, usuario_id: int) -> bool:
+    if _superadmin_en_algun_tenant(db, usuario_id) is not None:
+        return True
     m = _membresia(db, tenant_id, usuario_id)
     return m is not None and m.rol in (RolUsuario.ASESOR, RolUsuario.ADMIN, RolUsuario.SUPERADMIN)
 
@@ -621,6 +635,137 @@ def listar_reservas_admin(
         items=items,
         paginacion=PaginacionOut(total=total, limit=limit, offset=offset),
     )
+
+
+# ============================================================
+# ADMIN — GESTIÓN DE SERVICIOS
+# ============================================================
+def _servicio_admin_out(s: Servicio) -> ServicioAdminOut:
+    return ServicioAdminOut.model_validate(s)
+
+
+@router.get("/admin/servicios", response_model=List[ServicioAdminOut])
+def listar_servicios_admin(
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    cond = [Servicio.tenant_id == tenant.id]
+    if activo is not None:
+        cond.append(Servicio.activo.is_(activo))
+
+    filas = db.execute(
+        select(Servicio).where(*cond).order_by(Servicio.creado_en.desc())
+    ).scalars().all()
+    return [_servicio_admin_out(s) for s in filas]
+
+
+@router.post("/admin/servicios", response_model=ServicioAdminOut, status_code=status.HTTP_201_CREATED)
+def crear_servicio_admin(
+    body: ServicioAdminIn,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    s = Servicio(
+        tenant_id=tenant.id,
+        nombre=body.nombre,
+        descripcion=body.descripcion,
+        categoria=body.categoria,
+        color=body.color,
+        slug=body.slug,
+        tipo_agenda=TipoAgenda(body.tipo_agenda.value),
+        modalidad=Modalidad(body.modalidad.value),
+        duracion_minutos=body.duracion_minutos,
+        buffer_antes_min=body.buffer_antes_min,
+        buffer_despues_min=body.buffer_despues_min,
+        cupo_minimo=body.cupo_minimo,
+        cupo_maximo=body.cupo_maximo,
+        precio=body.precio,
+        moneda=body.moneda,
+        pago_requerido=body.pago_requerido,
+        visible_web=body.visible_web,
+    )
+    db.add(s)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe un servicio con ese slug")
+    db.refresh(s)
+    return _servicio_admin_out(s)
+
+
+@router.patch("/admin/servicios/{servicio_id}", response_model=ServicioAdminOut)
+def actualizar_servicio_admin(
+    servicio_id: int = Path(..., gt=0),
+    body: ServicioAdminUpdate = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    s = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+
+    cambios = body.model_dump(exclude_unset=True)
+    if not cambios:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se enviaron campos para actualizar")
+
+    if "tipo_agenda" in cambios:
+        cambios["tipo_agenda"] = TipoAgenda(cambios["tipo_agenda"].value)
+    if "modalidad" in cambios:
+        cambios["modalidad"] = Modalidad(cambios["modalidad"].value)
+
+    for campo, valor in cambios.items():
+        setattr(s, campo, valor)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe un servicio con ese slug")
+    db.refresh(s)
+    return _servicio_admin_out(s)
+
+
+@router.post("/admin/servicios/{servicio_id}/activar", response_model=OperacionOut)
+def activar_servicio_admin(
+    servicio_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    s = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+
+    s.activo = True
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Servicio activado", detalle={"id": servicio_id})
+
+
+@router.delete("/admin/servicios/{servicio_id}", response_model=OperacionOut)
+def desactivar_servicio_admin(
+    servicio_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    s = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+
+    s.activo = False
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Servicio desactivado", detalle={"id": servicio_id})
 
 
 # ============================================================

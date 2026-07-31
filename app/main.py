@@ -72,7 +72,7 @@ app.add_middleware(
 
 from fastapi import Body
 from app.dependencies import crear_token
-from app.models_v2_2 import Usuario, UsuarioTenant
+from app.models_v2_2 import Usuario, UsuarioTenant, Tenant
 from app.database import get_db
 from sqlalchemy.orm import Session
 import bcrypt
@@ -89,6 +89,11 @@ def login(
     usuario = db.query(Usuario).filter_by(email=email).first()
     if usuario is None or usuario.es_invitado:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email o contraseña incorrectos")
+    if not usuario.password_hash or not bcrypt.checkpw(
+        password.encode("utf-8"),
+        usuario.password_hash.encode("utf-8"),
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email o contraseña incorrectos")
     token = crear_token(usuario.id)
 
     membresias = db.query(UsuarioTenant).filter(
@@ -96,13 +101,25 @@ def login(
         UsuarioTenant.activo.is_(True),
     ).all()
     rol = "cliente"
+    tenant_slug = None
+    tenant_nombre = None
     if membresias:
-        rol = max(
-            (m.rol.value for m in membresias),
-            key=lambda v: _ROL_RANK.get(v, -1),
-        )
+        mejor = max(membresias, key=lambda m: _ROL_RANK.get(m.rol.value, -1))
+        rol = mejor.rol.value
+        if rol != "superadmin":
+            tenant = db.get(Tenant, mejor.tenant_id)
+            if tenant is not None:
+                tenant_slug = tenant.slug
+                tenant_nombre = tenant.nombre
 
-    return {"token": token, "usuario_id": usuario.id, "nombre": usuario.nombre, "rol": rol}
+    return {
+        "token": token,
+        "usuario_id": usuario.id,
+        "nombre": usuario.nombre,
+        "rol": rol,
+        "tenant_slug": tenant_slug,
+        "tenant_nombre": tenant_nombre,
+    }
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 app.include_router(router)
 app.include_router(superadmin_router)

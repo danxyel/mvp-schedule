@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
 
 
 # ============================================================
@@ -393,3 +393,90 @@ class TenantUpdate(BaseModel):
     max_servicios: Optional[int] = Field(None, ge=1)
     max_clientes: Optional[int] = Field(None, ge=1)
     max_reservas_mes: Optional[int] = Field(None, ge=1)
+
+
+# ============================================================
+# ADMIN — SERVICIOS
+# ============================================================
+class ServicioAdminIn(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=255)
+    descripcion: Optional[str] = Field(None, max_length=2000)
+    categoria: Optional[str] = Field(None, max_length=64)
+    color: str = Field("#3b82f6", pattern=r"^#[0-9a-fA-F]{6}$")
+    slug: Optional[str] = Field(None, max_length=128)
+    tipo_agenda: TipoAgendaEnum = TipoAgendaEnum.INDIVIDUAL
+    modalidad: ModalidadEnum = ModalidadEnum.VIRTUAL
+    duracion_minutos: int = Field(60, ge=1)
+    buffer_antes_min: int = Field(0, ge=0)
+    buffer_despues_min: int = Field(0, ge=0)
+    cupo_minimo: int = Field(1, ge=1)
+    cupo_maximo: int = Field(1, ge=1)
+    precio: Optional[Decimal] = Field(None, ge=0)
+    moneda: str = Field("MXN", min_length=3, max_length=3)
+    pago_requerido: bool = True
+    visible_web: bool = True
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _validar_cupos(self):
+        if self.cupo_maximo < self.cupo_minimo:
+            raise ValueError("cupo_maximo no puede ser menor que cupo_minimo")
+        if self.tipo_agenda == TipoAgendaEnum.INDIVIDUAL and self.cupo_maximo != 1:
+            raise ValueError("Un servicio individual solo admite cupo_maximo = 1")
+        return self
+
+
+class ServicioAdminUpdate(BaseModel):
+    """PATCH parcial. `activo` NO se edita aquí: se usa activar/desactivar."""
+    nombre: Optional[str] = Field(None, min_length=2, max_length=255)
+    descripcion: Optional[str] = Field(None, max_length=2000)
+    categoria: Optional[str] = Field(None, max_length=64)
+    color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    slug: Optional[str] = Field(None, max_length=128)
+    tipo_agenda: Optional[TipoAgendaEnum] = None
+    modalidad: Optional[ModalidadEnum] = None
+    duracion_minutos: Optional[int] = Field(None, ge=1)
+    buffer_antes_min: Optional[int] = Field(None, ge=0)
+    buffer_despues_min: Optional[int] = Field(None, ge=0)
+    cupo_minimo: Optional[int] = Field(None, ge=1)
+    cupo_maximo: Optional[int] = Field(None, ge=1)
+    precio: Optional[Decimal] = Field(None, ge=0)
+    moneda: Optional[str] = Field(None, min_length=3, max_length=3)
+    pago_requerido: Optional[bool] = None
+    visible_web: Optional[bool] = None
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _validar_cupos(self):
+        if self.cupo_maximo is not None and self.cupo_minimo is not None:
+            if self.cupo_maximo < self.cupo_minimo:
+                raise ValueError("cupo_maximo no puede ser menor que cupo_minimo")
+        if self.tipo_agenda == TipoAgendaEnum.INDIVIDUAL and self.cupo_maximo is not None:
+            if self.cupo_maximo != 1:
+                raise ValueError("Un servicio individual solo admite cupo_maximo = 1")
+        return self
+
+
+class ServicioAdminOut(BaseModel):
+    id: int
+    sede_id: Optional[int] = None
+    nombre: str
+    descripcion: Optional[str] = None
+    categoria: Optional[str] = None
+    color: str
+    slug: Optional[str] = None
+    tipo_agenda: TipoAgendaEnum
+    modalidad: ModalidadEnum
+    duracion_minutos: int
+    buffer_antes_min: int
+    buffer_despues_min: int
+    cupo_minimo: int
+    cupo_maximo: int
+    precio: Optional[Decimal] = None
+    moneda: str
+    pago_requerido: bool
+    visible_web: bool
+    activo: bool
+    creado_en: datetime
+    actualizado_en: datetime
+    model_config = ConfigDict(from_attributes=True)

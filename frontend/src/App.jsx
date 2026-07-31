@@ -7,11 +7,16 @@ import DetalleReserva from './components/DetalleReserva'
 import PanelAdmin from './components/admin/PanelAdmin'
 import GestionTenants from './components/superadmin/GestionTenants'
 
-const NAV = [
-  { key: 'calendario', label: 'Calendario' },
-  { key: 'mis-reservas', label: 'Mis Reservas' },
-  { key: 'admin', label: 'Admin' },
-]
+function persistirSesion({ token, usuario, tenantSlug, tenantNombre }) {
+  const guardar = (clave, valor) => {
+    if (valor) sessionStorage.setItem(clave, valor)
+    else sessionStorage.removeItem(clave)
+  }
+  guardar('token', token)
+  guardar('usuario', usuario ? JSON.stringify(usuario) : null)
+  guardar('tenantSlug', tenantSlug)
+  guardar('tenantNombre', tenantNombre)
+}
 
 function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('token') || null)
@@ -19,28 +24,57 @@ function App() {
     const u = sessionStorage.getItem('usuario')
     return u ? JSON.parse(u) : null
   })
-  const [vista, setVista] = useState('calendario')
+  const [tenantSlug, setTenantSlug] = useState(
+    () => sessionStorage.getItem('tenantSlug') || null,
+  )
+  const [tenantNombre, setTenantNombre] = useState(
+    () => sessionStorage.getItem('tenantNombre') || null,
+  )
+  const [vista, setVista] = useState(() => {
+    const u = sessionStorage.getItem('usuario')
+    const rol = u ? JSON.parse(u).rol : null
+    if (rol === 'superadmin') return 'tenants'
+    if (rol === 'admin' || rol === 'asesor') return 'panel-admin'
+    return 'calendario'
+  })
   const [slotSeleccionado, setSlotSeleccionado] = useState(null)
   const [folioSeleccionado, setFolioSeleccionado] = useState(null)
 
   const handleLogin = (nuevoToken, nuevoUsuario) => {
-    sessionStorage.setItem('token', nuevoToken)
-    sessionStorage.setItem('usuario', JSON.stringify(nuevoUsuario))
     setToken(nuevoToken)
     setUsuario(nuevoUsuario)
+    setTenantSlug(nuevoUsuario.tenant_slug)
+    setTenantNombre(nuevoUsuario.tenant_nombre)
     setSlotSeleccionado(null)
     setFolioSeleccionado(null)
-    setVista('calendario')
+    persistirSesion({
+      token: nuevoToken,
+      usuario: nuevoUsuario,
+      tenantSlug: nuevoUsuario.tenant_slug,
+      tenantNombre: nuevoUsuario.tenant_nombre,
+    })
+    if (nuevoUsuario.rol === 'superadmin') setVista('tenants')
+    else if (nuevoUsuario.rol === 'admin' || nuevoUsuario.rol === 'asesor') setVista('panel-admin')
+    else setVista('calendario')
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem('token')
-    sessionStorage.removeItem('usuario')
     setToken(null)
     setUsuario(null)
+    setTenantSlug(null)
+    setTenantNombre(null)
     setSlotSeleccionado(null)
     setFolioSeleccionado(null)
     setVista('calendario')
+    persistirSesion({ token: null, usuario: null, tenantSlug: null, tenantNombre: null })
+  }
+
+  const handleEntrarTenant = (slug, nombre) => {
+    setTenantSlug(slug)
+    setTenantNombre(nombre)
+    persistirSesion({ token, usuario, tenantSlug: slug, tenantNombre: nombre })
+    setSlotSeleccionado(null)
+    setVista('panel-admin')
   }
 
   const handleSlotSelect = (slot) => {
@@ -53,6 +87,10 @@ function App() {
     setVista('calendario')
   }
 
+  const handleVolverDePanel = () => {
+    setVista(usuario?.rol === 'superadmin' ? 'tenants' : 'calendario')
+  }
+
   const handleVerDetalle = (folio) => {
     setFolioSeleccionado(folio)
     setVista('detalle')
@@ -63,27 +101,48 @@ function App() {
     setVista('mis-reservas')
   }
 
+  const handleNav = (key) => {
+    setSlotSeleccionado(null)
+    setVista(key)
+  }
+
   if (!token) {
     return <Login onLogin={handleLogin} />
+  }
+
+  let brand = 'MVP Schedule'
+  if (usuario?.rol === 'superadmin') {
+    if (vista === 'panel-admin' && tenantNombre) brand = `${tenantNombre}. Admin`
+  } else if (tenantNombre) {
+    brand = tenantNombre
+  }
+
+  let navItems = []
+  if (usuario?.rol === 'superadmin') {
+    if (vista !== 'tenants') navItems = [{ key: 'tenants', label: '← Tenants' }]
+  } else if (usuario?.rol === 'admin' || usuario?.rol === 'asesor') {
+    navItems = [
+      { key: 'panel-admin', label: 'Panel' },
+      { key: 'calendario', label: 'Calendario' },
+    ]
+  } else {
+    navItems = [
+      { key: 'calendario', label: 'Calendario' },
+      { key: 'mis-reservas', label: 'Mis Reservas' },
+    ]
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          <span className="text-sm font-bold text-gray-700">MVP Schedule</span>
+          <span className="text-sm font-bold text-gray-700">{brand}</span>
           <div className="flex gap-1">
-            {(usuario?.rol === 'superadmin'
-              ? [...NAV, { key: 'superadmin', label: 'Tenants' }]
-              : NAV
-            ).map(({ key, label }) => (
+            {navItems.map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => {
-                  setSlotSeleccionado(null)
-                  setVista(key)
-                }}
+                onClick={() => handleNav(key)}
                 className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
                   vista === key
                     ? 'bg-blue-600 text-white'
@@ -112,7 +171,7 @@ function App() {
       <main className="flex justify-center p-4">
         {vista === 'reserva' && slotSeleccionado ? (
           <FlujReserva
-            tenantSlug="simal"
+            tenantSlug={tenantSlug}
             servicioId={1}
             slot={slotSeleccionado}
             servicioNombre="Consultoría Individual"
@@ -122,29 +181,29 @@ function App() {
           />
         ) : vista === 'mis-reservas' ? (
           <MisReservas
-            tenantSlug="simal"
+            tenantSlug={tenantSlug}
             token={token}
             onVerDetalle={handleVerDetalle}
           />
         ) : vista === 'detalle' && folioSeleccionado ? (
           <DetalleReserva
-            tenantSlug="simal"
+            tenantSlug={tenantSlug}
             folio={folioSeleccionado}
             token={token}
             onVolver={handleVolverDeDetalle}
             onCancelada={handleVolverDeDetalle}
           />
-        ) : vista === 'admin' ? (
+        ) : vista === 'panel-admin' && tenantSlug ? (
           <PanelAdmin
-            tenantSlug="simal"
+            tenantSlug={tenantSlug}
             token={token}
-            onVolver={handleVolver}
+            onVolver={handleVolverDePanel}
           />
-        ) : vista === 'superadmin' ? (
-          <GestionTenants token={token} onVolver={() => setVista('calendario')} />
+        ) : vista === 'panel-admin' || vista === 'tenants' ? (
+          <GestionTenants token={token} onEntrarTenant={handleEntrarTenant} />
         ) : (
           <CalendarioDisponibilidad
-            tenantSlug="simal"
+            tenantSlug={tenantSlug}
             servicioId={1}
             onSlotSelect={handleSlotSelect}
           />

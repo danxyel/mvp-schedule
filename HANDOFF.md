@@ -228,7 +228,7 @@ svc.sincronizar_calendario()    # Google Calendar API (Sprint 4)
 
 ## 10. PLAN DE SPRINTS
 
-### Sprint 1 — Gestión de usuarios y email (SIGUIENTE)
+### Sprint 1 — Gestión de usuarios y email (COMPLETADO)
 | # | Tarea | Estado |
 |---|-------|--------|
 | 1.1 | Registro de usuario (POST /auth/register) | ✅ |
@@ -239,7 +239,7 @@ svc.sincronizar_calendario()    # Google Calendar API (Sprint 4)
 | 5.2 | Asignar asesor a servicio desde UI | ✅ |
 | 5.3 | Bloqueos/vacaciones del asesor | ✅ |
 | 11.1 | Email de confirmación real (SMTP) | ✅ |
-| 9.6 | Registrar pago local (efectivo/transferencia) | ⏳ SIGUIENTE |
+| 9.6 | Registrar pago local (efectivo/transferencia) | ✅ |
 
 ### Sprint 2 — Dashboard, agenda y cancelación masiva
 | # | Tarea |

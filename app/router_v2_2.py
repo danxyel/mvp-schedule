@@ -565,7 +565,7 @@ def listar_reservas_admin(
         select(Reserva)
         .join(Sesion, Sesion.id == Reserva.sesion_id)
           .options(
-              joinedload(Reserva.sesion).joinedload(Sesion.asesor),
+              joinedload(Reserva.sesion).joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
               joinedload(Reserva.servicio),
               joinedload(Reserva.creado_por),
           )
@@ -593,8 +593,8 @@ def listar_reservas_admin(
             moneda=r.moneda,
             asesor=AsesorPublicOut(
                 id=asesor.id,
-                nombre=asesor.nombre,
-                avatar_url=asesor.avatar_url,
+                nombre=asesor.usuario.nombre if asesor.usuario else "Sin asignar",
+                avatar_url=asesor.usuario.avatar_url if asesor.usuario else None,
                 bio=asesor.bio,
             ) if asesor else None,
         ))

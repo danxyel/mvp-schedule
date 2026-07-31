@@ -13,13 +13,18 @@ const NAV = [
 ]
 
 function App() {
-  const [token, setToken] = useState(null)
-  const [usuario, setUsuario] = useState(null)
+  const [token, setToken] = useState(() => sessionStorage.getItem('token') || null)
+  const [usuario, setUsuario] = useState(() => {
+    const u = sessionStorage.getItem('usuario')
+    return u ? JSON.parse(u) : null
+  })
   const [vista, setVista] = useState('calendario')
   const [slotSeleccionado, setSlotSeleccionado] = useState(null)
   const [folioSeleccionado, setFolioSeleccionado] = useState(null)
 
   const handleLogin = (nuevoToken, nuevoUsuario) => {
+    sessionStorage.setItem('token', nuevoToken)
+    sessionStorage.setItem('usuario', JSON.stringify(nuevoUsuario))
     setToken(nuevoToken)
     setUsuario(nuevoUsuario)
     setSlotSeleccionado(null)
@@ -28,6 +33,8 @@ function App() {
   }
 
   const handleLogout = () => {
+    sessionStorage.removeItem('token')
+    sessionStorage.removeItem('usuario')
     setToken(null)
     setUsuario(null)
     setSlotSeleccionado(null)

@@ -607,6 +607,7 @@ function ReservasTab({ tenantSlug, token }) {
       offset,
       ...(estado !== 'todas' ? { estado } : {}),
     }
+    console.log('Fetching reservas del día...')
     const { data, error: fetchErr } = await client.GET(
       '/api/v2/{tenant_slug}/admin/reservas',
       {

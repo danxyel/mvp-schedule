@@ -5,6 +5,7 @@ v2.2.1: webhook Stripe, check-in, completar sesión, excepciones específicas.
 
 import logging
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from typing import Optional, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
@@ -20,7 +21,7 @@ from app.dependencies import (
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
     RolUsuario, EstadoSesion, EstadoReserva, ESTADOS_SESION_ACTIVA, PlanTenant,
-    TipoAgenda, Modalidad,
+    TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio,
 )
 from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaCreateResponse, ReagendarSesionIn,
@@ -30,7 +31,7 @@ from app.schemas_v2_2 import (
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
-    UsuarioAdminOut,
+    UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -919,6 +920,197 @@ def desvincular_usuario(
     ut.desvinculado_en = datetime.now(timezone.utc)
     db.commit()
     return OperacionOut(ok=True, mensaje="Usuario desvinculado", detalle={"ut_id": ut_id})
+
+
+# ============================================================
+# HORARIOS Y SERVICIOS DEL ASESOR
+# ============================================================
+def _asesor_admin(db: Session, tenant_id: int, ut_id: int) -> UsuarioTenant:
+    ut = _usuario_tenant_admin(db, tenant_id, ut_id)
+    if ut is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+    if ut.rol != RolUsuario.ASESOR:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El usuario no es un asesor")
+    return ut
+
+
+@router.get("/admin/asesores/{ut_id}/horarios", response_model=List[HorarioAsesorOut])
+def listar_horarios_asesor(
+    ut_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    _asesor_admin(db, tenant.id, ut_id)
+    filas = db.execute(
+        select(HorarioDisponibilidad).where(
+            HorarioDisponibilidad.tenant_id == tenant.id,
+            HorarioDisponibilidad.entidad_tipo == "asesor",
+            HorarioDisponibilidad.entidad_id == ut_id,
+        )
+    ).scalars().all()
+    filas = sorted(filas, key=lambda h: (h.dia_semana, h.hora_inicio))
+    return [HorarioAsesorOut.model_validate(h) for h in filas]
+
+
+@router.post(
+    "/admin/asesores/{ut_id}/horarios",
+    response_model=HorarioAsesorOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_horario_asesor(
+    ut_id: int = Path(..., gt=0),
+    dia_semana: int = Body(...),
+    hora_inicio: time = Body(...),
+    hora_fin: time = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    _asesor_admin(db, tenant.id, ut_id)
+    if not 0 <= dia_semana <= 6:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "dia_semana debe estar entre 0 y 6")
+    if hora_fin <= hora_inicio:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "hora_fin debe ser mayor a hora_inicio")
+
+    h = HorarioDisponibilidad(
+        tenant_id=tenant.id,
+        entidad_tipo="asesor",
+        entidad_id=ut_id,
+        dia_semana=dia_semana,
+        hora_inicio=hora_inicio,
+        hora_fin=hora_fin,
+        activo=True,
+    )
+    db.add(h)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El horario no es válido")
+    db.refresh(h)
+    return HorarioAsesorOut.model_validate(h)
+
+
+@router.delete("/admin/asesores/{ut_id}/horarios/{h_id}", response_model=OperacionOut)
+def eliminar_horario_asesor(
+    ut_id: int = Path(..., gt=0),
+    h_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    _asesor_admin(db, tenant.id, ut_id)
+    h = db.execute(
+        select(HorarioDisponibilidad).where(
+            HorarioDisponibilidad.id == h_id,
+            HorarioDisponibilidad.tenant_id == tenant.id,
+            HorarioDisponibilidad.entidad_tipo == "asesor",
+            HorarioDisponibilidad.entidad_id == ut_id,
+        )
+    ).scalar_one_or_none()
+    if h is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Horario no encontrado")
+
+    db.delete(h)
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Horario eliminado", detalle={"h_id": h_id})
+
+
+@router.get("/admin/asesores/{ut_id}/servicios", response_model=List[AsesorServicioOut])
+def listar_servicios_asesor(
+    ut_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    _asesor_admin(db, tenant.id, ut_id)
+    filas = db.execute(
+        select(AsesorServicio)
+        .where(AsesorServicio.usuario_tenant_id == ut_id)
+        .options(joinedload(AsesorServicio.servicio))
+    ).scalars().all()
+    return [
+        AsesorServicioOut(
+            id=a.id,
+            usuario_tenant_id=a.usuario_tenant_id,
+            servicio_id=a.servicio_id,
+            servicio_nombre=a.servicio.nombre,
+            precio_custom=a.precio_custom,
+            duracion_custom_min=a.duracion_custom_min,
+            activo=a.activo,
+        )
+        for a in filas
+    ]
+
+
+@router.post(
+    "/admin/asesores/{ut_id}/servicios",
+    response_model=AsesorServicioOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def asignar_servicio_asesor(
+    ut_id: int = Path(..., gt=0),
+    servicio_id: int = Body(...),
+    precio_custom: Optional[Decimal] = Body(None),
+    duracion_custom_min: Optional[int] = Body(None),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    _asesor_admin(db, tenant.id, ut_id)
+    servicio = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+
+    a = AsesorServicio(
+        usuario_tenant_id=ut_id,
+        servicio_id=servicio_id,
+        precio_custom=precio_custom,
+        duracion_custom_min=duracion_custom_min,
+        activo=True,
+    )
+    db.add(a)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "El asesor ya tiene asignado este servicio")
+    db.refresh(a)
+    return AsesorServicioOut(
+        id=a.id,
+        usuario_tenant_id=a.usuario_tenant_id,
+        servicio_id=a.servicio_id,
+        servicio_nombre=servicio.nombre,
+        precio_custom=a.precio_custom,
+        duracion_custom_min=a.duracion_custom_min,
+        activo=a.activo,
+    )
+
+
+@router.delete("/admin/asesores/{ut_id}/servicios/{s_id}", response_model=OperacionOut)
+def desasignar_servicio_asesor(
+    ut_id: int = Path(..., gt=0),
+    s_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    _asesor_admin(db, tenant.id, ut_id)
+    a = db.execute(
+        select(AsesorServicio).where(
+            AsesorServicio.id == s_id,
+            AsesorServicio.usuario_tenant_id == ut_id,
+        )
+    ).scalar_one_or_none()
+    if a is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Asignación no encontrada")
+
+    db.delete(a)
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Servicio desasignado", detalle={"s_id": s_id})
 
 
 

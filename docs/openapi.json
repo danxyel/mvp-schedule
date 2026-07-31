@@ -1294,6 +1294,392 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/horarios": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Horarios Asesor",
+        "operationId": "listar_horarios_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ut_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Ut Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HorarioAsesorOut"
+                  },
+                  "title": "Response Listar Horarios Asesor Api V2  Tenant Slug  Admin Asesores  Ut Id  Horarios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Horario Asesor",
+        "operationId": "crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ut_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Ut Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HorarioAsesorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/horarios/{h_id}": {
+      "delete": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Eliminar Horario Asesor",
+        "operationId": "eliminar_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios__h_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ut_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Ut Id"
+            }
+          },
+          {
+            "name": "h_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "H Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/servicios": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Servicios Asesor",
+        "operationId": "listar_servicios_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ut_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Ut Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AsesorServicioOut"
+                  },
+                  "title": "Response Listar Servicios Asesor Api V2  Tenant Slug  Admin Asesores  Ut Id  Servicios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Asignar Servicio Asesor",
+        "operationId": "asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ut_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Ut Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsesorServicioOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/servicios/{s_id}": {
+      "delete": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Desasignar Servicio Asesor",
+        "operationId": "desasignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios__s_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ut_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Ut Id"
+            }
+          },
+          {
+            "name": "s_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "S Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/reservas/{folio}/checkin": {
       "post": {
         "tags": [
@@ -1812,6 +2198,99 @@
         "title": "AsesorPublicOut",
         "description": "Datos de asesor visibles al público. Sin email, sin comisión, sin metadata."
       },
+      "AsesorServicioOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "usuario_tenant_id": {
+            "type": "integer",
+            "title": "Usuario Tenant Id"
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "type": "string",
+            "title": "Servicio Nombre"
+          },
+          "precio_custom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Custom"
+          },
+          "duracion_custom_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracion Custom Min"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "usuario_tenant_id",
+          "servicio_id",
+          "servicio_nombre",
+          "activo"
+        ],
+        "title": "AsesorServicioOut"
+      },
+      "Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post": {
+        "properties": {
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "precio_custom": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Custom"
+          },
+          "duracion_custom_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracion Custom Min"
+          }
+        },
+        "type": "object",
+        "required": [
+          "servicio_id"
+        ],
+        "title": "Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post"
+      },
       "Body_cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch": {
         "properties": {
           "rol": {
@@ -1824,6 +2303,31 @@
           "rol"
         ],
         "title": "Body_cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch"
+      },
+      "Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post": {
+        "properties": {
+          "dia_semana": {
+            "type": "integer",
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "hora_fin": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Fin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dia_semana",
+          "hora_inicio",
+          "hora_fin"
+        ],
+        "title": "Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post"
       },
       "Body_invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post": {
         "properties": {
@@ -2036,6 +2540,47 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HorarioAsesorOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "dia_semana": {
+            "type": "integer",
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "hora_fin": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Fin"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dia_semana",
+          "hora_inicio",
+          "hora_fin",
+          "activo",
+          "creado_en"
+        ],
+        "title": "HorarioAsesorOut"
       },
       "MetodoPagoEnum": {
         "type": "string",

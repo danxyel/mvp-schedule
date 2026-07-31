@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
+import HorariosAsesor from './HorariosAsesor'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -88,6 +89,7 @@ export default function GestionUsuarios({ tenantSlug, token }) {
   const [cambiandoRol, setCambiandoRol] = useState(null)
   const [confirmarDesvincular, setConfirmarDesvincular] = useState(null)
   const [desvinculando, setDesvinculando] = useState(false)
+  const [asesorHorarios, setAsesorHorarios] = useState(null)
 
   const fetchUsuarios = useCallback(async () => {
     setLoading(true)
@@ -295,6 +297,15 @@ export default function GestionUsuarios({ tenantSlug, token }) {
                   <Badge value={u.activo} map={ESTADO_BADGE} labelMap={ESTADO_LABEL} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
+                  {u.rol === 'asesor' && u.activo && (
+                    <button
+                      type="button"
+                      onClick={() => setAsesorHorarios(u)}
+                      className="mr-2 rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50"
+                    >
+                      Horarios
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setConfirmarDesvincular(u)}
@@ -425,6 +436,15 @@ export default function GestionUsuarios({ tenantSlug, token }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {asesorHorarios && (
+        <HorariosAsesor
+          asesor={asesorHorarios}
+          tenantSlug={tenantSlug}
+          token={token}
+          onClose={() => setAsesorHorarios(null)}
+        />
       )}
     </div>
   )

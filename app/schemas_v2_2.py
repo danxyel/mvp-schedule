@@ -13,7 +13,7 @@ Correcciones sobre v2.1:
     router importando app.schemas_v2_1 — clases distintas para el mismo dato.
 """
 
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, time, timezone as dt_timezone
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 from enum import Enum
@@ -505,4 +505,25 @@ class ServicioAdminOut(BaseModel):
     activo: bool
     creado_en: datetime
     actualizado_en: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HorarioAsesorOut(BaseModel):
+    id: int
+    dia_semana: int
+    hora_inicio: time
+    hora_fin: time
+    activo: bool
+    creado_en: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AsesorServicioOut(BaseModel):
+    id: int
+    usuario_tenant_id: int
+    servicio_id: int
+    servicio_nombre: str
+    precio_custom: Optional[Decimal] = None
+    duracion_custom_min: Optional[int] = None
+    activo: bool
     model_config = ConfigDict(from_attributes=True)

@@ -329,6 +329,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/horarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Horarios Asesor */
+        get: operations["listar_horarios_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_get"];
+        put?: never;
+        /** Crear Horario Asesor */
+        post: operations["crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/horarios/{h_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Eliminar Horario Asesor */
+        delete: operations["eliminar_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios__h_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/servicios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Servicios Asesor */
+        get: operations["listar_servicios_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_get"];
+        put?: never;
+        /** Asignar Servicio Asesor */
+        post: operations["asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/servicios/{s_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Desasignar Servicio Asesor */
+        delete: operations["desasignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios__s_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/reservas/{folio}/checkin": {
         parameters: {
             query?: never;
@@ -487,10 +557,51 @@ export interface components {
             /** Bio */
             bio?: string | null;
         };
+        /** AsesorServicioOut */
+        AsesorServicioOut: {
+            /** Id */
+            id: number;
+            /** Usuario Tenant Id */
+            usuario_tenant_id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre: string;
+            /** Precio Custom */
+            precio_custom?: string | null;
+            /** Duracion Custom Min */
+            duracion_custom_min?: number | null;
+            /** Activo */
+            activo: boolean;
+        };
+        /** Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post */
+        Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post: {
+            /** Servicio Id */
+            servicio_id: number;
+            /** Precio Custom */
+            precio_custom?: number | string | null;
+            /** Duracion Custom Min */
+            duracion_custom_min?: number | null;
+        };
         /** Body_cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch */
         Body_cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch: {
             /** Rol */
             rol: string;
+        };
+        /** Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post */
+        Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post: {
+            /** Dia Semana */
+            dia_semana: number;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /**
+             * Hora Fin
+             * Format: time
+             */
+            hora_fin: string;
         };
         /** Body_invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post */
         Body_invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post: {
@@ -571,6 +682,30 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HorarioAsesorOut */
+        HorarioAsesorOut: {
+            /** Id */
+            id: number;
+            /** Dia Semana */
+            dia_semana: number;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /**
+             * Hora Fin
+             * Format: time
+             */
+            hora_fin: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
         };
         /**
          * MetodoPagoEnum
@@ -1941,6 +2076,208 @@ export interface operations {
             header?: never;
             path: {
                 ut_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_horarios_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HorarioAsesorOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HorarioAsesorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    eliminar_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios__h_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
+                h_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_servicios_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsesorServicioOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsesorServicioOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desasignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios__s_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
+                s_id: number;
                 tenant_slug: string;
             };
             cookie?: never;

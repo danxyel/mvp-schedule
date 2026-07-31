@@ -4,7 +4,7 @@ v2.2.1: webhook Stripe, check-in, completar sesión, excepciones específicas.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Request, status
@@ -26,6 +26,7 @@ from app.schemas_v2_2 import (
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
+    ReservaAdminListOut, ReservasAdminPaginadasOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -518,6 +519,86 @@ def listar_mis_reservas(
 
 
 # ============================================================
+# ADMIN — LISTADO DE RESERVAS
+# ============================================================
+@router.get("/admin/reservas", response_model=ReservasAdminPaginadasOut)
+def listar_reservas_admin(
+    fecha: Optional[date] = Query(None, description="Filtra por fecha de la sesión (default: hoy)"),
+    estado: Optional[str] = Query(None, description="Filtra por estado de reserva (ej. confirmada)"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    if fecha is None:
+        fecha = date.today()
+
+    estado_enum = None
+    if estado:
+        try:
+            estado_enum = EstadoReserva(estado)
+        except ValueError:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Estado de reserva inválido: {estado}",
+            )
+
+    inicio = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
+    fin = inicio + timedelta(days=1)
+
+    cond = [
+        Reserva.tenant_id == tenant.id,
+        Sesion.fecha_hora_inicio >= inicio,
+        Sesion.fecha_hora_inicio < fin,
+    ]
+    if estado_enum is not None:
+        cond.append(Reserva.estado == estado_enum)
+
+    total = db.execute(
+        select(func.count(Reserva.id))
+        .join(Sesion, Sesion.id == Reserva.sesion_id)
+        .where(*cond)
+    ).scalar_one()
+
+    reservas = db.execute(
+        select(Reserva)
+        .join(Sesion, Sesion.id == Reserva.sesion_id)
+        .options(
+            joinedload(Reserva.sesion),
+            joinedload(Reserva.servicio),
+            joinedload(Reserva.creado_por),
+        )
+        .where(*cond)
+        .order_by(Sesion.fecha_hora_inicio.desc())
+        .limit(limit).offset(offset)
+    ).scalars().unique().all()
+
+    items = []
+    for r in reservas:
+        s = r.sesion
+        items.append(ReservaAdminListOut(
+            id=r.id,
+            folio=r.folio,
+            estado=r.estado.value,
+            estado_pago=r.estado_pago.value,
+            nombre_cliente=r.creado_por.nombre if r.creado_por else None,
+            email_cliente=r.creado_por.email if r.creado_por else None,
+            servicio_nombre=r.servicio.nombre if r.servicio else None,
+            fecha_hora_inicio=s.fecha_hora_inicio,
+            fecha_hora_fin=s.fecha_hora_fin,
+            timezone=s.timezone,
+            precio_final=r.precio_final,
+            moneda=r.moneda,
+        ))
+
+    return ReservasAdminPaginadasOut(
+        items=items,
+        paginacion=PaginacionOut(total=total, limit=limit, offset=offset),
+    )
+
+
+# ============================================================
 # CHECK-IN — NUEVO
 # ============================================================
 @router.post("/reservas/{folio}/checkin", response_model=OperacionOut)
@@ -531,14 +612,23 @@ def checkin_reserva(
         select(Reserva).where(Reserva.tenant_id == tenant.id, Reserva.folio == folio)
     ).scalar_one_or_none()
 
-    es_staff = _es_staff(db, tenant.id, usuario.id)
-    if r is None or (r.creado_por_usuario_id != usuario.id and not es_staff):
+    if r is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+
+    if not _es_staff(db, tenant.id, usuario.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Requiere permisos de personal")
 
     if r.estado != EstadoReserva.CONFIRMADA:
         raise HTTPException(status.HTTP_409_CONFLICT, "Solo reservas confirmadas pueden hacer check-in")
 
-    r.checked_in = True
+    r.estado = EstadoReserva.COMPLETADA
+
+    svc.registrar_bitacora(
+        db, tenant.id, "reserva", r.id, "checkin",
+        usuario_id=usuario.id,
+        detalles={"folio": folio},
+    )
+
     db.commit()
     return OperacionOut(ok=True, mensaje="Check-in registrado", detalle={"folio": folio})
 

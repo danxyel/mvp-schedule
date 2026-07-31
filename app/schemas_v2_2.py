@@ -265,6 +265,21 @@ class SesionAdminOut(SesionDetailOut):
     reservas: List[ReservaResumenAdminOut] = Field(default_factory=list)
 
 
+class ReservaAdminListOut(BaseModel):
+    id: int
+    folio: str
+    estado: EstadoReservaEnum
+    estado_pago: EstadoPagoEnum
+    nombre_cliente: Optional[str] = None
+    email_cliente: Optional[str] = None
+    servicio_nombre: Optional[str] = None
+    fecha_hora_inicio: datetime
+    fecha_hora_fin: datetime
+    timezone: str
+    precio_final: Optional[Decimal] = None
+    moneda: str = "MXN"
+
+
 # ============================================================
 # SALIDA — RESERVA
 # ============================================================
@@ -323,6 +338,11 @@ class PaginacionOut(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ReservasAdminPaginadasOut(BaseModel):
+    items: List[ReservaAdminListOut]
+    paginacion: PaginacionOut
 
 
 class SesionesPaginadasOut(BaseModel):

@@ -4,10 +4,12 @@ import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
 import FlujReserva from './components/FlujReserva'
 import MisReservas from './components/MisReservas'
 import DetalleReserva from './components/DetalleReserva'
+import PanelAdmin from './components/admin/PanelAdmin'
 
 const NAV = [
   { key: 'calendario', label: 'Calendario' },
   { key: 'mis-reservas', label: 'Mis Reservas' },
+  { key: 'admin', label: 'Admin' },
 ]
 
 function App() {
@@ -120,6 +122,12 @@ function App() {
             token={token}
             onVolver={handleVolverDeDetalle}
             onCancelada={handleVolverDeDetalle}
+          />
+        ) : vista === 'admin' ? (
+          <PanelAdmin
+            tenantSlug="simal"
+            token={token}
+            onVolver={handleVolver}
           />
         ) : (
           <CalendarioDisponibilidad

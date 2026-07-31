@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
 import GestionServicios from './GestionServicios'
+import GestionUsuarios from './GestionUsuarios'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -1001,14 +1002,27 @@ export default function PanelAdmin({ tenantSlug, token, onVolver }) {
         >
           Servicios
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('usuarios')}
+          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+            tab === 'usuarios'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Usuarios
+        </button>
       </div>
 
       {tab === 'sesiones' ? (
         <SesionesTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'reservas' ? (
         <ReservasTab tenantSlug={tenantSlug} token={token} />
-      ) : (
+      ) : tab === 'servicios' ? (
         <GestionServicios tenantSlug={tenantSlug} token={token} />
+      ) : (
+        <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}
     </div>
   )

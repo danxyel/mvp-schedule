@@ -30,6 +30,7 @@ from app.schemas_v2_2 import (
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
+    UsuarioAdminOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -784,6 +785,141 @@ def desactivar_servicio_admin(
     s.activo = False
     db.commit()
     return OperacionOut(ok=True, mensaje="Servicio desactivado", detalle={"id": servicio_id})
+
+
+# ============================================================
+# GESTIÓN DE USUARIOS DEL TENANT
+# ============================================================
+_ROLES_VINCULABLES = {
+    "cliente": RolUsuario.CLIENTE,
+    "asesor": RolUsuario.ASESOR,
+    "admin": RolUsuario.ADMIN,
+}
+
+
+def _usuario_admin_out(ut: UsuarioTenant) -> UsuarioAdminOut:
+    return UsuarioAdminOut(
+        id=ut.id,
+        usuario_id=ut.usuario_id,
+        email=ut.usuario.email,
+        nombre=ut.usuario.nombre,
+        apellido=ut.usuario.apellido,
+        telefono=ut.usuario.telefono,
+        rol=ut.rol.value,
+        activo=ut.activo,
+        fecha_vinculacion=ut.fecha_vinculacion,
+    )
+
+
+def _usuario_tenant_admin(db: Session, tenant_id: int, ut_id: int) -> Optional[UsuarioTenant]:
+    return db.execute(
+        select(UsuarioTenant)
+        .where(UsuarioTenant.id == ut_id, UsuarioTenant.tenant_id == tenant_id)
+        .options(joinedload(UsuarioTenant.usuario))
+    ).scalar_one_or_none()
+
+
+@router.get("/admin/usuarios", response_model=List[UsuarioAdminOut])
+def listar_usuarios_admin(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    filas = db.execute(
+        select(UsuarioTenant)
+        .where(UsuarioTenant.tenant_id == tenant.id)
+        .options(joinedload(UsuarioTenant.usuario))
+    ).scalars().all()
+    filas = sorted(filas, key=lambda ut: (not ut.activo, (ut.usuario.nombre or "").lower()))
+    return [_usuario_admin_out(ut) for ut in filas]
+
+
+@router.post("/admin/usuarios/invitar", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
+def invitar_usuario(
+    email: str = Body(...),
+    nombre: str = Body(...),
+    rol: str = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    if rol not in _ROLES_VINCULABLES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Rol inválido")
+
+    email_norm = email.strip().lower()
+    if not email_norm or not nombre.strip():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Email y nombre son obligatorios")
+
+    usuario = db.execute(select(Usuario).where(Usuario.email == email_norm)).scalar_one_or_none()
+    if usuario is None:
+        usuario = Usuario(
+            email=email_norm,
+            nombre=nombre.strip(),
+            es_invitado=True,
+            password_hash=None,
+        )
+        db.add(usuario)
+        db.flush()
+    else:
+        ya_vinculado = db.execute(
+            select(UsuarioTenant).where(
+                UsuarioTenant.tenant_id == tenant.id,
+                UsuarioTenant.usuario_id == usuario.id,
+            )
+        ).scalar_one_or_none()
+        if ya_vinculado is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
+
+    ut = UsuarioTenant(tenant_id=tenant.id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
+    db.add(ut)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
+
+    ut = _usuario_tenant_admin(db, tenant.id, ut.id)
+    return _usuario_admin_out(ut)
+
+
+@router.patch("/admin/usuarios/{ut_id}/rol", response_model=UsuarioAdminOut)
+def cambiar_rol_usuario(
+    ut_id: int = Path(..., gt=0),
+    rol: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    if rol not in _ROLES_VINCULABLES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Rol inválido")
+
+    ut = _usuario_tenant_admin(db, tenant.id, ut_id)
+    if ut is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+    if ut.rol == RolUsuario.SUPERADMIN:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No se puede cambiar el rol de un superadmin")
+
+    ut.rol = _ROLES_VINCULABLES[rol]
+    db.commit()
+    return _usuario_admin_out(ut)
+
+
+@router.delete("/admin/usuarios/{ut_id}", response_model=OperacionOut)
+def desvincular_usuario(
+    ut_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    ut = _usuario_tenant_admin(db, tenant.id, ut_id)
+    if ut is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+
+    ut.activo = False
+    ut.desvinculado_en = datetime.now(timezone.utc)
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Usuario desvinculado", detalle={"ut_id": ut_id})
+
 
 
 # ============================================================

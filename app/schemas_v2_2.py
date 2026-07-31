@@ -398,6 +398,18 @@ class TenantUpdate(BaseModel):
 # ============================================================
 # ADMIN — SERVICIOS
 # ============================================================
+class UsuarioAdminOut(BaseModel):
+    id: int
+    usuario_id: int
+    email: str
+    nombre: str
+    apellido: Optional[str] = None
+    telefono: Optional[str] = None
+    rol: str
+    activo: bool
+    fecha_vinculacion: datetime
+
+
 class ServicioAdminIn(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=255)
     descripcion: Optional[str] = Field(None, max_length=2000)

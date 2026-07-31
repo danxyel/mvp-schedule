@@ -261,6 +261,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/usuarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Usuarios Admin */
+        get: operations["listar_usuarios_admin_api_v2__tenant_slug__admin_usuarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/usuarios/invitar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invitar Usuario */
+        post: operations["invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/usuarios/{ut_id}/rol": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambiar Rol Usuario */
+        patch: operations["cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/usuarios/{ut_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Desvincular Usuario */
+        delete: operations["desvincular_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/reservas/{folio}/checkin": {
         parameters: {
             query?: never;
@@ -418,6 +486,20 @@ export interface components {
             avatar_url?: string | null;
             /** Bio */
             bio?: string | null;
+        };
+        /** Body_cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch */
+        Body_cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch: {
+            /** Rol */
+            rol: string;
+        };
+        /** Body_invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post */
+        Body_invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post: {
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Rol */
+            rol: string;
         };
         /** Body_login_auth_login_post */
         Body_login_auth_login_post: {
@@ -1146,6 +1228,30 @@ export interface components {
          * @enum {string}
          */
         TipoAgendaEnum: "individual" | "grupal" | "recurrente";
+        /** UsuarioAdminOut */
+        UsuarioAdminOut: {
+            /** Id */
+            id: number;
+            /** Usuario Id */
+            usuario_id: number;
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Apellido */
+            apellido?: string | null;
+            /** Telefono */
+            telefono?: string | null;
+            /** Rol */
+            rol: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Fecha Vinculacion
+             * Format: date-time
+             */
+            fecha_vinculacion: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1701,6 +1807,140 @@ export interface operations {
             header?: never;
             path: {
                 servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_usuarios_admin_api_v2__tenant_slug__admin_usuarios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_invitar_usuario_api_v2__tenant_slug__admin_usuarios_invitar_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_cambiar_rol_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__rol_patch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desvincular_usuario_api_v2__tenant_slug__admin_usuarios__ut_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ut_id: number;
                 tenant_slug: string;
             };
             cookie?: never;

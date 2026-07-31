@@ -10,8 +10,12 @@ import uuid
 import random
 import string
 import logging
+import os
+import smtplib
 from datetime import datetime, timedelta, timezone, date
 from decimal import Decimal
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Optional, List, Dict, Any, Tuple
 from zoneinfo import ZoneInfo
 
@@ -1007,8 +1011,163 @@ def sincronizar_calendario(tenant: Tenant, sesion: Sesion) -> Optional[str]:
     raise NotImplementedError("Integrar Google Calendar")
 
 
-def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Usuario, sesion: Sesion) -> None:
-    raise NotImplementedError("Integrar envío de correo")
+def _smtp_cfg(tenant: Tenant) -> dict:
+    cfg = tenant.smtp_config
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _fecha_email(dt_utc: Optional[datetime], tzname: str) -> str:
+    if dt_utc is None:
+        return ""
+    local = dt_utc.astimezone(ZoneInfo(tzname))
+    return local.strftime("%A %d de %B de %Y, %I:%M %p")
+
+
+def _asesor_email(asesor: Optional[UsuarioTenant]) -> Optional[str]:
+    if asesor is None:
+        return None
+    return (asesor.usuario.nombre if asesor.usuario else None) or f"Asesor #{asesor.id}"
+
+
+def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optional[Usuario], sesion: Sesion) -> None:
+    """Envía la confirmación de reserva por SMTP.
+
+    La config vive en `tenant.smtp_config` (EncryptedJSON):
+      { "host", "port", "user", "password", "from_email", "from_name",
+        "tls" (bool, default True), "ssl" (bool, default False),
+        "console" (bool, imprime en vez de enviar) }
+    Si no hay host, la confirmación se omite (log) y nunca se lanza excepción:
+    el email es un efecto externo que no debe romper el flujo de reserva.
+    """
+    cfg = _smtp_cfg(tenant)
+    host = cfg.get("host")
+    if not host:
+        log.info(
+            "SMTP no configurado para tenant '%s' — confirmación omitida (folio %s)",
+            tenant.slug, reserva.folio,
+        )
+        return
+
+    if usuario is None or not usuario.email:
+        log.info("Sin destinatario para la confirmación (folio %s)", reserva.folio)
+        return
+
+    servicio = reserva.servicio
+    asesor = _asesor_email(sesion.asesor) if sesion.asesor is not None else None
+    sede = sesion.sede
+    fecha = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+    fin = _fecha_email(sesion.fecha_hora_fin, sesion.timezone)
+
+    fila_precio = ""
+    if reserva.precio_final is not None:
+        fila_precio = (
+            f'<tr><td style="padding:6px 0;color:#6b7280;">Total</td>'
+            f'<td style="padding:6px 0;text-align:right;font-weight:600;color:#111827;">'
+            f'{reserva.precio_final:.2f} {reserva.moneda}</td></tr>'
+        )
+
+    meet_html = ""
+    if sesion.meet_url and servicio.modalidad.value in ("virtual", "hibrida"):
+        meet_html = (
+            f'<p style="margin:12px 0 0;font-size:14px;color:#111827;">'
+            f'Tu sesión es en línea. Únete con este enlace:</p>'
+            f'<p style="margin:4px 0 0;"><a href="{sesion.meet_url}" '
+            f'style="color:#2563eb;font-weight:600;">{sesion.meet_url}</a></p>'
+        )
+
+    sede_html = ""
+    if sede is not None:
+        sede_html = (
+            f'<tr><td style="padding:6px 0;color:#6b7280;">Lugar</td>'
+            f'<td style="padding:6px 0;text-align:right;color:#111827;">{sede.nombre}</td></tr>'
+        )
+
+    html = f"""\
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;">
+  <tr>
+    <td style="padding:24px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr>
+          <td style="background-color:#1e3a5f;padding:20px 24px;">
+            <h1 style="margin:0;color:#ffffff;font-size:18px;font-family:Arial,sans-serif;">
+              {tenant.nombre} — Reserva confirmada
+            </h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px;font-family:Arial,sans-serif;">
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {usuario.nombre}, tu reserva está confirmada:
+            </p>
+            <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">{servicio.nombre}</p>
+            <p style="margin:4px 0 16px;font-size:15px;color:#4b5563;">
+              {fecha}{' — ' + fin if fin and fin != fecha else ''}
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+              <tr><td style="padding:6px 0;color:#6b7280;">Asesor</td>
+                  <td style="padding:6px 0;text-align:right;color:#111827;">{asesor or 'Por asignar'}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;">Modalidad</td>
+                  <td style="padding:6px 0;text-align:right;color:#111827;">{servicio.modalidad.value}</td></tr>
+              {sede_html}
+              {fila_precio}
+              <tr><td style="padding:6px 0;color:#6b7280;">Folio</td>
+                  <td style="padding:6px 0;text-align:right;color:#111827;">{reserva.folio}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;">Código</td>
+                  <td style="padding:6px 0;text-align:right;color:#111827;">{reserva.codigo_confirmacion}</td></tr>
+            </table>
+            {meet_html}
+            <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
+              Si necesitas cambiar o cancelar esta reserva, contacta a tu proveedor.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>"""
+
+    texto_plano = (
+        f"{tenant.nombre} — Reserva confirmada\n\n"
+        f"Hola {usuario.nombre}, tu reserva está confirmada:\n\n"
+        f"{servicio.nombre}\n{fecha}"
+        + (f" — {fin}" if fin and fin != fecha else "")
+        + f"\nAsesor: {asesor or 'Por asignar'}"
+        + (f"\nLugar: {sede.nombre}" if sede else "")
+        + (f"\nTotal: {reserva.precio_final:.2f} {reserva.moneda}" if reserva.precio_final is not None else "")
+        + f"\nFolio: {reserva.folio}\nCódigo: {reserva.codigo_confirmacion}"
+        + (f"\n\nEnlace de la sesión: {sesion.meet_url}" if sesion.meet_url else "")
+    )
+
+    if cfg.get("console") or os.environ.get("SMTP_CONSOLE", "").lower() == "1":
+        log.info("EMAIL (console) → %s | asunto: Confirmación de reserva — %s", usuario.email, servicio.nombre)
+        log.info("Contenido: %s", texto_plano.replace("\n", " | "))
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Confirmación de reserva — {servicio.nombre}"
+    msg["From"] = f'{cfg.get("from_name") or tenant.nombre} <{cfg.get("from_email")}>'
+    msg["To"] = usuario.email
+    msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    port = int(cfg.get("port") or (465 if cfg.get("ssl") else 587))
+    user = cfg.get("user")
+    password = cfg.get("password")
+    from_email = cfg.get("from_email")
+
+    if cfg.get("ssl"):
+        server = smtplib.SMTP_SSL(host, port, timeout=15)
+    else:
+        server = smtplib.SMTP(host, port, timeout=15)
+        if cfg.get("tls", True):
+            server.starttls()
+    try:
+        if user:
+            server.login(user, password or "")
+        server.sendmail(from_email, [usuario.email], msg.as_string())
+    finally:
+        server.quit()
+    log.info("Confirmación enviada a %s (folio %s)", usuario.email, reserva.folio)
 
 
 def generar_mapa_url(sede: Optional[Sede]) -> Optional[str]:

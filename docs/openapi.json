@@ -593,6 +593,71 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/reservas/{folio}/publica": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Consultar Reserva Publica",
+        "description": "Consulta pública de reserva mediante folio + código de confirmación.\n\nNo requiere autenticación. Devuelve vista limitada (sin meet_url, notas, sede, asesor).\nRate limited a 10 requests/minuto por IP.",
+        "operationId": "consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get",
+        "parameters": [
+          {
+            "name": "folio",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 32,
+              "title": "Folio"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "codigo_confirmacion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 8,
+              "title": "Codigo Confirmacion"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservaPublicaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/mis-reservas": {
       "get": {
         "tags": [
@@ -4238,6 +4303,93 @@
           "creado_en"
         ],
         "title": "ReservaOut"
+      },
+      "ReservaPublicaOut": {
+        "properties": {
+          "folio": {
+            "type": "string",
+            "title": "Folio"
+          },
+          "codigo_confirmacion": {
+            "type": "string",
+            "title": "Codigo Confirmacion"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoReservaEnum"
+          },
+          "estado_pago": {
+            "$ref": "#/components/schemas/EstadoPagoEnum"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "fecha_hora_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora Inicio"
+          },
+          "fecha_hora_fin": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora Fin"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "modalidad": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalidadEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "precio_final": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Final"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda",
+            "default": "MXN"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folio",
+          "codigo_confirmacion",
+          "estado",
+          "estado_pago",
+          "fecha_hora_inicio",
+          "fecha_hora_fin",
+          "timezone",
+          "creado_en"
+        ],
+        "title": "ReservaPublicaOut",
+        "description": "Vista pública de reserva (solo lectura, sin datos sensibles).\n\nAccesible sin autenticación mediante folio + codigo_confirmacion.\nNo incluye: meet_url, notas_cliente, sede, asesor (privados)."
       },
       "ReservaResumenAdminOut": {
         "properties": {

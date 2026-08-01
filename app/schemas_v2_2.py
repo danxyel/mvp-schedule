@@ -337,6 +337,27 @@ class ReservaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReservaPublicaOut(BaseModel):
+    """Vista pública de reserva (solo lectura, sin datos sensibles).
+    
+    Accesible sin autenticación mediante folio + codigo_confirmacion.
+    No incluye: meet_url, notas_cliente, sede, asesor (privados).
+    """
+    folio: str
+    codigo_confirmacion: str
+    estado: EstadoReservaEnum
+    estado_pago: EstadoPagoEnum
+    servicio_nombre: Optional[str] = None
+    fecha_hora_inicio: datetime
+    fecha_hora_fin: datetime
+    timezone: str
+    modalidad: Optional[ModalidadEnum] = None
+    precio_final: Optional[Decimal] = None
+    moneda: str = "MXN"
+    creado_en: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CheckoutUrlOut(BaseModel):
     url: str
     proveedor: str

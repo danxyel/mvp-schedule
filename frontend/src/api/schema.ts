@@ -191,6 +191,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/reservas/{folio}/publica": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar Reserva Publica
+         * @description Consulta pública de reserva mediante folio + código de confirmación.
+         *
+         *     No requiere autenticación. Devuelve vista limitada (sin meet_url, notas, sede, asesor).
+         *     Rate limited a 10 requests/minuto por IP.
+         */
+        get: operations["consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/mis-reservas": {
         parameters: {
             query?: never;
@@ -1211,6 +1234,48 @@ export interface components {
             hold_expira_en?: string | null;
             /** Notas Cliente */
             notas_cliente?: string | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /**
+         * ReservaPublicaOut
+         * @description Vista pública de reserva (solo lectura, sin datos sensibles).
+         *
+         *     Accesible sin autenticación mediante folio + codigo_confirmacion.
+         *     No incluye: meet_url, notas_cliente, sede, asesor (privados).
+         */
+        ReservaPublicaOut: {
+            /** Folio */
+            folio: string;
+            /** Codigo Confirmacion */
+            codigo_confirmacion: string;
+            estado: components["schemas"]["EstadoReservaEnum"];
+            estado_pago: components["schemas"]["EstadoPagoEnum"];
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Inicio
+             * Format: date-time
+             */
+            fecha_hora_inicio: string;
+            /**
+             * Fecha Hora Fin
+             * Format: date-time
+             */
+            fecha_hora_fin: string;
+            /** Timezone */
+            timezone: string;
+            modalidad?: components["schemas"]["ModalidadEnum"] | null;
+            /** Precio Final */
+            precio_final?: string | null;
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
             /**
              * Creado En
              * Format: date-time
@@ -2246,6 +2311,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReservaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get: {
+        parameters: {
+            query: {
+                codigo_confirmacion: string;
+            };
+            header?: never;
+            path: {
+                folio: string;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservaPublicaOut"];
                 };
             };
             /** @description Validation Error */

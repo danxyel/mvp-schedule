@@ -27,8 +27,9 @@ from app.models_v2_2 import (
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
     TipoBloqueo, utcnow,
 )
+from app.rate_limiter import limiter
 from app.schemas_v2_2 import (
-    ReservaCreate, ReservaOut, ReservaCreateResponse, ReagendarSesionIn,
+    ReservaCreate, ReservaOut, ReservaPublicaOut, ReservaCreateResponse, ReagendarSesionIn,
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
@@ -582,6 +583,46 @@ def consultar_reserva(
         asesor=_asesor_out(s),
         hold_expira_en=r.hold_expira_en,
         notas_cliente=r.notas_cliente,
+        creado_en=r.creado_en,
+    )
+
+
+@router.get("/reservas/{folio}/publica", response_model=ReservaPublicaOut)
+@limiter.limit("10/minute")
+def consultar_reserva_publica(
+    request: Request,
+    folio: str = Path(..., min_length=8, max_length=32),
+    codigo_confirmacion: str = Query(..., min_length=8, max_length=8),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    """Consulta pública de reserva mediante folio + código de confirmación.
+    
+    No requiere autenticación. Devuelve vista limitada (sin meet_url, notas, sede, asesor).
+    Rate limited a 10 requests/minuto por IP.
+    """
+    r = db.execute(
+        select(Reserva)
+        .options(joinedload(Reserva.servicio))
+        .where(Reserva.tenant_id == tenant.id, Reserva.folio == folio)
+    ).scalars().unique().one_or_none()
+
+    if r is None or r.codigo_confirmacion != codigo_confirmacion:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+
+    s = r.sesion
+    return ReservaPublicaOut(
+        folio=r.folio,
+        codigo_confirmacion=r.codigo_confirmacion,
+        estado=r.estado.value,
+        estado_pago=r.estado_pago.value,
+        servicio_nombre=r.servicio.nombre if r.servicio else None,
+        fecha_hora_inicio=s.fecha_hora_inicio,
+        fecha_hora_fin=s.fecha_hora_fin,
+        timezone=s.timezone,
+        modalidad=r.servicio.modalidad.value if r.servicio else None,
+        precio_final=r.precio_final,
+        moneda=r.moneda,
         creado_en=r.creado_en,
     )
 

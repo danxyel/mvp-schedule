@@ -327,6 +327,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechazar Solicitud Admin */
+        post: operations["rechazar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__rechazar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/servicios": {
         parameters: {
             query?: never;
@@ -1719,6 +1736,14 @@ export interface components {
              */
             creado_en: string;
         };
+        /**
+         * SolicitudRechazarIn
+         * @description El staff rechaza una solicitud pendiente.
+         */
+        SolicitudRechazarIn: {
+            /** Motivo */
+            motivo?: string | null;
+        };
         /** TenantAdminOut */
         TenantAdminOut: {
             /** Id */
@@ -2499,6 +2524,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SolicitudConfirmarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rechazar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__rechazar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudRechazarIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudAdminOut"];
                 };
             };
             /** @description Validation Error */

@@ -1170,6 +1170,73 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Rechazar Solicitud Admin",
+        "operationId": "rechazar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__rechazar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "solicitud_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Solicitud Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudRechazarIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/servicios": {
       "get": {
         "tags": [
@@ -5823,6 +5890,26 @@
         ],
         "title": "SolicitudOut",
         "description": "Vista del cliente: sin datos de resolución internos."
+      },
+      "SolicitudRechazarIn": {
+        "properties": {
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SolicitudRechazarIn",
+        "description": "El staff rechaza una solicitud pendiente."
       },
       "TenantAdminOut": {
         "properties": {

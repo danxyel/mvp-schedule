@@ -16,8 +16,12 @@ from dotenv import load_dotenv
 load_dotenv()
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends, Body
+from fastapi import FastAPI, Depends, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.database import verificar_conexion
 from app.router_v2_2 import router, superadmin_router
@@ -77,6 +81,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+# Protege /auth/login y /auth/register contra fuerza bruta. El contador vive en
+# memoria por IP (suficiente para MVP); detrás de un proxy (Render) conviene
+# leer X-Forwarded-For en vez de request.client.host.
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "codigo": "demasiadas_solicitudes",
+            "mensaje": "Demasiados intentos. Espera un momento e intenta de nuevo.",
+        },
+    )
+
 from fastapi import Body
 from pydantic import EmailStr
 from app.dependencies import crear_token
@@ -115,7 +137,9 @@ def _resolver_membresia(db: Session, usuario_id: int):
 
 
 @app.post("/auth/login", tags=["Auth"])
+@limiter.limit("5/minute")
 def login(
+    request: Request,
     email: str = Body(...),
     password: str = Body(...),
     db: Session = Depends(get_db),
@@ -143,7 +167,9 @@ def login(
 
 
 @app.post("/auth/register", tags=["Auth"])
+@limiter.limit("3/hour")
 def register(
+    request: Request,
     email: EmailStr = Body(...),
     password: str = Body(..., min_length=8),
     nombre: str = Body(..., min_length=1),

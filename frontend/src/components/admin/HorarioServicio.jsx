@@ -18,8 +18,16 @@ function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
-export default function HorarioServicio({ servicio, tenantSlug, token, onClose }) {
-  const [loading, setLoading] = useState(true)
+export default function HorarioServicio({
+  servicio,
+  tenantSlug,
+  token,
+  onClose,
+  pendiente = false,
+  sinModal = false,
+  onCambio,
+}) {
+  const [loading, setLoading] = useState(!pendiente)
   const [error, setError] = useState(null)
   const [accionError, setAccionError] = useState(null)
   const [horarios, setHorarios] = useState([])
@@ -27,6 +35,18 @@ export default function HorarioServicio({ servicio, tenantSlug, token, onClose }
   const [horas, setHoras] = useState(() =>
     Object.fromEntries(DIAS.map((_, d) => [d, { inicio: '09:00', fin: '18:00' }])),
   )
+
+  const emitirCambio = (lista) => {
+    if (onCambio) {
+      onCambio(
+        lista.map((h) => ({
+          dia_semana: h.dia_semana,
+          hora_inicio: h.hora_inicio,
+          hora_fin: h.hora_fin,
+        })),
+      )
+    }
+  }
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -58,13 +78,23 @@ export default function HorarioServicio({ servicio, tenantSlug, token, onClose }
   }, [tenantSlug, token, servicio.id])
 
   useEffect(() => {
+    if (pendiente) return
     cargar()
-  }, [cargar])
+  }, [cargar, pendiente])
 
   const crearHorario = async (dia) => {
     const { inicio, fin } = horas[dia]
     if (inicio >= fin) {
       setAccionError('La hora de inicio debe ser antes de la de fin')
+      return
+    }
+    if (pendiente) {
+      const lista = [
+        ...horarios,
+        { id: `pendiente-${dia}`, dia_semana: dia, hora_inicio: inicio, hora_fin: fin },
+      ]
+      setHorarios(lista)
+      emitirCambio(lista)
       return
     }
     setGuardando(dia)
@@ -90,6 +120,12 @@ export default function HorarioServicio({ servicio, tenantSlug, token, onClose }
   }
 
   const eliminarHorario = async (h) => {
+    if (pendiente) {
+      const lista = horarios.filter((x) => x.id !== h.id)
+      setHorarios(lista)
+      emitirCambio(lista)
+      return
+    }
     setGuardando(h.dia_semana)
     setAccionError(null)
     const { error: fetchErr } = await client.DELETE(
@@ -124,13 +160,22 @@ export default function HorarioServicio({ servicio, tenantSlug, token, onClose }
 
   const guardarHora = async (dia, campo, valor) => {
     const existente = horarios.find((h) => h.dia_semana === dia)
-    setHoras((prev) => ({ ...prev, [dia]: { ...prev[dia], [campo]: valor } }))
-    if (!existente) return
     const nuevo = { ...horas[dia], [campo]: valor }
-    if (nuevo.inicio >= nuevo.fin) {
+    setHoras((prev) => ({ ...prev, [dia]: nuevo }))
+    if (existente && nuevo.inicio >= nuevo.fin) {
       setAccionError('La hora de inicio debe ser antes de la de fin')
       return
     }
+    if (pendiente) {
+      if (!existente) return
+      const lista = horarios.map((h) =>
+        h.dia_semana === dia ? { ...h, [campo]: valor } : h,
+      )
+      setHorarios(lista)
+      emitirCambio(lista)
+      return
+    }
+    if (!existente) return
     setGuardando(dia)
     setAccionError(null)
     await client.DELETE(
@@ -166,6 +211,91 @@ export default function HorarioServicio({ servicio, tenantSlug, token, onClose }
     setHorarios((prev) => prev.map((h) => (h.dia_semana === dia ? data : h)))
   }
 
+  const contenido = (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">
+        Ventana en la que el cliente puede proponer fecha y hora. La
+        disponibilidad real del asesor se valida al confirmar la
+        solicitud.
+      </p>
+      <div className="space-y-2">
+        {DIAS.map((nombre, dia) => {
+          const existente = horarios.find((h) => h.dia_semana === dia)
+          const ocupado = guardando === dia
+          return (
+            <div
+              key={dia}
+              className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 ${
+                existente ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white'
+              }`}
+            >
+              <label className="flex w-36 cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!existente}
+                  disabled={ocupado}
+                  onChange={() => toggleDia(dia)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 accent-blue-600"
+                />
+                <span className="text-sm font-medium text-gray-800">{nombre}</span>
+              </label>
+              {existente && (
+                <div className="flex items-center gap-2 text-sm">
+                  <input
+                    type="time"
+                    value={horas[dia].inicio}
+                    disabled={ocupado}
+                    onChange={(e) => guardarHora(dia, 'inicio', e.target.value)}
+                    className="rounded-lg border border-gray-300 px-2 py-1 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-400">a</span>
+                  <input
+                    type="time"
+                    value={horas[dia].fin}
+                    disabled={ocupado}
+                    onChange={(e) => guardarHora(dia, 'fin', e.target.value)}
+                    className="rounded-lg border border-gray-300 px-2 py-1 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+              {ocupado && <span className="text-xs text-blue-600">Guardando...</span>}
+            </div>
+          )
+        })}
+      </div>
+
+      {accionError && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
+          {accionError}
+        </p>
+      )}
+
+      {!sinModal && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+          >
+            {pendiente ? 'Listo' : 'Cerrar'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
+  if (sinModal) {
+    return (
+      <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+        <p className="mb-2 text-sm font-medium text-gray-800">Horario de propuestas</p>
+        {contenido}
+      </div>
+    )
+  }
+
   return (
     <Modal
       title={`Horario de propuestas · ${servicio.nombre}`}
@@ -190,77 +320,7 @@ export default function HorarioServicio({ servicio, tenantSlug, token, onClose }
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          <p className="text-xs text-gray-500">
-            Ventana en la que el cliente puede proponer fecha y hora. La
-            disponibilidad real del asesor se valida al confirmar la
-            solicitud.
-          </p>
-          <div className="space-y-2">
-            {DIAS.map((nombre, dia) => {
-              const existente = horarios.find((h) => h.dia_semana === dia)
-              const ocupado = guardando === dia
-              return (
-                <div
-                  key={dia}
-                  className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 ${
-                    existente ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white'
-                  }`}
-                >
-                  <label className="flex w-36 cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!existente}
-                      disabled={ocupado}
-                      onChange={() => toggleDia(dia)}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 accent-blue-600"
-                    />
-                    <span className="text-sm font-medium text-gray-800">{nombre}</span>
-                  </label>
-                  {existente && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <input
-                        type="time"
-                        value={horas[dia].inicio}
-                        disabled={ocupado}
-                        onChange={(e) => guardarHora(dia, 'inicio', e.target.value)}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
-                      />
-                      <span className="text-gray-400">a</span>
-                      <input
-                        type="time"
-                        value={horas[dia].fin}
-                        disabled={ocupado}
-                        onChange={(e) => guardarHora(dia, 'fin', e.target.value)}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                  {ocupado && <span className="text-xs text-blue-600">Guardando...</span>}
-                </div>
-              )
-            })}
-          </div>
-
-          {accionError && (
-            <p
-              role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-            >
-              {accionError}
-            </p>
-          )}
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
+        contenido
       )}
     </Modal>
   )

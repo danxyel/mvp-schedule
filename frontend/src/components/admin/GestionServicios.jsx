@@ -117,6 +117,7 @@ export default function GestionServicios({ tenantSlug, token }) {
   const [editarLoading, setEditarLoading] = useState(false)
   const [editarError, setEditarError] = useState(null)
   const [horarioDe, setHorarioDe] = useState(null)
+  const [franjasNuevas, setFranjasNuevas] = useState([])
   const [form, setForm] = useState(FORM_VACIO)
 
   const fetchServicios = useCallback(async () => {
@@ -150,6 +151,7 @@ export default function GestionServicios({ tenantSlug, token }) {
 
   const abrirModal = () => {
     setForm({ ...FORM_VACIO })
+    setFranjasNuevas([])
     setCrearError(null)
     setModalAbierto(true)
   }
@@ -257,8 +259,26 @@ export default function GestionServicios({ tenantSlug, token }) {
     }
     setServicios((prev) => [data, ...prev])
     setModalAbierto(false)
-    if (form.requiere_confirmacion) {
-      setHorarioDe(data)
+    setFranjasNuevas([])
+    if (franjasNuevas.length > 0) {
+      let fallo = null
+      for (const f of franjasNuevas) {
+        const { error: hErr } = await client.POST(
+          '/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/horarios',
+          {
+            params: { path: { tenant_slug: tenantSlug, servicio_id: data.id } },
+            body: f,
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        )
+        if (hErr) {
+          fallo = errorMensaje(hErr)
+          break
+        }
+      }
+      if (fallo) {
+        setAccionError(`Servicio creado, pero no se pudo guardar el horario: ${fallo}`)
+      }
     }
   }
 
@@ -757,11 +777,13 @@ export default function GestionServicios({ tenantSlug, token }) {
             </div>
 
             {form.requiere_confirmacion && (
-              <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Al crear el servicio se abrirá la configuración de su "Horario de propuestas"
-                (la ventana en la que el cliente propone fecha/hora; el asesor se asigna al
-                confirmar).
-              </p>
+              <HorarioServicio
+                pendiente
+                sinModal
+                servicio={{ nombre: form.nombre.trim() || 'Nuevo servicio' }}
+                onCambio={setFranjasNuevas}
+                onClose={() => {}}
+              />
             )}
 
             {crearError && (

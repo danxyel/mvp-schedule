@@ -208,6 +208,7 @@ function App() {
         {vista === 'reserva' && slotSeleccionado && servicioSeleccionado ? (
           <FlujReserva
             tenantSlug={tenantSlug}
+            token={token}
             servicioId={servicioSeleccionado.id}
             slot={slotSeleccionado}
             servicioNombre={servicioSeleccionado.nombre}

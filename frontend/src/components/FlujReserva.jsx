@@ -59,7 +59,7 @@ function CountdownTimer({ expiraEn }) {
   )
 }
 
-export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, servicioNombre, precio, moneda }) {
+export default function FlujReserva({ tenantSlug, token, slot, servicioId, onVolver, servicioNombre, precio, moneda }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({ email: '', nombre: '', telefono: '', notas: '' })
   const [errors, setErrors] = useState({})
@@ -97,11 +97,15 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
 
     const { data, error } = await client.POST(
       '/api/v2/{tenant_slug}/reservas',
-      { params: { path: { tenant_slug: tenantSlug } }, body },
+      {
+        params: { path: { tenant_slug: tenantSlug } },
+        body,
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+      },
     )
 
     return { data, error }
-  }, [tenantSlug, slot, servicioId, form])
+  }, [tenantSlug, token, slot, servicioId, form])
 
   const handleSubmit = async () => {
     if (!validar() || submitLockRef.current) return

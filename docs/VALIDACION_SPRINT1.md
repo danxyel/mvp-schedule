@@ -58,6 +58,32 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 3. Un admin/asesor que hace login normal (ya tiene membresía) NO debe ver esta pantalla — su `tenant_slug` ya viene resuelto, sigue directo a su panel.
 4. Si no hay ningún tenant activo, la pantalla debe mostrar un estado vacío razonable, no un error feo.
 
+## Notas de Daniel (mobile) — 3 fixes 2026-07-31
+
+> Salieron de probar la app en pantallas chicas (375px/390px) y del flujo de invitar usuarios. Cada uno con su commit: `bafe3fa` (header), `531e56f` (modal común), `f00e990` (contraseña inicial).
+
+### Tarea 1 — Header responsive
+
+- [ ] A 375px y 390px, con el nav del cliente ("← Servicios", "Calendario", "Mis Reservas") y del admin ("Panel", "Calendario"), el header no se desborda horizontalmente; si no cabe, el grupo usuario+logout baja a segunda fila.
+- [ ] En mobile se ve un círculo con la inicial del usuario en vez del nombre completo; en desktop sigue el nombre completo.
+- [ ] En desktop (> 640px) el header se ve igual que antes (nombre visible, una sola fila).
+
+### Tarea 2 — Modal compartido `common/Modal.jsx`
+
+- [ ] Abrir cualquier modal en mobile (nuevo/editar servicio, invitar usuario, horarios del asesor, nuevo/editar tenant, cancelar reserva, registrar pago local, reagendar): sale como bottom sheet a ancho completo, con esquinas redondeadas arriba y scroll interno si el contenido es más alto que la pantalla. Ningún botón de la parte inferior queda fuera de alcance.
+- [ ] En desktop el mismo modal se ve centrado como antes (los 7 modales).
+- [ ] El botón ✕ del header cierra el modal (equivale a "Cancelar"/"No, volver").
+- [ ] En el formulario de Nuevo/Editar servicio, los campos Duración/Cupo mínimo/Cupo máximo/Moneda apilados en mobile (1 columna), 2 columnas en `sm`, 4 en `md`.
+- [ ] En Reagendar, fecha y hora en columna en mobile, en fila en `sm+`.
+
+### Tarea 3 — Contraseña inicial al invitar
+
+- [ ] Admin abre Usuarios → Invitar usuario: aparece el campo "Contraseña inicial (opcional)" con ayuda "mínimo 8 caracteres".
+- [ ] Invitar **con** contraseña → el invitado puede loguearse de inmediato con ese email+contraseña y entra a su rol (sin pasar por registro).
+- [ ] Invitar **sin** contraseña → comportamiento anterior: el invitado se registra solo con su email.
+- [ ] Invitar con contraseña a un email que ya se registró por su cuenta → error claro (422), no se sobrescribe su contraseña.
+- [ ] Invitar el mismo email dos veces en el mismo tenant → 409 "ya está vinculado".
+
 ## Regresión general
 
 - [ ] `npm run build` en `frontend/` corre limpio en tu máquina (no lo pude confirmar desde el sandbox — ver nota de la sesión anterior).

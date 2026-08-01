@@ -84,6 +84,31 @@
         }
       }
     },
+    "/tenants/publicos": {
+      "get": {
+        "tags": [
+          "Tenants"
+        ],
+        "summary": "Listar Tenants Publicos",
+        "operationId": "listar_tenants_publicos_tenants_publicos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TenantPublicOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Tenants Publicos Tenants Publicos Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/servicios": {
       "get": {
         "tags": [
@@ -2745,14 +2770,17 @@
         "properties": {
           "email": {
             "type": "string",
+            "format": "email",
             "title": "Email"
           },
           "password": {
             "type": "string",
+            "minLength": 8,
             "title": "Password"
           },
           "nombre": {
             "type": "string",
+            "minLength": 1,
             "title": "Nombre"
           },
           "telefono": {
@@ -4879,6 +4907,45 @@
           "nombre"
         ],
         "title": "TenantCreate"
+      },
+      "TenantPublicOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "color_primario": {
+            "type": "string",
+            "title": "Color Primario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "nombre",
+          "color_primario"
+        ],
+        "title": "TenantPublicOut"
       },
       "TenantUpdate": {
         "properties": {

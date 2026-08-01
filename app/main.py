@@ -10,7 +10,7 @@ OpenAPI disponible en:
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List
 from dotenv import load_dotenv
 load_dotenv()
 from contextlib import asynccontextmanager
@@ -75,6 +75,7 @@ from fastapi import Body
 from pydantic import EmailStr
 from app.dependencies import crear_token
 from app.models_v2_2 import Usuario, UsuarioTenant, Tenant
+from app.schemas_v2_2 import TenantPublicOut
 from app.database import get_db
 from sqlalchemy.orm import Session
 import bcrypt
@@ -195,6 +196,12 @@ def register(
         "tenant_slug": tenant_slug,
         "tenant_nombre": tenant_nombre,
     }
+
+
+@app.get("/tenants/publicos", response_model=List[TenantPublicOut], tags=["Tenants"])
+def listar_tenants_publicos(db: Session = Depends(get_db)):
+    tenants = db.query(Tenant).filter(Tenant.activo == True).order_by(Tenant.nombre).all()
+    return tenants
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 app.include_router(router)
 app.include_router(superadmin_router)

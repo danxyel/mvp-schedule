@@ -498,6 +498,15 @@ class ServicioPublicOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TenantPublicOut(BaseModel):
+    id: int
+    slug: str
+    nombre: str
+    logo_url: Optional[str] = None
+    color_primario: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ServicioAdminOut(BaseModel):
     id: int
     sede_id: Optional[int] = None

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Login from './components/Login'
 import Registro from './components/Registro'
 import SeleccionServicio from './components/SeleccionServicio'
+import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
 import FlujReserva from './components/FlujReserva'
 import MisReservas from './components/MisReservas'
@@ -37,6 +38,7 @@ function App() {
     const rol = u ? JSON.parse(u).rol : null
     if (rol === 'superadmin') return 'tenants'
     if (rol === 'admin' || rol === 'asesor') return 'panel-admin'
+    if (rol === 'cliente' && !sessionStorage.getItem('tenantSlug')) return 'seleccion-tenant'
     return 'servicios'
   })
   const [mostrarRegistro, setMostrarRegistro] = useState(false)
@@ -60,6 +62,7 @@ function App() {
     })
     if (nuevoUsuario.rol === 'superadmin') setVista('tenants')
     else if (nuevoUsuario.rol === 'admin' || nuevoUsuario.rol === 'asesor') setVista('panel-admin')
+    else if (nuevoUsuario.rol === 'cliente' && !nuevoUsuario.tenant_slug) setVista('seleccion-tenant')
     else setVista('servicios')
   }
 
@@ -82,6 +85,15 @@ function App() {
     setServicioSeleccionado(null)
     setSlotSeleccionado(null)
     setVista('panel-admin')
+  }
+
+  const handleElegirTenant = (slug, nombre) => {
+    setTenantSlug(slug)
+    setTenantNombre(nombre)
+    persistirSesion({ token, usuario, tenantSlug: slug, tenantNombre: nombre })
+    setServicioSeleccionado(null)
+    setSlotSeleccionado(null)
+    setVista('servicios')
   }
 
   const handleSeleccionarServicio = (servicio) => {
@@ -143,6 +155,8 @@ function App() {
       { key: 'panel-admin', label: 'Panel' },
       { key: 'calendario', label: 'Calendario' },
     ]
+  } else if (vista === 'seleccion-tenant') {
+    navItems = []
   } else {
     navItems = [
       { key: 'servicios', label: '← Servicios' },
@@ -220,6 +234,8 @@ function App() {
           />
         ) : vista === 'panel-admin' || vista === 'tenants' ? (
           <GestionTenants token={token} onEntrarTenant={handleEntrarTenant} />
+        ) : vista === 'seleccion-tenant' ? (
+          <SeleccionTenant onSeleccionar={handleElegirTenant} />
         ) : vista === 'servicios' || (vista === 'calendario' && !servicioSeleccionado) ? (
           <SeleccionServicio tenantSlug={tenantSlug} onSeleccionar={handleSeleccionarServicio} />
         ) : (

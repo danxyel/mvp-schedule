@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/publicos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Tenants Publicos */
+        get: operations["listar_tenants_publicos_tenants_publicos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/servicios": {
         parameters: {
             query?: never;
@@ -725,7 +742,10 @@ export interface components {
         };
         /** Body_register_auth_register_post */
         Body_register_auth_register_post: {
-            /** Email */
+            /**
+             * Email
+             * Format: email
+             */
             email: string;
             /** Password */
             password: string;
@@ -1455,6 +1475,19 @@ export interface components {
              */
             max_reservas_mes: number;
         };
+        /** TenantPublicOut */
+        TenantPublicOut: {
+            /** Id */
+            id: number;
+            /** Slug */
+            slug: string;
+            /** Nombre */
+            nombre: string;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Color Primario */
+            color_primario: string;
+        };
         /** TenantUpdate */
         TenantUpdate: {
             /** Activo */
@@ -1592,6 +1625,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_tenants_publicos_tenants_publicos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantPublicOut"][];
                 };
             };
         };

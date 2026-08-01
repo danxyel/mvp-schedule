@@ -1558,6 +1558,7 @@ def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
         max_reservas_mes=t.max_reservas_mes,
         creado_en=t.creado_en,
         total_usuarios=total_usuarios,
+        smtp_configurado=bool(t.smtp_config and t.smtp_config.get("host")),
     )
 
 
@@ -1650,6 +1651,16 @@ def actualizar_tenant(
 
     if "plan" in cambios:
         cambios["plan"] = PlanTenant(cambios["plan"])
+
+    if "smtp_config" in cambios:
+        # smtp_config es write-only desde el frontend (el password nunca se
+        # devuelve en GET/PATCH). Omitir campos en el payload (ej. "password")
+        # debe conservar el valor actual, no pisarlo con vacío.
+        if cambios["smtp_config"] is None:
+            cambios["smtp_config"] = None
+        else:
+            actual = t.smtp_config if isinstance(t.smtp_config, dict) else {}
+            cambios["smtp_config"] = {**actual, **cambios["smtp_config"]}
 
     for campo, valor in cambios.items():
         setattr(t, campo, valor)

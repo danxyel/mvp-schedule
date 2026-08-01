@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Modal from '../common/Modal'
+import ConfigSmtpModal from './ConfigSmtpModal'
 
 const API_BASE = 'http://localhost:8000'
 const LIMIT = 20
@@ -57,6 +58,7 @@ export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
   const [editando, setEditando] = useState(null)
   const [editarLoading, setEditarLoading] = useState(false)
   const [editarError, setEditarError] = useState(null)
+  const [configSmtp, setConfigSmtp] = useState(null)
   const [form, setForm] = useState({
     nombre: '',
     slug: '',
@@ -369,6 +371,22 @@ export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${
+                        t.smtp_configurado ? 'bg-green-500' : 'bg-gray-300'
+                      }`}
+                      title={t.smtp_configurado ? 'Email configurado' : 'Email sin configurar'}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setConfigSmtp(t)
+                      }}
+                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                    >
+                      Email
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -777,6 +795,17 @@ export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {configSmtp && (
+        <ConfigSmtpModal
+          tenant={configSmtp}
+          token={token}
+          onClose={() => setConfigSmtp(null)}
+          onGuardado={(actualizado) => {
+            setTenants((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)))
+          }}
+        />
       )}
     </div>
   )

@@ -395,6 +395,7 @@ class TenantAdminOut(BaseModel):
     max_reservas_mes: int
     creado_en: datetime
     total_usuarios: int = 0
+    smtp_configurado: bool = False
 
 
 class TenantUpdate(BaseModel):
@@ -408,6 +409,7 @@ class TenantUpdate(BaseModel):
     max_servicios: Optional[int] = Field(None, ge=1)
     max_clientes: Optional[int] = Field(None, ge=1)
     max_reservas_mes: Optional[int] = Field(None, ge=1)
+    smtp_config: Optional[dict] = None
 
 
 # ============================================================

@@ -1434,6 +1434,11 @@ export interface components {
              * @default 0
              */
             total_usuarios: number;
+            /**
+             * Smtp Configurado
+             * @default false
+             */
+            smtp_configurado: boolean;
         };
         /** TenantCreate */
         TenantCreate: {
@@ -1512,6 +1517,8 @@ export interface components {
             max_clientes?: number | null;
             /** Max Reservas Mes */
             max_reservas_mes?: number | null;
+            /** Smtp Config */
+            smtp_config?: Record<string, never> | null;
         };
         /**
          * TipoAgendaEnum

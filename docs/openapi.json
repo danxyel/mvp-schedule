@@ -4834,6 +4834,11 @@
             "type": "integer",
             "title": "Total Usuarios",
             "default": 0
+          },
+          "smtp_configurado": {
+            "type": "boolean",
+            "title": "Smtp Configurado",
+            "default": false
           }
         },
         "type": "object",
@@ -5084,6 +5089,17 @@
               }
             ],
             "title": "Max Reservas Mes"
+          },
+          "smtp_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Config"
           }
         },
         "type": "object",

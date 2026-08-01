@@ -47,13 +47,13 @@ function App() {
           } 
         />
         
-        <Route 
-          path="/admin" 
+        <Route
+          path="/admin"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'asesor']}>
+            <ProtectedRoute allowedRoles={['admin', 'asesor', 'superadmin']}>
               <PanelAdmin />
             </ProtectedRoute>
-          } 
+          }
         />
         
         <Route 

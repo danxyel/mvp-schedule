@@ -10,7 +10,7 @@ from typing import Optional, List
 
 import bcrypt
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm.exc import StaleDataError
@@ -20,7 +20,7 @@ from app.dependencies import (
     get_current_tenant, get_current_user, get_current_user_optional,
 )
 from app.models_v2_2 import (
-    Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
+    Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
     SolicitudReserva,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
     EstadoSolicitud, ESTADOS_SESION_ACTIVA, PlanTenant,
@@ -118,6 +118,20 @@ def _es_staff(db: Session, tenant_id: int, usuario_id: int) -> bool:
         return True
     m = _membresia(db, tenant_id, usuario_id)
     return m is not None and m.rol in (RolUsuario.ASESOR, RolUsuario.ADMIN, RolUsuario.SUPERADMIN)
+
+
+def _es_propietario_reserva(db: Session, tenant_id: int, reserva: Reserva, usuario_id: int) -> bool:
+    """Devuelve True si el usuario es el creador de la reserva o su beneficiario."""
+    if reserva.creado_por_usuario_id == usuario_id:
+        return True
+    if reserva.beneficiario_id is None:
+        return False
+    beneficiario = db.get(Beneficiario, reserva.beneficiario_id)
+    return (
+        beneficiario is not None
+        and beneficiario.tenant_id == tenant_id
+        and beneficiario.usuario_id == usuario_id
+    )
 
 
 # ============================================================
@@ -548,7 +562,8 @@ def consultar_reserva(
     ).scalars().unique().one_or_none()
 
     if r is None or (
-        r.creado_por_usuario_id != usuario.id and not _es_staff(db, tenant.id, usuario.id)
+        not _es_propietario_reserva(db, tenant.id, r, usuario.id)
+        and not _es_staff(db, tenant.id, usuario.id)
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
 
@@ -580,16 +595,22 @@ def listar_mis_reservas(
     tenant: Tenant = Depends(get_current_tenant),
     usuario: Usuario = Depends(get_current_user),
 ):
-    cond = [Reserva.tenant_id == tenant.id, Reserva.creado_por_usuario_id == usuario.id]
     stmt = (
         select(Reserva)
+        .outerjoin(Beneficiario, Beneficiario.id == Reserva.beneficiario_id)
         .join(Sesion, Sesion.id == Reserva.sesion_id)
         .options(
             joinedload(Reserva.sesion).joinedload(Sesion.sede),
             joinedload(Reserva.sesion).joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
             joinedload(Reserva.servicio),
         )
-        .where(*cond)
+        .where(
+            Reserva.tenant_id == tenant.id,
+            or_(
+                Reserva.creado_por_usuario_id == usuario.id,
+                Beneficiario.usuario_id == usuario.id,
+            ),
+        )
     )
     if not incluir_pasadas:
         stmt = stmt.where(Sesion.fecha_hora_inicio >= datetime.now(timezone.utc))
@@ -1961,7 +1982,9 @@ def cancelar_reserva_endpoint(
     ).scalar_one_or_none()
 
     es_staff = _es_staff(db, tenant.id, usuario.id)
-    if r is None or (r.creado_por_usuario_id != usuario.id and not es_staff):
+    if r is None or (
+        not _es_propietario_reserva(db, tenant.id, r, usuario.id) and not es_staff
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
 
     try:

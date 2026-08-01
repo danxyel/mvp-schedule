@@ -432,6 +432,12 @@ class SolicitudConfirmarOut(SolicitudAdminOut):
     sesion_id: Optional[int] = None
 
 
+class SolicitudRechazarIn(BaseModel):
+    """El staff rechaza una solicitud pendiente."""
+    motivo: Optional[str] = Field(default=None, max_length=500)
+    model_config = ConfigDict(extra="forbid")
+
+
 # ============================================================
 # SUPERADMIN — TENANTS
 # ============================================================

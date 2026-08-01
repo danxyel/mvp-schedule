@@ -34,7 +34,7 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
-    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, CanalEnum,
+    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudRechazarIn, CanalEnum,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -1080,6 +1080,59 @@ def confirmar_solicitud_admin(
         folio_reserva=reserva.folio,
         sesion_id=sesion.id,
     )
+
+
+@router.post("/admin/solicitudes/{solicitud_id}/rechazar", response_model=SolicitudAdminOut)
+def rechazar_solicitud_admin(
+    payload: SolicitudRechazarIn,
+    solicitud_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if solicitud is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "solicitud_no_encontrada", "mensaje": "Solicitud no encontrada"},
+        )
+
+    if solicitud.estado != EstadoSolicitud.PENDIENTE:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "solicitud_no_pendiente",
+             "mensaje": "La solicitud ya fue resuelta"},
+        )
+
+    solicitud.estado = EstadoSolicitud.RECHAZADA
+    solicitud.motivo_rechazo = payload.motivo
+    solicitud.resuelto_por_id = staff.usuario_id
+    solicitud.resuelto_en = utcnow()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_rechazada",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "motivo_rechazo": payload.motivo,
+        },
+    )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al rechazar solicitud %s", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(solicitud)
+    return _solicitud_admin_out(db, solicitud)
 
 
 # ============================================================

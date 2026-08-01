@@ -1078,7 +1078,7 @@ function PendientesTab({ tenantSlug, token }) {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [asesores, setAsesores] = useState([])
+  const [asesoresPorServicio, setAsesoresPorServicio] = useState({})
   const [asesorSel, setAsesorSel] = useState({})
   const [confirmando, setConfirmando] = useState(null)
   const [errores, setErrores] = useState({})
@@ -1110,19 +1110,26 @@ function PendientesTab({ tenantSlug, token }) {
   }, [fetchPendientes])
 
   const fetchAsesores = useCallback(async () => {
-    const { data, error: fetchErr } = await client.GET(
-      '/api/v2/{tenant_slug}/admin/usuarios',
-      {
-        params: { path: { tenant_slug: tenantSlug } },
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    if (fetchErr) {
-      setAsesores([])
+    const servicioIds = [...new Set(items.map((r) => r.servicio_id).filter(Boolean))]
+    if (servicioIds.length === 0) {
+      setAsesoresPorServicio({})
       return
     }
-    setAsesores((data ?? []).filter((u) => u.rol === 'asesor' && u.activo))
-  }, [tenantSlug, token])
+    const result = {}
+    await Promise.all(
+      servicioIds.map(async (sid) => {
+        const { data, error: fetchErr } = await client.GET(
+          '/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/asesores',
+          {
+            params: { path: { tenant_slug: tenantSlug, servicio_id: sid } },
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        )
+        if (!fetchErr) result[sid] = data ?? []
+      }),
+    )
+    setAsesoresPorServicio(result)
+  }, [tenantSlug, token, items])
 
   useEffect(() => {
     fetchAsesores()
@@ -1234,21 +1241,25 @@ function PendientesTab({ tenantSlug, token }) {
                     <p className="hidden text-xs text-gray-400 sm:block">{r.email_cliente ?? ''}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <select
-                      value={asesorSel[r.id] ?? ''}
-                      onChange={(e) =>
-                        setAsesorSel((prev) => ({ ...prev, [r.id]: e.target.value }))
-                      }
-                      disabled={confirmando === r.id}
-                      className="w-full min-w-[9rem] rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="">Elige un asesor</option>
-                      {asesores.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.nombre}
-                        </option>
-                      ))}
-                    </select>
+                    {asesoresPorServicio[r.servicio_id]?.length > 0 ? (
+                      <select
+                        value={asesorSel[r.id] ?? ''}
+                        onChange={(e) =>
+                          setAsesorSel((prev) => ({ ...prev, [r.id]: e.target.value }))
+                        }
+                        disabled={confirmando === r.id}
+                        className="w-full min-w-[9rem] rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <option value="">Elige un asesor</option>
+                        {asesoresPorServicio[r.servicio_id].map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs text-gray-400">Sin asesores vinculados</span>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
                     <button

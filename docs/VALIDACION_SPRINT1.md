@@ -105,11 +105,20 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 
 - [ ] `POST /api/v2/{tenant_slug}/admin/reservas/{reserva_id}/asignar-asesor` con un asesor válido y disponible en la franja → `200 { ok: true }`, la reserva pasa a `confirmada`, `Sesion.asesor_id` queda asignado, se registra bitácora `asignar_asesor` y **en ese momento** se envía el email de confirmación.
 - [ ] Con un asesor que tiene un bloqueo/traslape en esa franja → 409 `franja_ocupada`; la reserva sigue `pendiente` y el asesor no queda asignado.
+- [ ] Con un asesor **no vinculado a ese servicio** (existe y está activo, pero no tiene `AsesorServicio` activo con el servicio de la reserva) → 409 `asesor_no_asignado_a_servicio`; la reserva NO se confirma.
 - [ ] Con una reserva que ya está `confirmada` → 409 `reserva_no_pendiente`.
 - [ ] Con `reserva_id` inexistente o de otro tenant → 404.
 - [ ] Con un `asesor_id` inexistente, inactivo o de otro tenant → 404.
 - [ ] Sin token → 401; con token de cliente (no staff) → 403.
 - [ ] Body sin `asesor_id` o con `asesor_id: 0`/negativo → 422; campos extra en el body → 422 (`extra="forbid"`).
+
+### Endpoint `GET /admin/servicios/{servicio_id}/asesores`
+
+- [ ] Devuelve solo asesores **activos y vinculados** a ese servicio (`AsesorServicio` activo), shape `{ id, nombre, ... }` de `UsuarioAdminOut`.
+- [ ] Con un `servicio_id` inexistente o de otro tenant → 404 `servicio_no_encontrado`.
+- [ ] Sin token → 401; con token de cliente (no staff) → 403.
+- [ ] Un asesor vinculado pero inactivo, o un servicio con `AsesorServicio` inactivo, NO aparece en la lista.
+- [ ] `GET /admin/reservas` ahora incluye `servicio_id` en cada item (además de `servicio_nombre`).
 
 ### Frontend — FlujReserva (cliente)
 
@@ -121,7 +130,8 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 
 - [ ] En el panel (admin) hay una pestaña "Pendientes" entre Sesiones y Reservas del día.
 - [ ] Lista las reservas `pendiente` de **todas las fechas** del tenant (no solo las de hoy), con folio, servicio, fecha/hora, cliente (nombre + email).
-- [ ] Cada fila tiene un selector de asesor (lista los asesores activos del tenant) y un botón "Asignar y confirmar".
+- [ ] Cada fila tiene un selector de asesor que lista SOLO los asesores activos **vinculados a ese servicio** (vía `GET /admin/servicios/{servicio_id}/asesores`) y un botón "Asignar y confirmar".
+- [ ] Un servicio sin asesores vinculados muestra "Sin asesores vinculados" en vez del selector.
 - [ ] Elegir un asesor y confirmar → la reserva desaparece de la lista, se ve un banner verde con el mensaje de éxito y el folio, y el email de confirmación llega al cliente.
 - [ ] Elegir un asesor sin disponibilidad en esa franja → 409 `franja_ocupada`: se muestra el error inline bajo la fila ("Este asesor no tiene disponibilidad..."), la lista sigue viva y se puede elegir otro asesor y reintentar.
 - [ ] Apretar "Asignar y confirmar" sin elegir asesor → error inline "Elige un asesor para confirmar." sin llamar al endpoint.

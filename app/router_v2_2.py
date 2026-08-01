@@ -649,17 +649,14 @@ def listar_mis_solicitudes(
 # ============================================================
 @router.get("/admin/reservas", response_model=ReservasAdminPaginadasOut)
 def listar_reservas_admin(
-    fecha: Optional[date] = Query(None, description="Filtra por fecha de la sesión (default: hoy)"),
-    estado: Optional[str] = Query(None, description="Filtra por estado de reserva (ej. confirmada)"),
+    fecha: Optional[date] = Query(None, description="Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas)"),
+    estado: Optional[str] = Query(None, description="Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     staff: UsuarioTenant = Depends(requiere_staff),
 ):
-    if fecha is None:
-        fecha = date.today()
-
     estado_enum = None
     if estado:
         try:
@@ -670,14 +667,17 @@ def listar_reservas_admin(
                 f"Estado de reserva inválido: {estado}",
             )
 
-    inicio = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
-    fin = inicio + timedelta(days=1)
+    if fecha is None and estado_enum is None:
+        fecha = date.today()
 
-    cond = [
-        Reserva.tenant_id == tenant.id,
-        Sesion.fecha_hora_inicio >= inicio,
-        Sesion.fecha_hora_inicio < fin,
-    ]
+    cond = [Reserva.tenant_id == tenant.id]
+    if fecha is not None:
+        inicio = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
+        fin = inicio + timedelta(days=1)
+        cond.extend([
+            Sesion.fecha_hora_inicio >= inicio,
+            Sesion.fecha_hora_inicio < fin,
+        ])
     if estado_enum is not None:
         cond.append(Reserva.estado == estado_enum)
 

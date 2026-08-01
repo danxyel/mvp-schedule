@@ -3,6 +3,7 @@ import createClient from 'openapi-fetch'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
 import Modal from '../common/Modal'
+import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
@@ -131,6 +132,8 @@ function Badge({ value, map, labelMap }) {
 }
 
 function SesionesTab({ tenantSlug, token }) {
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
   const [offset, setOffset] = useState(0)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -487,26 +490,24 @@ function SesionesTab({ tenantSlug, token }) {
             {formatFechaHora(reagendar.sesion.fecha_hora_inicio, reagendar.sesion.timezone)}
           </p>
 
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Nueva fecha</label>
-              <input
-                type="date"
-                min={toDateInputValue(new Date())}
-                value={reagendar.fecha}
-                onChange={(e) => setReagendar((prev) => ({ ...prev, fecha: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Nueva hora</label>
-              <input
-                type="time"
-                value={reagendar.hora}
-                onChange={(e) => setReagendar((prev) => ({ ...prev, hora: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+          <div className="mb-4 flex justify-center">
+            <SelectorFecha
+              value={new Date(`${reagendar.fecha}T00:00:00`)}
+              onChange={(day) =>
+                setReagendar((prev) => ({ ...prev, fecha: toDateInputValue(day) }))
+              }
+              minDate={hoy}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Nueva hora</label>
+            <input
+              type="time"
+              value={reagendar.hora}
+              onChange={(e) => setReagendar((prev) => ({ ...prev, hora: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           {reagendarError && (

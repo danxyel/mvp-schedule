@@ -10,6 +10,7 @@ OpenAPI disponible en:
 """
 
 import logging
+import os
 from typing import Optional, List
 from dotenv import load_dotenv
 load_dotenv()
@@ -51,21 +52,25 @@ app = FastAPI(
     description="Sistema de agendamiento multitenant · v2.2",
     version="2.2.0",
     lifespan=lifespan,
-    # En producción cambiar a False y no exponer /docs públicamente
+    # ENV: "development" (default) expone /docs, /redoc y /openapi.json.
+    # En "production" se deshabilitan para no exponer Swagger públicamente.
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# Durante desarrollo permite el frontend en localhost:5173 (Vite por defecto)
-# En producción reemplazar con la URL real del frontend
+# CORS_ORIGINS: lista de orígenes permitidos separados por coma.
+# Default = localhost del dev (Vite 5173 + CRA/Next 3000). En producción
+# apuntar a la URL real del frontend (ej. https://tu-app.vercel.app).
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite dev
-        "http://localhost:3000",   # Create React App / Next.js
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

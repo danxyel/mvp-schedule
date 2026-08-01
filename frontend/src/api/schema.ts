@@ -2132,9 +2132,9 @@ export interface operations {
     listar_reservas_admin_api_v2__tenant_slug__admin_reservas_get: {
         parameters: {
             query?: {
-                /** @description Filtra por fecha de la sesión (default: hoy) */
+                /** @description Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas) */
                 fecha?: string | null;
-                /** @description Filtra por estado de reserva (ej. confirmada) */
+                /** @description Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas */
                 estado?: string | null;
                 limit?: number;
                 offset?: number;

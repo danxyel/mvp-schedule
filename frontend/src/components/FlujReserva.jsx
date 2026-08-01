@@ -292,6 +292,7 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
   const errorMensaje = ERROR_MESSAGES[errorCodigo] ?? errorReserva?.mensaje ?? 'Ocurrió un error inesperado.'
   const esConfirmada = resultado?.reserva?.estado === 'confirmada'
   const esEnEspera = resultado?.reserva?.estado === 'en_espera'
+  const esNuevoEstadoPendiente = resultado?.reserva?.estado === 'pendiente'
   const reserva = resultado?.reserva
   const checkout = resultado?.checkout
 
@@ -303,7 +304,9 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
             ? 'border-red-200 bg-red-50'
             : esConfirmada
               ? 'border-green-200 bg-green-50'
-              : 'border-yellow-200 bg-yellow-50'
+              : esEnEspera
+                ? 'border-yellow-200 bg-yellow-50'
+                : 'border-blue-200 bg-blue-50'
         }`}
       >
         {errorReserva && (
@@ -356,6 +359,35 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
               type="button"
               onClick={onVolver}
               className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700"
+            >
+              Volver al calendario
+            </button>
+          </>
+        )}
+
+        {esNuevoEstadoPendiente && (
+          <>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-blue-700 text-lg font-bold">
+                📋
+              </span>
+              <h2 className="text-lg font-semibold text-blue-800">Solicitud recibida</h2>
+            </div>
+            <p className="mb-3 text-sm text-blue-700">
+              Tu solicitud fue recibida. Te confirmaremos el asesor y horario en breve.
+            </p>
+            <div className="mb-4 space-y-1 text-sm text-blue-700">
+              <p>
+                <span className="font-medium">Folio:</span> {reserva.folio}
+              </p>
+              <p>
+                <span className="font-medium">Código:</span> {reserva.codigo_confirmacion}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onVolver}
+              className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               Volver al calendario
             </button>

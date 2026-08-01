@@ -111,6 +111,25 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] Sin token → 401; con token de cliente (no staff) → 403.
 - [ ] Body sin `asesor_id` o con `asesor_id: 0`/negativo → 422; campos extra en el body → 422 (`extra="forbid"`).
 
+### Frontend — FlujReserva (cliente)
+
+- [ ] Reservar un servicio con `requiere_confirmacion=True` → la pantalla de éxito **azul** dice "Solicitud recibida" con el texto "Tu solicitud fue recibida. Te confirmaremos el asesor y horario en breve." + folio y código de confirmación. NO se ve como error (nada rojo).
+- [ ] El botón lleva "Volver al calendario" y el flujo sigue funcionando.
+- [ ] Regresión: reservar un servicio normal sigue mostrando "Reserva confirmada" (verde) o "Pago pendiente" (amarillo) según corresponda; el nuevo estado azul no aparece en esos flujos.
+
+### Frontend — Panel admin, pestaña "Pendientes"
+
+- [ ] En el panel (admin) hay una pestaña "Pendientes" entre Sesiones y Reservas del día.
+- [ ] Lista las reservas `pendiente` de **todas las fechas** del tenant (no solo las de hoy), con folio, servicio, fecha/hora, cliente (nombre + email).
+- [ ] Cada fila tiene un selector de asesor (lista los asesores activos del tenant) y un botón "Asignar y confirmar".
+- [ ] Elegir un asesor y confirmar → la reserva desaparece de la lista, se ve un banner verde con el mensaje de éxito y el folio, y el email de confirmación llega al cliente.
+- [ ] Elegir un asesor sin disponibilidad en esa franja → 409 `franja_ocupada`: se muestra el error inline bajo la fila ("Este asesor no tiene disponibilidad..."), la lista sigue viva y se puede elegir otro asesor y reintentar.
+- [ ] Apretar "Asignar y confirmar" sin elegir asesor → error inline "Elige un asesor para confirmar." sin llamar al endpoint.
+- [ ] Con asesores inactivos/no-asignados: no aparecen en el selector.
+- [ ] Sin reservas pendientes → estado vacío "No hay reservas pendientes de confirmación."
+- [ ] Paginación funciona (Anterior/Siguiente) si hay más de 50 pendientes.
+- [ ] Mobile 375px: la tabla scrollea horizontalmente dentro de su contenedor (min-w-0 en la raíz del panel), la página no se desplaza.
+
 
 ## Notas de Daniel (mobile) — 4 fixes 2026-07-31
 

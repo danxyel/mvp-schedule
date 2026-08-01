@@ -276,6 +276,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/reservas/{reserva_id}/asignar-asesor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asignar Asesor Reserva */
+        post: operations["asignar_asesor_reserva_api_v2__tenant_slug__admin_reservas__reserva_id__asignar_asesor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/servicios": {
         parameters: {
             query?: never;
@@ -676,6 +693,14 @@ export interface components {
             duracion_custom_min?: number | null;
             /** Activo */
             activo: boolean;
+        };
+        /** AsignarAsesorIn */
+        AsignarAsesorIn: {
+            /**
+             * Asesor Id
+             * @description UsuarioTenant (rol asesor/admin) a asignar a la sesión
+             */
+            asesor_id: number;
         };
         /** BloqueoCreate */
         BloqueoCreate: {
@@ -1527,29 +1552,8 @@ export interface components {
              * @default false
              */
             smtp_configurado: boolean;
-            /**
-             * Smtp Config
-             * Campos NO sensibles de smtp_config. `password` nunca viene.
-             * @default null
-             */
-            smtp_config?: {
-                /** Host */
-                host?: string | null;
-                /** Port */
-                port?: number;
-                /** User */
-                user?: string | null;
-                /** From Email */
-                from_email?: string | null;
-                /** From Name */
-                from_name?: string | null;
-                /** Tls */
-                tls?: boolean;
-                /** Ssl */
-                ssl?: boolean;
-                /** Console */
-                console?: boolean;
-            } | null;
+            /** Smtp Config */
+            smtp_config?: Record<string, never> | null;
         };
         /** TenantCreate */
         TenantCreate: {
@@ -2176,6 +2180,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PagoLocalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    asignar_asesor_reserva_api_v2__tenant_slug__admin_reservas__reserva_id__asignar_asesor_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reserva_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AsignarAsesorIn"];
             };
         };
         responses: {

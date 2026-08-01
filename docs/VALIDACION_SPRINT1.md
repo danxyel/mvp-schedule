@@ -90,6 +90,28 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] Probado desde un navegador con timezone distinto a UTC-6: reagendar un slot a las 10:00 local → en DB queda exactamente 10:00 local (el offset real del navegador acompaña el reloj local del `<input type="date">`/`<input type="time">`).
 - [ ] El campo `Sesion.fecha_hora_inicio` en la tabla de sesiones del panel muestra la nueva fecha/hora correcta tras reagendar, y la reserva asociada conserva su folio/estado.
 
+## Nuevo diseño 2026-07-31 — Reserva con confirmación manual + asignar asesor
+
+> Sustituye el flujo de `solicitudes_reserva` (tabla/schemas quedan sin uso). Un servicio con `requiere_confirmacion=True` ya NO crea una solicitud: crea una reserva real `PENDIENTE` con sesión sin asesor, y el staff la confirma asignando asesor.
+
+### Flujo de reserva con `requiere_confirmacion=True`
+
+- [ ] Reservar un servicio con `requiere_confirmacion=True` desde el calendario (slot disponible) → responde `201` con la reserva en `estado: "pendiente"`, **sin** `checkout`, **sin** email de confirmación y `sesion_id` creada con `Sesion.asesor_id = NULL`.
+- [ ] En DB: la reserva queda `estado=PENDIENTE` y la sesión existe con `asesor_id NULL`; no hay correo saliente (bandeja/console vacía).
+- [ ] La sesión creada respeta los bloqueos `global` y de `sede` (si hay un HorarioBloqueo global o de la sede en esa franja → 409 `franja_ocupada`, aunque haya asesores libres).
+- [ ] Regresión: reservar un servicio **sin** `requiere_confirmacion` (ej. pago local) sigue comportándose igual que antes (estado `confirmada`, sesión con asesor asignado, email al crear).
+
+### Asignar asesor y confirmar (staff)
+
+- [ ] `POST /api/v2/{tenant_slug}/admin/reservas/{reserva_id}/asignar-asesor` con un asesor válido y disponible en la franja → `200 { ok: true }`, la reserva pasa a `confirmada`, `Sesion.asesor_id` queda asignado, se registra bitácora `asignar_asesor` y **en ese momento** se envía el email de confirmación.
+- [ ] Con un asesor que tiene un bloqueo/traslape en esa franja → 409 `franja_ocupada`; la reserva sigue `pendiente` y el asesor no queda asignado.
+- [ ] Con una reserva que ya está `confirmada` → 409 `reserva_no_pendiente`.
+- [ ] Con `reserva_id` inexistente o de otro tenant → 404.
+- [ ] Con un `asesor_id` inexistente, inactivo o de otro tenant → 404.
+- [ ] Sin token → 401; con token de cliente (no staff) → 403.
+- [ ] Body sin `asesor_id` o con `asesor_id: 0`/negativo → 422; campos extra en el body → 422 (`extra="forbid"`).
+
+
 ## Notas de Daniel (mobile) — 4 fixes 2026-07-31
 
 > Salieron de probar la app en pantallas chicas (375px/390px) y del flujo de invitar usuarios. Cada uno con su commit: `bafe3fa` (header), `531e56f` (modal común), `f00e990` (contraseña inicial), `3fe9190` (min-w-0 tablas).

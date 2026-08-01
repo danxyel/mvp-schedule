@@ -713,21 +713,41 @@ def crear_reserva(
                     "No hay sesiones programadas en ese horario",
                     codigo="sin_sesion_disponible",
                 )
-            asesor_id = asignar_asesor_disponible(
-                db, tenant_id, servicio, inicio, fin, tzname, preferido_id=payload.asesor_id
-            )
-            validar_disponibilidad_franja(
-                db, tenant_id, servicio, inicio, fin, asesor_id=asesor_id, tzname=tzname
-            )
-            sesion = crear_sesion(
-                db, tenant, servicio, inicio, fin,
-                creado_por_usuario_id=usuario.id,
-                creado_por_tipo=CreadoPorTipo.ALUMNO.value if usuario_actual else CreadoPorTipo.SISTEMA.value,
-                asesor_id=asesor_id,
-                sede_id=payload.sede_id,
-                tzname=tzname,
-            )
-            sesion_creada = True
+            if servicio.requiere_confirmacion:
+                # Asignación manual de asesor: la sesión se crea SIN asesor y la
+                # reserva queda PENDIENTE. El staff asigna asesor al confirmar
+                # vía POST /admin/reservas/{reserva_id}/asignar-asesor. Aquí solo
+                # se validan bloqueos tipo "global"/"sede" (con asesor_id=None,
+                # validar_disponibilidad_franja no depende de disponibilidad de
+                # asesor) — sin corrimiento de concurrencia ni manejo de cupo.
+                validar_disponibilidad_franja(
+                    db, tenant_id, servicio, inicio, fin, asesor_id=None, tzname=tzname
+                )
+                sesion = crear_sesion(
+                    db, tenant, servicio, inicio, fin,
+                    creado_por_usuario_id=usuario.id,
+                    creado_por_tipo=CreadoPorTipo.ALUMNO.value if usuario_actual else CreadoPorTipo.SISTEMA.value,
+                    asesor_id=None,
+                    sede_id=payload.sede_id,
+                    tzname=tzname,
+                )
+                sesion_creada = True
+            else:
+                asesor_id = asignar_asesor_disponible(
+                    db, tenant_id, servicio, inicio, fin, tzname, preferido_id=payload.asesor_id
+                )
+                validar_disponibilidad_franja(
+                    db, tenant_id, servicio, inicio, fin, asesor_id=asesor_id, tzname=tzname
+                )
+                sesion = crear_sesion(
+                    db, tenant, servicio, inicio, fin,
+                    creado_por_usuario_id=usuario.id,
+                    creado_por_tipo=CreadoPorTipo.ALUMNO.value if usuario_actual else CreadoPorTipo.SISTEMA.value,
+                    asesor_id=asesor_id,
+                    sede_id=payload.sede_id,
+                    tzname=tzname,
+                )
+                sesion_creada = True
 
     if not _ocupar_lugar(db, sesion.id, tenant_id):
         raise CupoAgotadoError()
@@ -738,7 +758,11 @@ def crear_reserva(
     precio = servicio.precio or Decimal("0.00")
     requiere_pago = servicio.pago_requerido and precio > 0
 
-    if not requiere_pago:
+    if servicio.requiere_confirmacion:
+        estado = EstadoReserva.PENDIENTE
+        estado_pago = EstadoPagoReserva.PENDIENTE
+        hold_expira = None
+    elif not requiere_pago:
         estado = EstadoReserva.CONFIRMADA
         estado_pago = EstadoPagoReserva.EXENTO
         hold_expira = None
@@ -801,11 +825,21 @@ def crear_reserva(
         ip=ip, user_agent=user_agent,
     )
 
-    tareas = {
-        "checkout": metodo == MetodoPago.ONLINE.value and requiere_pago,
-        "sincronizar_calendario": sesion_creada,
-        "enviar_confirmacion": True,
-    }
+    if servicio.requiere_confirmacion:
+        # Nada se dispara post-commit: el email y el calendario se disparan
+        # hasta que el staff confirma (asigna asesor) en
+        # POST /admin/reservas/{reserva_id}/asignar-asesor.
+        tareas = {
+            "checkout": False,
+            "sincronizar_calendario": False,
+            "enviar_confirmacion": False,
+        }
+    else:
+        tareas = {
+            "checkout": metodo == MetodoPago.ONLINE.value and requiere_pago,
+            "sincronizar_calendario": sesion_creada,
+            "enviar_confirmacion": True,
+        }
 
     return {
         "reserva": reserva,
@@ -815,7 +849,8 @@ def crear_reserva(
         "sesion_creada": sesion_creada,
         "tareas_post_commit": tareas,
         "mensaje": (
-            "Reserva confirmada" if estado == EstadoReserva.CONFIRMADA
+            "Reserva pendiente de confirmación" if estado == EstadoReserva.PENDIENTE
+            else "Reserva confirmada" if estado == EstadoReserva.CONFIRMADA
             else "Reserva en espera de pago"
         ),
     }

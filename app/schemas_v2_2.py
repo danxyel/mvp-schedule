@@ -190,6 +190,11 @@ class PagoLocalIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AsignarAsesorIn(BaseModel):
+    asesor_id: int = Field(..., gt=0, description="UsuarioTenant (rol asesor/admin) a asignar a la sesión")
+    model_config = ConfigDict(extra="forbid")
+
+
 # ============================================================
 # SALIDA — PÚBLICA
 # ============================================================

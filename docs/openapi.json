@@ -960,6 +960,73 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/reservas/{reserva_id}/asignar-asesor": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Asignar Asesor Reserva",
+        "operationId": "asignar_asesor_reserva_api_v2__tenant_slug__admin_reservas__reserva_id__asignar_asesor_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reserva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Reserva Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignarAsesorIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/servicios": {
       "get": {
         "tags": [
@@ -2633,6 +2700,22 @@
           "activo"
         ],
         "title": "AsesorServicioOut"
+      },
+      "AsignarAsesorIn": {
+        "properties": {
+          "asesor_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Asesor Id",
+            "description": "UsuarioTenant (rol asesor/admin) a asignar a la sesión"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asesor_id"
+        ],
+        "title": "AsignarAsesorIn"
       },
       "BloqueoCreate": {
         "properties": {
@@ -5086,6 +5169,17 @@
             "type": "boolean",
             "title": "Smtp Configurado",
             "default": false
+          },
+          "smtp_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Config"
           }
         },
         "type": "object",

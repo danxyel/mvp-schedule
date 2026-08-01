@@ -33,7 +33,7 @@ from app.schemas_v2_2 import (
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
-    PagoLocalIn,
+    PagoLocalIn, AsignarAsesorIn,
     SolicitudCreate, SolicitudOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
@@ -792,6 +792,112 @@ def registrar_pago_local(
         ok=True,
         mensaje="Pago registrado",
         detalle={"folio": folio, "metodo_pago_usado": payload.metodo},
+    )
+
+
+# ============================================================
+# ADMIN — ASIGNAR ASESOR A RESERVA PENDIENTE (confirmación manual)
+# ============================================================
+@router.post("/admin/reservas/{reserva_id}/asignar-asesor", response_model=OperacionOut)
+def asignar_asesor_reserva(
+    payload: AsignarAsesorIn,
+    reserva_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    reserva = db.execute(
+        select(Reserva).where(Reserva.tenant_id == tenant.id, Reserva.id == reserva_id)
+    ).scalar_one_or_none()
+    if reserva is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "reserva_no_encontrada", "mensaje": "Reserva no encontrada"},
+        )
+
+    if reserva.estado != EstadoReserva.PENDIENTE:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "reserva_no_pendiente",
+             "mensaje": "La reserva debe estar pendiente para asignar asesor"},
+        )
+
+    sesion = db.get(Sesion, reserva.sesion_id)
+    if sesion is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "sesion_no_encontrada", "mensaje": "La sesión no existe"},
+        )
+
+    asesor = db.execute(
+        select(UsuarioTenant).where(
+            UsuarioTenant.tenant_id == tenant.id,
+            UsuarioTenant.id == payload.asesor_id,
+            UsuarioTenant.activo.is_(True),
+            UsuarioTenant.rol.in_([RolUsuario.ASESOR.value, RolUsuario.ADMIN.value]),
+        )
+    ).scalar_one_or_none()
+    if asesor is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "asesor_no_encontrado", "mensaje": "Asesor no encontrado en este tenant"},
+        )
+
+    servicio = db.get(Servicio, reserva.servicio_id)
+    try:
+        svc.validar_disponibilidad_franja(
+            db, tenant.id, servicio, sesion.fecha_hora_inicio, sesion.fecha_hora_fin,
+            asesor_id=payload.asesor_id, tzname=sesion.timezone,
+        )
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+
+    sesion.asesor_id = payload.asesor_id
+    reserva.estado = EstadoReserva.CONFIRMADA
+
+    svc.registrar_bitacora(
+        db, tenant.id, "reserva", reserva.id, "asignar_asesor",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "folio": reserva.folio,
+            "sesion_id": sesion.id,
+            "asesor_id": payload.asesor_id,
+        },
+    )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al asignar asesor a reserva %s", reserva_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(reserva)
+
+    # Efectos externos DESPUÉS del commit: no rompen la respuesta si fallan.
+    try:
+        svc.enviar_email_confirmacion(tenant, reserva, reserva.creado_por, sesion)
+    except Exception:
+        log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
+
+    try:
+        svc.sincronizar_calendario(tenant, sesion)
+    except Exception:
+        log.exception("Fallo al sincronizar calendario para sesión %s", sesion.id)
+
+    return OperacionOut(
+        ok=True,
+        mensaje="Asesor asignado y reserva confirmada",
+        detalle={
+            "reserva_id": reserva.id,
+            "folio": reserva.folio,
+            "sesion_id": sesion.id,
+            "asesor_id": payload.asesor_id,
+        },
     )
 
 

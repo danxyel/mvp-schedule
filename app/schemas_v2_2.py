@@ -300,6 +300,7 @@ class ReservaAdminListOut(BaseModel):
     nombre_cliente: Optional[str] = None
     email_cliente: Optional[str] = None
     servicio_id: int
+    sesion_id: int
     servicio_nombre: Optional[str] = None
     fecha_hora_inicio: datetime
     fecha_hora_fin: datetime

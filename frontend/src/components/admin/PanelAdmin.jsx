@@ -1095,6 +1095,8 @@ function ReservasTab({ tenantSlug, token }) {
 }
 
 function PendientesTab({ tenantSlug, token }) {
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
   const [offset, setOffset] = useState(0)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -1105,6 +1107,9 @@ function PendientesTab({ tenantSlug, token }) {
   const [confirmando, setConfirmando] = useState(null)
   const [errores, setErrores] = useState({})
   const [exito, setExito] = useState(null)
+  const [reprogramar, setReprogramar] = useState(null)
+  const [reprogramarLoading, setReprogramarLoading] = useState(false)
+  const [reprogramarError, setReprogramarError] = useState(null)
 
   const fetchPendientes = useCallback(async () => {
     const { data, error: fetchErr } = await client.GET(
@@ -1201,6 +1206,42 @@ function PendientesTab({ tenantSlug, token }) {
     fetchPendientes()
   }
 
+  const abrirReprogramar = (reserva) => {
+    setReprogramar({
+      reserva,
+      fecha: toDateInputValue(new Date(reserva.fecha_hora_inicio)),
+      hora: getHoraMin(reserva.fecha_hora_inicio, reserva.timezone),
+    })
+    setReprogramarError(null)
+  }
+
+  const guardarReprogramar = async () => {
+    if (!reprogramar?.fecha || !reprogramar?.hora) return
+    setReprogramarLoading(true)
+    setReprogramarError(null)
+    const nuevaFechaHora = `${reprogramar.fecha}T${reprogramar.hora}${getLocalOffset()}`
+    const { error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/sesiones/{sesion_id}/reagendar',
+      {
+        params: {
+          path: { tenant_slug: tenantSlug, sesion_id: reprogramar.reserva.sesion_id },
+        },
+        body: {
+          nueva_fecha_hora_inicio: nuevaFechaHora,
+          motivo: 'Reprogramado por el staff (reserva pendiente)',
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setReprogramarLoading(false)
+    if (fetchErr) {
+      setReprogramarError(fetchErr)
+      return
+    }
+    setReprogramar(null)
+    fetchPendientes()
+  }
+
   if (loading) {
     return (
       <div className="animate-pulse space-y-3">
@@ -1284,14 +1325,24 @@ function PendientesTab({ tenantSlug, token }) {
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => asignar(r)}
-                      disabled={confirmando !== null}
-                      className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {confirmando === r.id ? 'Confirmando...' : 'Asignar y confirmar'}
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => abrirReprogramar(r)}
+                        disabled={confirmando !== null}
+                        className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Reprogramar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => asignar(r)}
+                        disabled={confirmando !== null}
+                        className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {confirmando === r.id ? 'Confirmando...' : 'Asignar y confirmar'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 {errores[r.id] && (
@@ -1336,6 +1387,67 @@ function PendientesTab({ tenantSlug, token }) {
             Siguiente &rarr;
           </button>
         </div>
+      )}
+
+      {reprogramar && (
+        <Modal title="Reprogramar reserva pendiente" onClose={() => setReprogramar(null)}>
+          <p className="mb-4 text-sm text-gray-600">
+            Fecha/hora propuesta por el cliente:{' '}
+            {formatFechaHora(
+              reprogramar.reserva.fecha_hora_inicio,
+              reprogramar.reserva.timezone,
+            )}
+          </p>
+
+          <div className="mb-4 flex justify-center">
+            <SelectorFecha
+              value={new Date(`${reprogramar.fecha}T00:00:00`)}
+              onChange={(day) =>
+                setReprogramar((prev) => ({ ...prev, fecha: toDateInputValue(day) }))
+              }
+              minDate={hoy}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Nueva hora</label>
+            <input
+              type="time"
+              value={reprogramar.hora}
+              onChange={(e) => setReprogramar((prev) => ({ ...prev, hora: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <p className="mb-3 text-xs text-gray-500">
+            La reserva sigue pendiente. El email de confirmación y la asignación real del asesor
+            se hacen con "Asignar y confirmar".
+          </p>
+
+          {reprogramarError && (
+            <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorMensaje(reprogramarError)}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setReprogramar(null)}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={guardarReprogramar}
+              disabled={reprogramarLoading || !reprogramar.fecha || !reprogramar.hora}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {reprogramarLoading ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   )

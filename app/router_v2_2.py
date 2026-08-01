@@ -712,6 +712,7 @@ def listar_reservas_admin(
             nombre_cliente=r.creado_por.nombre if r.creado_por else None,
             email_cliente=r.creado_por.email if r.creado_por else None,
             servicio_id=r.servicio.id if r.servicio else 0,
+            sesion_id=s.id,
             servicio_nombre=r.servicio.nombre if r.servicio else None,
             fecha_hora_inicio=s.fecha_hora_inicio,
             fecha_hora_fin=s.fecha_hora_fin,
@@ -1824,10 +1825,11 @@ def reagendar_sesion_endpoint(
         raise
 
     db.refresh(sesion)
-    try:
-        svc.sincronizar_calendario(tenant, sesion)
-    except Exception:
-        log.exception("Fallo al sincronizar calendario tras reagendar %s", sesion_id)
+    if sesion.asesor_id is not None:
+        try:
+            svc.sincronizar_calendario(tenant, sesion)
+        except Exception:
+            log.exception("Fallo al sincronizar calendario tras reagendar %s", sesion_id)
 
     return _sesion_list_out(sesion)
 

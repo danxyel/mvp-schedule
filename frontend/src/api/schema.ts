@@ -1046,6 +1046,8 @@ export interface components {
             email_cliente?: string | null;
             /** Servicio Id */
             servicio_id: number;
+            /** Sesion Id */
+            sesion_id: number;
             /** Servicio Nombre */
             servicio_nombre?: string | null;
             /**

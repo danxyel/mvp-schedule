@@ -3677,6 +3677,10 @@
             "type": "integer",
             "title": "Servicio Id"
           },
+          "sesion_id": {
+            "type": "integer",
+            "title": "Sesion Id"
+          },
           "servicio_nombre": {
             "anyOf": [
               {
@@ -3736,6 +3740,7 @@
           "estado",
           "estado_pago",
           "servicio_id",
+          "sesion_id",
           "fecha_hora_inicio",
           "fecha_hora_fin",
           "timezone"

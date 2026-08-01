@@ -448,6 +448,9 @@ class TenantAdminOut(BaseModel):
     creado_en: datetime
     total_usuarios: int = 0
     smtp_configurado: bool = False
+    # Campos NO sensibles de smtp_config, para que el frontend pueda precargar
+    # el formulario al reabrir el modal. `password` NUNCA sale por aquí.
+    smtp_config: Optional[dict] = None
 
 
 class TenantUpdate(BaseModel):

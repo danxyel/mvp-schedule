@@ -1613,6 +1613,19 @@ superadmin_router = APIRouter(prefix="/api/v2/superadmin", tags=["Superadmin"])
 
 
 def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
+    smtp = t.smtp_config if isinstance(t.smtp_config, dict) else {}
+    smtp_salida = None
+    if smtp:
+        smtp_salida = {
+            "host": smtp.get("host"),
+            "port": smtp.get("port") or 587,
+            "user": smtp.get("user"),
+            "from_email": smtp.get("from_email"),
+            "from_name": smtp.get("from_name"),
+            "tls": smtp.get("tls", True),
+            "ssl": smtp.get("ssl", False),
+            "console": smtp.get("console", False),
+        }
     return TenantAdminOut(
         id=t.id,
         slug=t.slug,
@@ -1627,7 +1640,8 @@ def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
         max_reservas_mes=t.max_reservas_mes,
         creado_en=t.creado_en,
         total_usuarios=total_usuarios,
-        smtp_configurado=bool(t.smtp_config and t.smtp_config.get("host")),
+        smtp_configurado=bool(smtp.get("host")),
+        smtp_config=smtp_salida,
     )
 
 

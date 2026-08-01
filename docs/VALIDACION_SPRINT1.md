@@ -45,8 +45,9 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] Click en **Email** → abre un modal nuevo (no el de "Editar") con campos: host*, port (default 587), user, password (placeholder "Dejar vacío para no cambiar la contraseña guardada"), from_email, from_name, TLS (default on), SSL (default off), Modo prueba (console).
 - [ ] Llena host + los demás y guarda → el modal se cierra y el punto pasa a verde en esa fila (viene de `smtp_configurado` en la respuesta del PATCH).
 - [ ] **Write-only:** vuelve a abrir el modal → el campo password aparece vacío (nunca se prellena). Guarda solo cambiando `from_name` → no se pierde la contraseña guardada (el backend hace merge).
+- [ ] **Editar solo un campo sin re-ingresar el resto:** abre el modal de un tenant ya configurado → el formulario viene precargado con host, port, user, from_email, from_name y los checkboxes tls/ssl/console tal como estaban guardados. Cambia únicamente `from_name`, guarda sin tocar nada más → los demás valores (incluyendo tls/ssl/console) se conservan tal como estaban.
 - [ ] Con "Modo prueba" activado, el correo solo se registra en los logs del backend (`[EMAIL (console)]`), no se envía de verdad.
-- [ ] La respuesta del PATCH nunca devuelve `smtp_config` ni `password` — revisa en la pestaña Network de DevTools.
+- [ ] La respuesta del GET/PATCH de tenants devuelve `smtp_config` con todos sus campos excepto `password` (sigue siendo write-only) — revisa en la pestaña Network de DevTools que `password` nunca aparezca.
 
 ### Checklist de envío (requiere el paso 0 hecho)
 

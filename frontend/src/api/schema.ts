@@ -1527,6 +1527,29 @@ export interface components {
              * @default false
              */
             smtp_configurado: boolean;
+            /**
+             * Smtp Config
+             * Campos NO sensibles de smtp_config. `password` nunca viene.
+             * @default null
+             */
+            smtp_config?: {
+                /** Host */
+                host?: string | null;
+                /** Port */
+                port?: number;
+                /** User */
+                user?: string | null;
+                /** From Email */
+                from_email?: string | null;
+                /** From Name */
+                from_name?: string | null;
+                /** Tls */
+                tls?: boolean;
+                /** Ssl */
+                ssl?: boolean;
+                /** Console */
+                console?: boolean;
+            } | null;
         };
         /** TenantCreate */
         TenantCreate: {

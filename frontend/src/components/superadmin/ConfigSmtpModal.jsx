@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import createClient from 'openapi-fetch'
 import Modal from '../common/Modal'
 
@@ -22,6 +22,22 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
   const [error, setError] = useState(null)
 
   const set = (campo, valor) => setForm((prev) => ({ ...prev, [campo]: valor }))
+
+  useEffect(() => {
+    if (!tenant) return
+    const cfg = tenant.smtp_config ?? {}
+    setForm({
+      host: cfg.host ?? '',
+      port: cfg.port != null ? String(cfg.port) : '587',
+      user: cfg.user ?? '',
+      password: '',
+      from_email: cfg.from_email ?? '',
+      from_name: cfg.from_name ?? '',
+      tls: cfg.tls ?? true,
+      ssl: cfg.ssl ?? false,
+      console: cfg.console ?? false,
+    })
+  }, [tenant])
 
   const guardar = async (e) => {
     e.preventDefault()

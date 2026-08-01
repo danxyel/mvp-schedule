@@ -1124,6 +1124,10 @@ function SolicitudesTab({ tenantSlug, token }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [confirmando, setConfirmando] = useState(null)
+  const [rechazando, setRechazando] = useState(null)
+  const [rechazarModal, setRechazarModal] = useState(null)
+  const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [rechazandoLoading, setRechazandoLoading] = useState(false)
   const [errores, setErrores] = useState({})
   const [exito, setExito] = useState(null)
 
@@ -1192,6 +1196,52 @@ function SolicitudesTab({ tenantSlug, token }) {
       mensaje: `Reserva creada (${data?.folio_reserva}). Revisa la pestaña Pendientes para asignar el asesor.`,
     })
     window.setTimeout(() => setExito(null), 6000)
+    fetchSolicitudes()
+  }
+
+  const abrirRechazar = (s) => {
+    setRechazarModal(s)
+    setMotivoRechazo(s.motivo_rechazo ?? '')
+    setErrores((prev) => ({ ...prev, [s.id]: null }))
+  }
+
+  const cerrarRechazar = () => {
+    setRechazarModal(null)
+    setMotivoRechazo('')
+    setRechazandoLoading(false)
+  }
+
+  const rechazar = async () => {
+    if (!rechazarModal) return
+    setRechazando(rechazarModal.id)
+    setRechazandoLoading(true)
+    setErrores((prev) => ({ ...prev, [rechazarModal.id]: null }))
+    setExito(null)
+    const { error: fetchErr, response } = await client.POST(
+      '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar',
+      {
+        params: { path: { tenant_slug: tenantSlug, solicitud_id: rechazarModal.id } },
+        body: { motivo: motivoRechazo.trim() || null },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setRechazando(null)
+    setRechazandoLoading(false)
+    if (fetchErr) {
+      const msg =
+        fetchErr?.codigo === 'solicitud_no_pendiente'
+          ? 'Esta solicitud ya fue resuelta.'
+          : errorMensaje(fetchErr)
+      setErrores((prev) => ({ ...prev, [rechazarModal.id]: msg }))
+      if (response?.status === 409 && fetchErr?.codigo === 'solicitud_no_pendiente') {
+        fetchSolicitudes()
+        cerrarRechazar()
+      }
+      return
+    }
+    cerrarRechazar()
+    setExito({ folio: null, mensaje: 'Solicitud rechazada.' })
+    window.setTimeout(() => setExito(null), 4000)
     fetchSolicitudes()
   }
 
@@ -1290,17 +1340,26 @@ function SolicitudesTab({ tenantSlug, token }) {
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
-                    {s.estado === 'pendiente' && (
-                      <button
-                        type="button"
-                        onClick={() => confirmar(s)}
-                        disabled={confirmando === s.id}
-                        className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {confirmando === s.id ? 'Confirmando...' : 'Confirmar (crear reserva)'}
-                      </button>
-                    )}
-                    {s.estado !== 'pendiente' && (
+                    {s.estado === 'pendiente' ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => confirmar(s)}
+                          disabled={confirmando === s.id || rechazando === s.id}
+                          className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {confirmando === s.id ? 'Confirmando...' : 'Confirmar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => abrirRechazar(s)}
+                          disabled={confirmando === s.id || rechazando === s.id}
+                          className="rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    ) : (
                       <span className="text-xs text-gray-400">Resuelta</span>
                     )}
                   </td>
@@ -1324,6 +1383,58 @@ function SolicitudesTab({ tenantSlug, token }) {
           </tbody>
         </table>
       </div>
+
+      {rechazarModal && (
+        <Modal title="Rechazar solicitud" onClose={cerrarRechazar} maxWidth="max-w-sm">
+          <p className="mb-3 text-sm text-gray-600">
+            <span className="font-medium text-gray-800">Cliente:</span>{' '}
+            {rechazarModal.nombre_cliente ?? '—'}
+            <br />
+            <span className="font-medium text-gray-800">Propuesta:</span>{' '}
+            {formatFechaHoraLocal(rechazarModal.fecha_hora_propuesta)}
+          </p>
+
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Motivo de rechazo (opcional)
+          </label>
+          <textarea
+            value={motivoRechazo}
+            onChange={(e) => setMotivoRechazo(e.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder="Ej. No tenemos disponibilidad en ese horario."
+            className="mb-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-red-500"
+          />
+          <p className="mb-3 text-right text-xs text-gray-400">
+            {motivoRechazo.length}/500
+          </p>
+
+          {errores[rechazarModal.id] && (
+            <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errores[rechazarModal.id]}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={cerrarRechazar}
+              disabled={rechazandoLoading}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={rechazar}
+              disabled={rechazandoLoading}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {rechazandoLoading ? 'Rechazando...' : 'Rechazar solicitud'}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

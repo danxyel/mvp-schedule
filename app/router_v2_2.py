@@ -23,7 +23,7 @@ from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
     SolicitudReserva,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
-    ESTADOS_SESION_ACTIVA, PlanTenant,
+    EstadoSolicitud, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
     TipoBloqueo, utcnow,
 )
@@ -34,7 +34,7 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
-    SolicitudCreate, SolicitudOut,
+    SolicitudCreate, SolicitudOut, SolicitudAdminOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -190,6 +190,29 @@ def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
         motivo_rechazo=s.motivo_rechazo,
         reserva_id=s.reserva_id,
         creado_en=s.creado_en,
+    )
+
+
+def _solicitud_admin_out(db: Session, s: SolicitudReserva) -> SolicitudAdminOut:
+    servicio = db.get(Servicio, s.servicio_id)
+    cliente = db.get(Usuario, s.cliente_usuario_id)
+    return SolicitudAdminOut(
+        id=s.id,
+        servicio_id=s.servicio_id,
+        servicio_nombre=servicio.nombre if servicio else None,
+        fecha_hora_propuesta=s.fecha_hora_propuesta,
+        duracion_minutos=s.duracion_minutos,
+        notas_cliente=s.notas_cliente,
+        estado=s.estado.value,
+        asesor_id=s.asesor_id,
+        motivo_rechazo=s.motivo_rechazo,
+        reserva_id=s.reserva_id,
+        creado_en=s.creado_en,
+        cliente_usuario_id=s.cliente_usuario_id,
+        nombre_cliente=cliente.nombre if cliente else None,
+        email_cliente=cliente.email if cliente else None,
+        resuelto_por_id=s.resuelto_por_id,
+        resuelto_en=s.resuelto_en,
     )
 
 
@@ -907,6 +930,37 @@ def asignar_asesor_reserva(
             "asesor_id": payload.asesor_id,
         },
     )
+
+
+# ============================================================
+# ADMIN — SOLICITUDES DE RESERVA (confirmación manual, Tarea 10)
+# El cliente propone fecha/hora (POST /solicitudes) y no reserva nada.
+# El staff lista las pendientes y las confirma: esto crea la Reserva
+# PENDIENTE real (crear_reserva) y el staff la termina de confirmar con
+# POST /admin/reservas/{id}/asignar-asesor (email + calendario post-commit).
+# ============================================================
+@router.get("/admin/solicitudes", response_model=List[SolicitudAdminOut])
+def listar_solicitudes_admin(
+    estado: Optional[EstadoSolicitud] = Query(
+        None, description="Filtrar por estado. Default: todas",
+    ),
+    servicio_id: Optional[int] = Query(None, gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    cond = [SolicitudReserva.tenant_id == tenant.id]
+    if estado is not None:
+        cond.append(SolicitudReserva.estado == estado)
+    if servicio_id is not None:
+        cond.append(SolicitudReserva.servicio_id == servicio_id)
+
+    filas = db.execute(
+        select(SolicitudReserva)
+        .where(*cond)
+        .order_by(SolicitudReserva.creado_en.asc())
+    ).scalars().all()
+    return [_solicitud_admin_out(db, s) for s in filas]
 
 
 # ============================================================

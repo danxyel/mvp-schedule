@@ -73,6 +73,13 @@ class CanalEnum(str, Enum):
     API = "api"
 
 
+class EstadoSolicitudEnum(str, Enum):
+    PENDIENTE = "pendiente"
+    ACEPTADA = "aceptada"
+    RECHAZADA = "rechazada"
+    CANCELADA = "cancelada"
+
+
 # ============================================================
 # HELPERS DE TIMEZONE
 # ============================================================
@@ -364,6 +371,51 @@ class ReservasAdminPaginadasOut(BaseModel):
 class SesionesPaginadasOut(BaseModel):
     items: List[SesionListOut]
     paginacion: PaginacionOut
+
+
+# ============================================================
+# SOLICITUDES DE RESERVA — confirmación manual (Sprint 2 #10)
+# ============================================================
+class SolicitudCreate(BaseModel):
+    """El cliente propone una fecha/hora libre para un servicio con
+    `requiere_confirmacion=True`. No reserva nada todavía."""
+    servicio_id: int = Field(..., gt=0)
+    fecha_hora_propuesta: datetime
+    notas_cliente: Optional[str] = Field(default=None, max_length=2000)
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("fecha_hora_propuesta")
+    @classmethod
+    def _validar_fecha(cls, v: datetime) -> datetime:
+        v = exigir_aware(v, "fecha_hora_propuesta")
+        if v <= datetime.now(dt_timezone.utc):
+            raise ValueError("La fecha propuesta debe ser futura")
+        return v
+
+
+class SolicitudOut(BaseModel):
+    """Vista del cliente: sin datos de resolución internos."""
+    id: int
+    servicio_id: int
+    servicio_nombre: Optional[str] = None
+    fecha_hora_propuesta: datetime
+    duracion_minutos: int
+    notas_cliente: Optional[str] = None
+    estado: EstadoSolicitudEnum
+    asesor_id: Optional[int] = None
+    motivo_rechazo: Optional[str] = None
+    reserva_id: Optional[int] = None
+    creado_en: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SolicitudAdminOut(SolicitudOut):
+    """Vista del staff: agrega datos del cliente y de resolución."""
+    cliente_usuario_id: int
+    nombre_cliente: Optional[str] = None
+    email_cliente: Optional[str] = None
+    resuelto_por_id: Optional[int] = None
+    resuelto_en: Optional[datetime] = None
 
 
 # ============================================================

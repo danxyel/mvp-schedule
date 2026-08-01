@@ -148,6 +148,13 @@ class CreadoPorTipo(str, PyEnum):
     ADMIN = "admin"; ALUMNO = "alumno"; SISTEMA = "sistema"
 
 
+class EstadoSolicitud(str, PyEnum):
+    PENDIENTE = "pendiente"
+    ACEPTADA = "aceptada"
+    RECHAZADA = "rechazada"
+    CANCELADA = "cancelada"
+
+
 class TipoCampoFormulario(str, PyEnum):
     TEXTO = "texto"; TEXTAREA = "textarea"; NUMERO = "numero"; EMAIL = "email"
     TELEFONO = "telefono"; FECHA = "fecha"; SELECT = "select"
@@ -525,6 +532,33 @@ class Reserva(Base, TenantScopedMixin):
     beneficiario: Mapped[Optional["Beneficiario"]] = relationship(back_populates="reservas")
     respuestas_formulario: Mapped[List["RespuestaFormulario"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
     integrantes: Mapped[List["ReservaIntegrante"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
+
+
+# ============================================================
+# 7b. SOLICITUD DE RESERVA — confirmación manual (Sprint 2 #10)
+# Tabla NUEVA, separada de Reserva/Sesion (decisión con Daniel).
+# Se convierte en Reserva/Sesion real solo al aceptarla.
+# ============================================================
+class SolicitudReserva(Base, TenantScopedMixin):
+    __tablename__ = "solicitudes_reserva"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    servicio_id: Mapped[int] = mapped_column(ForeignKey("servicios.id", ondelete="RESTRICT"))
+    cliente_usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    fecha_hora_propuesta: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    duracion_minutos: Mapped[int]
+    notas_cliente: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    estado: Mapped[EstadoSolicitud] = mapped_column(SQLEnum(EstadoSolicitud), default=EstadoSolicitud.PENDIENTE)
+    asesor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
+    motivo_rechazo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    reserva_id: Mapped[Optional[int]] = mapped_column(ForeignKey("reservas.id", ondelete="SET NULL"), nullable=True)
+    resuelto_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
+    resuelto_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        Index("idx_solicitudes_estado", "tenant_id", "estado"),
+        Index("idx_solicitudes_cliente", "tenant_id", "cliente_usuario_id", "creado_en"),
+    )
 
 
 # ============================================================

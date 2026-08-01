@@ -193,8 +193,12 @@ export default function CalendarioDisponibilidad({
                       {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
                       {toLocalTime(slot.fecha_hora_fin, timezone)}
                     </p>
-                    {slot.asesor && (
+                    {slot.asesor ? (
                       <p className="text-xs text-blue-600">{slot.asesor.nombre}</p>
+                    ) : (
+                      <p className="text-xs text-blue-500">
+                        Se te asignar&aacute; un asesor al confirmar
+                      </p>
                     )}
                   </div>
                   <span className="text-xs font-medium text-blue-500">

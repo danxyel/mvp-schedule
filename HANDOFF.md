@@ -37,7 +37,7 @@ Sistema de agendamiento multitenant construido para **SIMAL Corporativo** (clien
 ### Infraestructura
 - **DB:** Neon PostgreSQL (connection pooling habilitado)
 - **Deploy pendiente:** Railway o Render
-- **Variables de entorno:** .env con DATABASE_URL, JWT_SECRET_KEY, TENANT_SECRETS_KEY (Fernet base64)
+- **Variables de entorno:** .env con DATABASE_URL, JWT_SECRET_KEY, TENANT_SECRETS_KEY (Fernet base64), CORS_ORIGINS, ENV (ver sección 11); frontend con VITE_API_URL
 
 ---
 
@@ -302,6 +302,24 @@ npm run dev
 - Backend API: http://localhost:8000
 - Swagger UI: http://localhost:8000/docs
 - OpenAPI spec: http://localhost:8000/openapi.json
+
+### Variables de entorno
+
+**Backend** (`.env` en la raíz — ver `.env.example`):
+
+| Variable | Default | Qué hace |
+|----------|---------|----------|
+| `DATABASE_URL` | — (requerida) | Cadena de conexión PostgreSQL (psycopg2) |
+| `JWT_SECRET_KEY` | — (requerida) | Secreto de firma de tokens JWT |
+| `TENANT_SECRETS_KEY` | — (requerida) | Fernet base64 para cifrar secrets de tenant |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Orígenes permitidos por CORS, separados por coma. En producción poner la URL real del frontend (ej. `https://tu-app.vercel.app`). *(nueva 2026-08-01)* |
+| `ENV` | `development` | Si es `production`, se deshabilitan `/docs`, `/redoc` y `/openapi.json` (no se expone Swagger). *(nueva 2026-08-01)* |
+
+**Frontend** (`frontend/.env` — ver `frontend/.env.example`):
+
+| Variable | Default | Qué hace |
+|----------|---------|----------|
+| `VITE_API_URL` | `http://localhost:8000` | URL base de la API. El cliente único `frontend/src/api/client.js` la lee; en producción apuntar a la URL del backend (ej. `https://tu-api.onrender.com`). En local no hace falta configurarla. *(nueva 2026-08-01)* |
 
 ### Usuarios de prueba
 - `mail@mail.com` / `daniel123` → superadmin

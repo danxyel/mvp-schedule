@@ -17,6 +17,10 @@ pydantic[email]==2.10.3
 
 # Autenticación JWT
 pyjwt==2.10.1
+bcrypt==5.0.0
+
+# Cifrado de secrets de tenant (Fernet)
+cryptography==49.0.0
 
 # Timezone (Python 3.9+ incluye zoneinfo, pero este backport es más completo)
 tzdata==2024.2

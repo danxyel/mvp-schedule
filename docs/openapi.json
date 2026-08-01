@@ -1027,6 +1027,149 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/solicitudes": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Solicitudes Admin",
+        "operationId": "listar_solicitudes_admin_api_v2__tenant_slug__admin_solicitudes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EstadoSolicitud"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por estado. Default: todas",
+              "title": "Estado"
+            },
+            "description": "Filtrar por estado. Default: todas"
+          },
+          {
+            "name": "servicio_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Servicio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SolicitudAdminOut"
+                  },
+                  "title": "Response Listar Solicitudes Admin Api V2  Tenant Slug  Admin Solicitudes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Confirmar Solicitud Admin",
+        "operationId": "confirmar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "solicitud_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Solicitud Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudConfirmarOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/servicios": {
       "get": {
         "tags": [
@@ -3349,6 +3492,16 @@
         ],
         "title": "EstadoSesionEnum"
       },
+      "EstadoSolicitud": {
+        "type": "string",
+        "enum": [
+          "pendiente",
+          "aceptada",
+          "rechazada",
+          "cancelada"
+        ],
+        "title": "EstadoSolicitud"
+      },
       "EstadoSolicitudEnum": {
         "type": "string",
         "enum": [
@@ -5229,6 +5382,318 @@
           "disponible"
         ],
         "title": "SlotDisponible"
+      },
+      "SolicitudAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "fecha_hora_propuesta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora Propuesta"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "title": "Duracion Minutos"
+          },
+          "notas_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notas Cliente"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSolicitudEnum"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "reserva_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserva Id"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "cliente_usuario_id": {
+            "type": "integer",
+            "title": "Cliente Usuario Id"
+          },
+          "nombre_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Cliente"
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente"
+          },
+          "resuelto_por_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto Por Id"
+          },
+          "resuelto_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "servicio_id",
+          "fecha_hora_propuesta",
+          "duracion_minutos",
+          "estado",
+          "creado_en",
+          "cliente_usuario_id"
+        ],
+        "title": "SolicitudAdminOut",
+        "description": "Vista del staff: agrega datos del cliente y de resolución."
+      },
+      "SolicitudConfirmarOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "fecha_hora_propuesta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora Propuesta"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "title": "Duracion Minutos"
+          },
+          "notas_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notas Cliente"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSolicitudEnum"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "reserva_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserva Id"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "cliente_usuario_id": {
+            "type": "integer",
+            "title": "Cliente Usuario Id"
+          },
+          "nombre_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Cliente"
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente"
+          },
+          "resuelto_por_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto Por Id"
+          },
+          "resuelto_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto En"
+          },
+          "folio_reserva": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folio Reserva"
+          },
+          "sesion_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sesion Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "servicio_id",
+          "fecha_hora_propuesta",
+          "duracion_minutos",
+          "estado",
+          "creado_en",
+          "cliente_usuario_id"
+        ],
+        "title": "SolicitudConfirmarOut",
+        "description": "El staff confirmó la solicitud: la Reserva PENDIENTE ya existe y el\nstaff la termina de confirmar vía POST /admin/reservas/{id}/asignar-asesor."
       },
       "SolicitudCreate": {
         "properties": {

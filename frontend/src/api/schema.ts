@@ -293,6 +293,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/solicitudes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Solicitudes Admin */
+        get: operations["listar_solicitudes_admin_api_v2__tenant_slug__admin_solicitudes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirmar Solicitud Admin */
+        post: operations["confirmar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/servicios": {
         parameters: {
             query?: never;
@@ -924,6 +958,11 @@ export interface components {
          */
         EstadoSesionEnum: "abierta" | "confirmada" | "llena" | "cancelada" | "completada";
         /**
+         * EstadoSolicitud
+         * @enum {string}
+         */
+        EstadoSolicitud: "pendiente" | "aceptada" | "rechazada" | "cancelada";
+        /**
          * EstadoSolicitudEnum
          * @enum {string}
          */
@@ -1539,6 +1578,97 @@ export interface components {
             asesor?: components["schemas"]["AsesorPublicOut"] | null;
             /** Motivo No Disponible */
             motivo_no_disponible?: string | null;
+        };
+        /**
+         * SolicitudAdminOut
+         * @description Vista del staff: agrega datos del cliente y de resolución.
+         */
+        SolicitudAdminOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+            estado: components["schemas"]["EstadoSolicitudEnum"];
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Motivo Rechazo */
+            motivo_rechazo?: string | null;
+            /** Reserva Id */
+            reserva_id?: number | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Email Cliente */
+            email_cliente?: string | null;
+            /** Resuelto Por Id */
+            resuelto_por_id?: number | null;
+            /** Resuelto En */
+            resuelto_en?: string | null;
+        };
+        /**
+         * SolicitudConfirmarOut
+         * @description El staff confirmó la solicitud: la Reserva PENDIENTE ya existe y el
+         *     staff la termina de confirmar vía POST /admin/reservas/{id}/asignar-asesor.
+         */
+        SolicitudConfirmarOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+            estado: components["schemas"]["EstadoSolicitudEnum"];
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Motivo Rechazo */
+            motivo_rechazo?: string | null;
+            /** Reserva Id */
+            reserva_id?: number | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Email Cliente */
+            email_cliente?: string | null;
+            /** Resuelto Por Id */
+            resuelto_por_id?: number | null;
+            /** Resuelto En */
+            resuelto_en?: string | null;
+            /** Folio Reserva */
+            folio_reserva?: string | null;
+            /** Sesion Id */
+            sesion_id?: number | null;
         };
         /**
          * SolicitudCreate
@@ -2302,6 +2432,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_solicitudes_admin_api_v2__tenant_slug__admin_solicitudes_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por estado. Default: todas */
+                estado?: components["schemas"]["EstadoSolicitud"] | null;
+                servicio_id?: number | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudConfirmarOut"];
                 };
             };
             /** @description Validation Error */

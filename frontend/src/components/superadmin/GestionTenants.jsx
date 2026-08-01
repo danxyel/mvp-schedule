@@ -286,7 +286,7 @@ export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto min-w-0 max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Gestión de Tenants</h2>
         {onVolver && (

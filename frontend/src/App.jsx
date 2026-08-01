@@ -204,7 +204,7 @@ function App() {
         </div>
       </header>
 
-      <main className="flex justify-center p-4">
+      <main className="flex min-w-0 justify-center p-4">
         {vista === 'reserva' && slotSeleccionado && servicioSeleccionado ? (
           <FlujReserva
             tenantSlug={tenantSlug}

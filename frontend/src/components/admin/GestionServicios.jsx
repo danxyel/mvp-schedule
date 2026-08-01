@@ -473,7 +473,7 @@ export default function GestionServicios({ tenantSlug, token }) {
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-600">
           <span className="font-semibold text-gray-900">{activos}</span> servicios activos

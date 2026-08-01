@@ -1075,7 +1075,7 @@ export default function PanelAdmin({ tenantSlug, token, onVolver }) {
   const [tab, setTab] = useState('sesiones')
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto min-w-0 max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Panel de administración</h2>
         <button

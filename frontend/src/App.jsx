@@ -168,15 +168,15 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          <span className="text-sm font-bold text-gray-700">{brand}</span>
-          <div className="flex gap-1">
+        <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3">
+          <span className="truncate text-sm font-bold text-gray-700">{brand}</span>
+          <div className="flex flex-wrap items-center gap-1">
             {navItems.map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => handleNav(key)}
-                className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition sm:px-4 ${
                   vista === key
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -187,7 +187,10 @@ function App() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600 sm:hidden">
+              {usuario?.nombre?.trim().charAt(0).toUpperCase() ?? 'U'}
+            </span>
+            <span className="hidden truncate text-sm text-gray-600 sm:inline">
               {usuario?.nombre ?? 'Usuario'}
             </span>
             <button

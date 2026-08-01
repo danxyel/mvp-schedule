@@ -1102,7 +1102,8 @@ function PendientesTab({ tenantSlug, token }) {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [asesoresPorServicio, setAsesoresPorServicio] = useState({})
+  const [staff, setStaff] = useState([])
+  const [errorStaff, setErrorStaff] = useState(null)
   const [asesorSel, setAsesorSel] = useState({})
   const [confirmando, setConfirmando] = useState(null)
   const [errores, setErrores] = useState({})
@@ -1136,31 +1137,26 @@ function PendientesTab({ tenantSlug, token }) {
     fetchPendientes()
   }, [fetchPendientes])
 
-  const fetchAsesores = useCallback(async () => {
-    const servicioIds = [...new Set(items.map((r) => r.servicio_id).filter(Boolean))]
-    if (servicioIds.length === 0) {
-      setAsesoresPorServicio({})
+  const fetchStaff = useCallback(async () => {
+    const { data, error: fetchErr } = await client.GET(
+      '/api/v2/{tenant_slug}/admin/usuarios',
+      {
+        params: { path: { tenant_slug: tenantSlug } },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    if (fetchErr) {
+      setErrorStaff(fetchErr)
       return
     }
-    const result = {}
-    await Promise.all(
-      servicioIds.map(async (sid) => {
-        const { data, error: fetchErr } = await client.GET(
-          '/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/asesores',
-          {
-            params: { path: { tenant_slug: tenantSlug, servicio_id: sid } },
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        )
-        if (!fetchErr) result[sid] = data ?? []
-      }),
+    setStaff(
+      (data ?? []).filter((u) => u.activo && (u.rol === 'asesor' || u.rol === 'admin')),
     )
-    setAsesoresPorServicio(result)
-  }, [tenantSlug, token, items])
+  }, [tenantSlug, token])
 
   useEffect(() => {
-    fetchAsesores()
-  }, [fetchAsesores])
+    fetchStaff()
+  }, [fetchStaff])
 
   const irPagina = (nuevaOffset) => {
     setLoading(true)
@@ -1304,7 +1300,9 @@ function PendientesTab({ tenantSlug, token }) {
                     <p className="hidden text-xs text-gray-400 sm:block">{r.email_cliente ?? ''}</p>
                   </td>
                   <td className="px-4 py-3">
-                    {asesoresPorServicio[r.servicio_id]?.length > 0 ? (
+                    {errorStaff ? (
+                      <span className="text-xs text-red-500">{errorMensaje(errorStaff)}</span>
+                    ) : staff.length > 0 ? (
                       <select
                         value={asesorSel[r.id] ?? ''}
                         onChange={(e) =>
@@ -1314,14 +1312,14 @@ function PendientesTab({ tenantSlug, token }) {
                         className="w-full min-w-[9rem] rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <option value="">Elige un asesor</option>
-                        {asesoresPorServicio[r.servicio_id].map((a) => (
+                        {staff.map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.nombre}
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-xs text-gray-400">Sin asesores vinculados</span>
+                      <span className="text-xs text-gray-400">Sin asesores disponibles</span>
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">

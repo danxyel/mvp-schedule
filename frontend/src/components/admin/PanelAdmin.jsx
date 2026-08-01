@@ -210,6 +210,10 @@ function SesionesTab({ tenantSlug, token }) {
     )
     setCheckinFolio(null)
     if (fetchErr) {
+      if (fetchErr?.detail?.codigo === 'pago_pendiente') {
+        setCheckinErrores((prev) => ({ ...prev, [folio]: 'Pago pendiente — regístralo antes de hacer check-in' }))
+        return
+      }
       if (response?.status === 409) {
         setCheckinErrores((prev) => ({ ...prev, [folio]: 'Ya registrado' }))
         return
@@ -647,7 +651,11 @@ function ReservasTab({ tenantSlug, token }) {
     )
     setCheckinFolio(null)
     if (fetchErr) {
-      setAccionError(fetchErr)
+      if (fetchErr?.detail?.codigo === 'pago_pendiente') {
+        setAccionError({ mensaje: 'Pago pendiente — regístralo antes de hacer check-in' })
+      } else {
+        setAccionError(fetchErr)
+      }
       return
     }
     setItems((prev) => prev.map((r) => (r.folio === folio ? { ...r, estado: 'completada' } : r)))

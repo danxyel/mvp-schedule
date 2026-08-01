@@ -151,6 +151,7 @@ _CODIGO_HTTP = {
     "identidad_requerida": status.HTTP_401_UNAUTHORIZED,
     "not_found": status.HTTP_404_NOT_FOUND,
     "estado_invalido": status.HTTP_409_CONFLICT,
+    "pago_pendiente": status.HTTP_409_CONFLICT,
 }
 
 
@@ -1994,6 +1995,12 @@ def checkin_reserva(
 
     if r.estado != EstadoReserva.CONFIRMADA:
         raise HTTPException(status.HTTP_409_CONFLICT, "Solo reservas confirmadas pueden hacer check-in")
+
+    if r.estado_pago not in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"codigo": "pago_pendiente", "mensaje": "El pago debe estar confirmado antes de hacer check-in"},
+        )
 
     r.estado = EstadoReserva.COMPLETADA
 

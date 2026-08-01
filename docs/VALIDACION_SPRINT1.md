@@ -160,6 +160,42 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] **Regresión flujo normal**: un servicio con `requiere_confirmacion=False` (ej. Consultoría) sigue generando sus slots desde el horario de sus asesores, con `asesor` poblado y traslapes/ocupados/bloqueados exactamente igual que antes. Nada de su calendario sale de horarios de servicio.
 
 
+## Widget de calendario + Horario de propuestas (frontend) — 2026-07-31
+
+> Frontend de las decisiones "Widget de calendario `@daypicker/react`" y "Horario de servicio en GestionServicios". Commits: `f765e68` (librería+SelectorFecha), `d3d8fc7` (CalendarioDisponibilidad), `4355341` (Reagendar), `dfffa94` (filtro ReservasTab), `1e373e8` (requiere_confirmacion en API+spec), `e2b8abc` (HorarioServicio), `64e7cd6` (aviso asesor pendiente).
+
+### SelectorFecha / CalendarioDisponibilidad
+
+- [ ] El calendario público ahora es **vista de mes** con días de la semana en español, semana empezando en lunes; no hay flechas Anterior/Siguiente (el cliente navega por día dentro de la pantalla).
+- [ ] Los días anteriores a hoy están deshabilitados (gris, no seleccionables).
+- [ ] Al hacer clic en un día se cargan los slots de ese día (misma llamada de `GET /disponibilidad` de siempre, con fecha con offset). Seleccionar otro día refresca.
+- [ ] El slot seleccionado mantiene su resaltado al cambiar de día.
+
+### Reagendar (PanelAdmin)
+
+- [ ] Al abrir Reagendar, la fecha se elige con el widget de mes (ya no con `<input type="date">`); la hora sigue en `<input type="time">`.
+- [ ] Días pasados quedan deshabilitados en el widget.
+- [ ] Al guardar, `nueva_fecha_hora_inicio` sigue mandando offset real (regresión del fix de Reagendar).
+
+### Filtro "Día" de ReservasTab
+
+- [ ] El filtro por día abre el widget en un popover; se cierra al elegir un día o al hacer clic fuera (overlay).
+- [ ] Aquí NO se deshabilitan días pasados (el admin agenda/mira reservas pasadas).
+
+### Horario de propuestas (GestionServicios)
+
+- [ ] En GestionServicios, solo los servicios con confirmación manual (ej. Fisio) muestran botón **"Horario"**; los de reserva directa (ej. Consultoría) no lo muestran.
+- [ ] Abre el modal "Horario de propuestas": checkbox por día + hora inicio/fin, mismo patrón visual que el horario semanal del asesor.
+- [ ] Guardar por día funciona (DELETE+POST cuando el día ya tenía franja); al recargar se ven las franjas guardadas.
+- [ ] Los campos de hora son `type="time"` (no textos libres) y se validan (inicio < fin).
+
+### Aviso de asesor pendiente (calendario público)
+
+- [ ] En un servicio con confirmación manual, los slots muestran **"Se te asignará un asesor al confirmar"** en vez del nombre del asesor.
+- [ ] El flujo de reserva de ese slot funciona hasta el éxito (la pantalla de éxito muestra "Solicitud recibida").
+- [ ] Regresión: servicios de reserva directa siguen mostrando el nombre/avatar del asesor en sus slots.
+
+
 ## Notas de Daniel (mobile) — 4 fixes 2026-07-31
 
 > Salieron de probar la app en pantallas chicas (375px/390px) y del flujo de invitar usuarios. Cada uno con su commit: `bafe3fa` (header), `531e56f` (modal común), `f00e990` (contraseña inicial), `3fe9190` (min-w-0 tablas).

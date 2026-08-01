@@ -160,7 +160,11 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] `PATCH /admin/servicios/{id}` con `{ "requiere_confirmacion": true }` → 200 y el `ServicioAdminOut` de la respuesta (y de un `GET` posterior) lo refleja; el valor persiste al recargar.
 - [ ] `PATCH` con `requiere_confirmacion: false` vuelve el servicio a reserva directa (su calendario vuelve a generar slots desde horarios de asesores).
 - [ ] Un PATCH que NO manda `requiere_confirmacion` no cambia el valor actual (campo opcional, `exclude_unset`).
-- [ ] Regresión: al crear un servicio en GestionServicios (frontend), este campo sigue sin UI dedicada — no rompe nada (solo no se muestra).
+- [ ] **E2E verificado por API (2026-08-01, 13 checks OK)**: crear servicio con `requiere_confirmacion:true` → horario lunes 09:00-12:00 → `GET /disponibilidad` del próximo lunes devuelve 3 slots `disponible:true` con `asesor:null` → PATCH a `false` deja el calendario sin slots de horario de servicio → PATCH a `true` los restaura → cleanup. Sin tocar la base de datos a mano.
+- [ ] GestionServicios: el formulario de crear/editar tiene el checkbox **"Requiere confirmación manual"**.
+- [ ] Crear servicio con el checkbox activo → al guardar se abre solo el modal **"Horario de propuestas"** (sin buscar la fila y pulsar "Horario").
+- [ ] Editar un servicio ya con `requiere_confirmacion:true` → el checkbox aparece marcado y el bloque "Horario de propuestas" se muestra sin guardar; pulsar "Configurar horario de propuestas" lo abre al instante.
+- [ ] En edición, desmarcar el checkbox y guardar → el botón "Horario" de la fila desaparece y el calendario público vuelve a slots desde asesores.
 
 #
 ## Horario de servicio — calendario público (listar_slots_disponibles)

@@ -74,6 +74,7 @@ const FORM_VACIO = {
   moneda: 'MXN',
   pago_requerido: true,
   visible_web: true,
+  requiere_confirmacion: false,
   buffer_antes_min: 0,
   buffer_despues_min: 0,
 }
@@ -167,6 +168,7 @@ export default function GestionServicios({ tenantSlug, token }) {
       moneda: s.moneda,
       pago_requerido: s.pago_requerido,
       visible_web: s.visible_web,
+      requiere_confirmacion: s.requiere_confirmacion ?? false,
       buffer_antes_min: s.buffer_antes_min,
       buffer_despues_min: s.buffer_despues_min,
     })
@@ -225,6 +227,7 @@ export default function GestionServicios({ tenantSlug, token }) {
       moneda: form.moneda,
       pago_requerido: form.pago_requerido,
       visible_web: form.visible_web,
+      requiere_confirmacion: form.requiere_confirmacion,
       buffer_antes_min: Number(form.buffer_antes_min),
       buffer_despues_min: Number(form.buffer_despues_min),
     }
@@ -254,6 +257,9 @@ export default function GestionServicios({ tenantSlug, token }) {
     }
     setServicios((prev) => [data, ...prev])
     setModalAbierto(false)
+    if (form.requiere_confirmacion) {
+      setHorarioDe(data)
+    }
   }
 
   const editarServicio = async (e) => {
@@ -295,6 +301,9 @@ export default function GestionServicios({ tenantSlug, token }) {
     if (form.moneda !== editando.moneda) cambios.moneda = form.moneda
     if (form.pago_requerido !== editando.pago_requerido) cambios.pago_requerido = form.pago_requerido
     if (form.visible_web !== editando.visible_web) cambios.visible_web = form.visible_web
+    if (form.requiere_confirmacion !== (editando.requiere_confirmacion ?? false)) {
+      cambios.requiere_confirmacion = form.requiere_confirmacion
+    }
     if (Number(form.buffer_antes_min) !== editando.buffer_antes_min) {
       cambios.buffer_antes_min = Number(form.buffer_antes_min)
     }
@@ -736,7 +745,24 @@ export default function GestionServicios({ tenantSlug, token }) {
                 />
                 Visible en web
               </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.requiere_confirmacion}
+                  onChange={(e) => setCampo('requiere_confirmacion', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                />
+                Requiere confirmación manual
+              </label>
             </div>
+
+            {form.requiere_confirmacion && (
+              <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                Al crear el servicio se abrirá la configuración de su "Horario de propuestas"
+                (la ventana en la que el cliente propone fecha/hora; el asesor se asigna al
+                confirmar).
+              </p>
+            )}
 
             {crearError && (
               <p
@@ -968,7 +994,32 @@ export default function GestionServicios({ tenantSlug, token }) {
                 />
                 Visible en web
               </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.requiere_confirmacion}
+                  onChange={(e) => setCampo('requiere_confirmacion', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                />
+                Requiere confirmación manual
+              </label>
             </div>
+
+            {form.requiere_confirmacion && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                <p className="mb-2 text-xs text-blue-700">
+                  El cliente propone fecha/hora dentro del "Horario de propuestas"; el asesor
+                  se asigna al confirmar.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setHorarioDe(editando)}
+                  className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                >
+                  Configurar horario de propuestas
+                </button>
+              </div>
+            )}
 
             {editarError && (
               <p

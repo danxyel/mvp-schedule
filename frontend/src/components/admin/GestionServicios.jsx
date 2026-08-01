@@ -1030,13 +1030,19 @@ export default function GestionServicios({ tenantSlug, token }) {
                   El cliente propone fecha/hora dentro del "Horario de propuestas"; el asesor
                   se asigna al confirmar.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setHorarioDe(editando)}
-                  className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
-                >
-                  Configurar horario de propuestas
-                </button>
+                {editando.requiere_confirmacion ? (
+                  <button
+                    type="button"
+                    onClick={() => setHorarioDe(editando)}
+                    className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                  >
+                    Configurar horario de propuestas
+                  </button>
+                ) : (
+                  <p className="text-xs font-medium text-blue-600">
+                    Guarda los cambios primero — después podrás configurar el horario aquí mismo.
+                  </p>
+                )}
               </div>
             )}
 

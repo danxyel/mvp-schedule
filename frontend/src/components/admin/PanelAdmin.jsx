@@ -1091,6 +1091,243 @@ function ReservasTab({ tenantSlug, token }) {
   )
 }
 
+const SOLICITUD_BADGE = {
+  pendiente: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  aceptada: 'bg-green-100 text-green-700 border-green-200',
+  rechazada: 'bg-red-100 text-red-700 border-red-200',
+  cancelada: 'bg-gray-100 text-gray-600 border-gray-200',
+}
+
+const SOLICITUD_LABEL = {
+  pendiente: 'Pendiente',
+  aceptada: 'Aceptada',
+  rechazada: 'Rechazada',
+  cancelada: 'Cancelada',
+}
+
+const FILTROS_SOLICITUD = ['pendiente', 'aceptada', 'rechazada', 'cancelada', 'todas']
+
+function formatFechaHoraLocal(utcString) {
+  return new Intl.DateTimeFormat('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(utcString))
+}
+
+function SolicitudesTab({ tenantSlug, token }) {
+  const [estado, setEstado] = useState('pendiente')
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [confirmando, setConfirmando] = useState(null)
+  const [errores, setErrores] = useState({})
+  const [exito, setExito] = useState(null)
+
+  const fetchSolicitudes = useCallback(async () => {
+    const query = estado !== 'todas' ? { estado } : {}
+    const { data, error: fetchErr } = await client.GET(
+      '/api/v2/{tenant_slug}/admin/solicitudes',
+      {
+        params: { path: { tenant_slug: tenantSlug }, query },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    if (fetchErr) {
+      setError(fetchErr)
+      setLoading(false)
+      return
+    }
+    setItems(data ?? [])
+    setLoading(false)
+  }, [tenantSlug, token, estado])
+
+  useEffect(() => {
+    fetchSolicitudes()
+  }, [fetchSolicitudes])
+
+  const cambiarEstado = (nuevoEstado) => {
+    setEstado(nuevoEstado)
+    setLoading(true)
+  }
+
+  const reintentar = () => {
+    setLoading(true)
+    setError(null)
+    fetchSolicitudes()
+  }
+
+  const confirmar = async (s) => {
+    setConfirmando(s.id)
+    setErrores((prev) => ({ ...prev, [s.id]: null }))
+    setExito(null)
+    const { data, error: fetchErr, response } = await client.POST(
+      '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar',
+      {
+        params: { path: { tenant_slug: tenantSlug, solicitud_id: s.id } },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setConfirmando(null)
+    if (fetchErr) {
+      const msg =
+        fetchErr?.codigo === 'solicitud_no_pendiente'
+          ? 'Esta solicitud ya fue resuelta.'
+          : fetchErr?.codigo === 'franja_ocupada'
+            ? 'El horario ya no está disponible.'
+            : fetchErr?.codigo === 'cupo_agotado'
+              ? 'Ya no hay lugares en ese horario.'
+              : errorMensaje(fetchErr)
+      setErrores((prev) => ({ ...prev, [s.id]: msg }))
+      if (response?.status === 409 && fetchErr?.codigo === 'solicitud_no_pendiente') {
+        fetchSolicitudes()
+      }
+      return
+    }
+    setExito({
+      folio: data?.folio_reserva,
+      mensaje: `Reserva creada (${data?.folio_reserva}). Revisa la pestaña Pendientes para asignar el asesor.`,
+    })
+    window.setTimeout(() => setExito(null), 6000)
+    fetchSolicitudes()
+  }
+
+  if (loading) {
+    return (
+      <div className="animate-pulse space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-12 rounded-lg bg-gray-100" />
+        ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+        <p className="mb-1 font-semibold text-red-700">Error al cargar solicitudes</p>
+        <p className="mb-4 text-sm text-red-600">{errorMensaje(error)}</p>
+        <button
+          type="button"
+          onClick={reintentar}
+          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+        >
+          Intentar de nuevo
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Estado</span>
+          <select
+            value={estado}
+            onChange={(e) => cambiarEstado(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
+          >
+            {FILTROS_SOLICITUD.map((e) => (
+              <option key={e} value={e}>
+                {e === 'todas' ? 'Todas' : SOLICITUD_LABEL[e] ?? e}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {exito && (
+        <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          {exito.mensaje}
+        </p>
+      )}
+
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <th className="px-4 py-3 font-medium">Servicio</th>
+              <th className="px-4 py-3 font-medium">Propuesta</th>
+              <th className="px-4 py-3 font-medium">Cliente</th>
+              <th className="px-4 py-3 font-medium">Notas / Motivo</th>
+              <th className="px-4 py-3 font-medium">Estado</th>
+              <th className="px-4 py-3 text-right font-medium">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {items.map((s) => (
+              <Fragment key={s.id}>
+                <tr className="align-top transition hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {s.servicio_nombre ?? `Servicio #${s.servicio_id}`}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                    {formatFechaHoraLocal(s.fecha_hora_propuesta)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-gray-700">{s.nombre_cliente ?? '—'}</p>
+                    <p className="hidden text-xs text-gray-400 sm:block">{s.email_cliente ?? ''}</p>
+                  </td>
+                  <td className="max-w-xs px-4 py-3 text-xs text-gray-600">
+                    {s.notas_cliente ? (
+                      <span className="line-clamp-2" title={s.notas_cliente}>
+                        {s.notas_cliente}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">Sin notas</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge value={s.estado} map={SOLICITUD_BADGE} labelMap={SOLICITUD_LABEL} />
+                    {s.reserva_id && (
+                      <p className="mt-1 font-mono text-[10px] text-gray-500">
+                        Reserva ID: {s.reserva_id}
+                      </p>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    {s.estado === 'pendiente' && (
+                      <button
+                        type="button"
+                        onClick={() => confirmar(s)}
+                        disabled={confirmando === s.id}
+                        className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {confirmando === s.id ? 'Confirmando...' : 'Confirmar (crear reserva)'}
+                      </button>
+                    )}
+                    {s.estado !== 'pendiente' && (
+                      <span className="text-xs text-gray-400">Resuelta</span>
+                    )}
+                  </td>
+                </tr>
+                {errores[s.id] && (
+                  <tr className="bg-red-50">
+                    <td colSpan={6} className="px-4 py-2 text-sm text-red-700">
+                      {errores[s.id]}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                  No hay solicitudes en este filtro.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function PendientesTab({ tenantSlug, token }) {
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
@@ -1489,6 +1726,17 @@ export default function PanelAdmin({ tenantSlug, token, onVolver }) {
         </button>
         <button
           type="button"
+          onClick={() => setTab('solicitudes')}
+          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+            tab === 'solicitudes'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Solicitudes
+        </button>
+        <button
+          type="button"
           onClick={() => setTab('reservas')}
           className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
             tab === 'reservas'
@@ -1526,6 +1774,8 @@ export default function PanelAdmin({ tenantSlug, token, onVolver }) {
         <SesionesTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'pendientes' ? (
         <PendientesTab tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'solicitudes' ? (
+        <SolicitudesTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'reservas' ? (
         <ReservasTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'servicios' ? (

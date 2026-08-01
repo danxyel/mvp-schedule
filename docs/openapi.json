@@ -2738,6 +2738,18 @@
           "rol": {
             "type": "string",
             "title": "Rol"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
           }
         },
         "type": "object",

@@ -732,6 +732,8 @@ export interface components {
             nombre: string;
             /** Rol */
             rol: string;
+            /** Password */
+            password?: string | null;
         };
         /** Body_login_auth_login_post */
         Body_login_auth_login_post: {

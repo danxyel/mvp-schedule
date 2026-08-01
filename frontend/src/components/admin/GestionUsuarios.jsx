@@ -59,7 +59,7 @@ export default function GestionUsuarios({ tenantSlug, token }) {
   const [invitarAbierto, setInvitarAbierto] = useState(false)
   const [invitarLoading, setInvitarLoading] = useState(false)
   const [invitarError, setInvitarError] = useState(null)
-  const [form, setForm] = useState({ email: '', nombre: '', rol: 'cliente' })
+  const [form, setForm] = useState({ email: '', nombre: '', rol: 'cliente', password: '' })
   const [cambiandoRol, setCambiandoRol] = useState(null)
   const [confirmarDesvincular, setConfirmarDesvincular] = useState(null)
   const [desvinculando, setDesvinculando] = useState(false)
@@ -95,7 +95,7 @@ export default function GestionUsuarios({ tenantSlug, token }) {
   }
 
   const abrirInvitar = () => {
-    setForm({ email: '', nombre: '', rol: 'cliente' })
+    setForm({ email: '', nombre: '', rol: 'cliente', password: '' })
     setInvitarError(null)
     setInvitarAbierto(true)
   }
@@ -119,6 +119,7 @@ export default function GestionUsuarios({ tenantSlug, token }) {
           email: form.email.trim(),
           nombre: form.nombre.trim(),
           rol: form.rol,
+          password: form.password.trim() || null,
         },
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -351,6 +352,27 @@ export default function GestionUsuarios({ tenantSlug, token }) {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="invitar-password" className="mb-1 block text-sm font-medium text-gray-700">
+                Contraseña inicial
+                <span className="font-normal text-gray-400"> (opcional)</span>
+              </label>
+              <input
+                id="invitar-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={form.password}
+                onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                placeholder="Mínimo 8 caracteres"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Si la defines, el usuario puede entrar de inmediato. Si la omites, el invitado se
+                registra solo con su email.
+              </p>
             </div>
 
             {invitarError && (

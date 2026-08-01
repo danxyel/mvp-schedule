@@ -8,6 +8,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, List
 
+import bcrypt
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -908,6 +909,7 @@ def invitar_usuario(
     email: str = Body(...),
     nombre: str = Body(...),
     rol: str = Body(...),
+    password: Optional[str] = Body(None, min_length=8),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     staff: UsuarioTenant = Depends(requiere_admin),
@@ -919,13 +921,17 @@ def invitar_usuario(
     if not email_norm or not nombre.strip():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Email y nombre son obligatorios")
 
+    password_hash = None
+    if password:
+        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
     usuario = db.execute(select(Usuario).where(Usuario.email == email_norm)).scalar_one_or_none()
     if usuario is None:
         usuario = Usuario(
             email=email_norm,
             nombre=nombre.strip(),
-            es_invitado=True,
-            password_hash=None,
+            es_invitado=not password_hash,
+            password_hash=password_hash,
         )
         db.add(usuario)
         db.flush()
@@ -938,6 +944,14 @@ def invitar_usuario(
         ).scalar_one_or_none()
         if ya_vinculado is not None:
             raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
+        if password_hash:
+            if usuario.password_hash is not None:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    "El usuario ya tiene una contraseña definida",
+                )
+            usuario.password_hash = password_hash
+            usuario.es_invitado = False
 
     ut = UsuarioTenant(tenant_id=tenant.id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
     db.add(ut)
@@ -946,7 +960,7 @@ def invitar_usuario(
     svc.registrar_bitacora(
         db, tenant.id, "usuario_tenant", ut.id, "invitar",
         usuario_id=staff.usuario_id,
-        detalles={"email": email_norm, "rol": rol},
+        detalles={"email": email_norm, "rol": rol, "password_set": bool(password_hash)},
     )
 
     try:

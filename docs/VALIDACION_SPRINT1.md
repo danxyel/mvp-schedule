@@ -36,6 +36,20 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 
 ## 11.1 — Email de confirmación SMTP
 
+### Paso 0 — Cómo llegar (configurar SMTP desde la pantalla nueva)
+
+> Pantalla agregada 2026-07-31 (commit `9b92a56`): configuración SMTP por tenant, separada del modal "Editar tenant". Antes no había forma de configurarlo y por eso el checklist de abajo no se podía probar.
+
+- [ ] Loguea como superadmin (`mail@mail.com`) → Gestión de Tenants.
+- [ ] Junto a cada fila hay un botón **Email** con un punto indicador: verde = "Email configurado", gris = "Email sin configurar". Antes de configurar nada, SIMAL debe verse con punto gris.
+- [ ] Click en **Email** → abre un modal nuevo (no el de "Editar") con campos: host*, port (default 587), user, password (placeholder "Dejar vacío para no cambiar la contraseña guardada"), from_email, from_name, TLS (default on), SSL (default off), Modo prueba (console).
+- [ ] Llena host + los demás y guarda → el modal se cierra y el punto pasa a verde en esa fila (viene de `smtp_configurado` en la respuesta del PATCH).
+- [ ] **Write-only:** vuelve a abrir el modal → el campo password aparece vacío (nunca se prellena). Guarda solo cambiando `from_name` → no se pierde la contraseña guardada (el backend hace merge).
+- [ ] Con "Modo prueba" activado, el correo solo se registra en los logs del backend (`[EMAIL (console)]`), no se envía de verdad.
+- [ ] La respuesta del PATCH nunca devuelve `smtp_config` ni `password` — revisa en la pestaña Network de DevTools.
+
+### Checklist de envío (requiere el paso 0 hecho)
+
 - [ ] Configurar `tenant.smtp_config` con credenciales reales (o `"console": true` para probar sin enviar de verdad) y crear una reserva → confirmar que llega el correo (o se loguea en consola) con folio, código, fecha y asesor correctos.
 - [ ] Tenant sin `smtp_config` → la reserva se crea igual, sin error visible al cliente (el email se omite silenciosamente, solo queda en logs).
 - [ ] Forzar un error SMTP (host inválido) → la reserva igual queda confirmada, el error solo aparece en logs del backend, nunca se le muestra al cliente ni revierte la reserva.

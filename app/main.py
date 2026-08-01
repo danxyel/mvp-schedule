@@ -47,16 +47,17 @@ async def lifespan(app: FastAPI):
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
+# ENV: "development" (default) expone /docs, /redoc y /openapi.json.
+# En "production" se deshabilitan para no exponer Swagger públicamente.
+_ENV = os.getenv("ENV", "development")
 app = FastAPI(
     title="MVP Schedule",
     description="Sistema de agendamiento multitenant · v2.2",
     version="2.2.0",
     lifespan=lifespan,
-    # ENV: "development" (default) expone /docs, /redoc y /openapi.json.
-    # En "production" se deshabilitan para no exponer Swagger públicamente.
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url=None if _ENV == "production" else "/docs",
+    redoc_url=None if _ENV == "production" else "/redoc",
+    openapi_url=None if _ENV == "production" else "/openapi.json",
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────

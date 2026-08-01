@@ -49,6 +49,15 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] Cliente (no staff) intenta pegarle al endpoint → 403.
 - [ ] Sin token → 401.
 
+## Fix 2026-07-31 — Selección de tenant para clientes sin membresía
+
+> Salido de validación manual: un cliente que se auto-registra vía `POST /auth/register` (sin invitación previa) queda con `tenant_slug=null` y `App.jsx` lo mandaba a `SeleccionServicio`, que llamaba `GET /api/v2/{tenant_slug}/servicios` con slug nulo → 404 "Tenant no encontrado". No existía pantalla para elegir tenant.
+
+1. Registra un cliente nuevo por primera vez, sin invitación previa → debe aparecer la pantalla de selección de tenant, no un error.
+2. Elige un tenant → debe cargar `SeleccionServicio` con los servicios de ese tenant.
+3. Un admin/asesor que hace login normal (ya tiene membresía) NO debe ver esta pantalla — su `tenant_slug` ya viene resuelto, sigue directo a su panel.
+4. Si no hay ningún tenant activo, la pantalla debe mostrar un estado vacío razonable, no un error feo.
+
 ## Regresión general
 
 - [ ] `npm run build` en `frontend/` corre limpio en tu máquina (no lo pude confirmar desde el sandbox — ver nota de la sesión anterior).

@@ -199,6 +199,7 @@ El router traduce `ReservaError` a 4xx con este formato:
 - Horarios y servicios del asesor (admin)
 - Bloqueos/vacaciones del asesor (admin)
 - Email de confirmación SMTP real (`services_v2_2.enviar_email_confirmacion`)
+- Selección de tenant para clientes sin membresía (`GET /tenants/publicos` + `SeleccionTenant`)
 
 ### Frontend ✅
 - Login con persistencia en sessionStorage
@@ -210,6 +211,7 @@ El router traduce `ReservaError` a 4xx con este formato:
 - Detalle de reserva + cancelar
 - Panel admin: sesiones, timeline con check-in, servicios
 - Gestión de usuarios (tab Usuarios + panel de horarios/bloqueos del asesor)
+- Selección de tenant para clientes sin membresía (SeleccionTenant)
 - Gestión de tenants (superadmin)
 - Navegación por rol
 
@@ -340,3 +342,4 @@ npx openapi-typescript ..\docs\openapi.json -o src\api\schema.ts
 | Navegación por rol en App.jsx | Una sola app, rutas protegidas por rol en frontend. |
 | `.gitattributes` con `text=auto eol=lf` (CRLF solo en `.ps1`) | Los diffs de línea completa (CRLF/LF) en `main.py`, `AGENTS.md`, `openapi.json` estaban escondiendo cambios reales. Se normalizó todo a LF el 2026-07-31. |
 | `PROMPT_MAESTRO.md` queda fuera de git a propósito | Es un snapshot local del prompt de sesión, se desactualiza rápido. Este HANDOFF.md es la única fuente de verdad — no confiar en `PROMPT_MAESTRO.md` para saber el estado del proyecto. |
+| `GET /tenants/publicos` + pantalla `SeleccionTenant` (2026-07-31) | Fix salido de validación manual de Sprint 1: un cliente que se auto-registra sin invitación previa no tiene fila en `usuario_tenants`, así que su login devuelve `tenant_slug=null` y `SeleccionServicio` fallaba con 404. Se agregó un endpoint público (en `main.py`, no en `router_v2_2.py`, porque ese router tiene prefix `/{tenant_slug}` que no existe todavía en ese punto del flujo) con schema `TenantPublicOut` que expone solo `id/slug/nombre/logo_url/color_primario` — nunca secrets (`smtp_config`, Stripe, etc.). `App.jsx` manda al cliente nuevo a la vista `seleccion-tenant`; al elegir, persiste slug igual que `handleEntrarTenant` y sigue a `SeleccionServicio`. El estado inicial de `vista` y la navegación también detectan el caso (cliente + sin `tenantSlug` en sessionStorage) para no romper tras un refresh; durante `seleccion-tenant` se oculta el nav para no exponer links a pantallas que requieren slug. |

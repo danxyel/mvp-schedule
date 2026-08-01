@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
 import Modal from '../common/Modal'
+import HorarioServicio from './HorarioServicio'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -114,6 +115,7 @@ export default function GestionServicios({ tenantSlug, token }) {
   const [editando, setEditando] = useState(null)
   const [editarLoading, setEditarLoading] = useState(false)
   const [editarError, setEditarError] = useState(null)
+  const [horarioDe, setHorarioDe] = useState(null)
   const [form, setForm] = useState(FORM_VACIO)
 
   const fetchServicios = useCallback(async () => {
@@ -408,6 +410,15 @@ export default function GestionServicios({ tenantSlug, token }) {
               >
                 Editar
               </button>
+              {s.requiere_confirmacion && (
+                <button
+                  type="button"
+                  onClick={() => setHorarioDe(s)}
+                  className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
+                >
+                  Horario
+                </button>
+              )}
               <button
                 type="button"
                 role="switch"
@@ -1020,6 +1031,15 @@ export default function GestionServicios({ tenantSlug, token }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {horarioDe && (
+        <HorarioServicio
+          servicio={horarioDe}
+          tenantSlug={tenantSlug}
+          token={token}
+          onClose={() => setHorarioDe(null)}
+        />
       )}
     </div>
   )

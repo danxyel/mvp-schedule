@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
+import Modal from '../common/Modal'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -97,33 +98,6 @@ function Badge({ value, map, labelMap, color }) {
     >
       {text}
     </span>
-  )
-}
-
-function Modal({ title, onClose, children, maxWidth = 'max-w-lg' }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className={`max-h-[80vh] w-full ${maxWidth} overflow-y-auto rounded-xl bg-white p-5 shadow-xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   )
 }
 
@@ -604,7 +578,7 @@ export default function GestionServicios({ tenantSlug, token }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
               <div>
                 <label htmlFor="servicio-duracion" className="mb-1 block text-sm font-medium text-gray-700">
                   Duración (min) *
@@ -837,7 +811,7 @@ export default function GestionServicios({ tenantSlug, token }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
               <div>
                 <label htmlFor="edit-servicio-duracion" className="mb-1 block text-sm font-medium text-gray-700">
                   Duración (min) *

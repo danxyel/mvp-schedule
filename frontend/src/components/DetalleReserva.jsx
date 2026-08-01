@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
+import Modal from './common/Modal'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -157,6 +158,12 @@ export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onC
     } finally {
       setCancelando(false)
     }
+  }
+
+  const cerrarModal = () => {
+    setShowModal(false)
+    setCancelError(null)
+    setMotivo('')
   }
 
   const CANCEL_ERROR_MESSAGES = {
@@ -337,11 +344,7 @@ export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onC
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-            <h3 className="mb-2 text-lg font-semibold text-gray-900">
-              Cancelar reserva
-            </h3>
+        <Modal title="Cancelar reserva" onClose={cerrarModal} maxWidth="max-w-sm">
             <p className="mb-4 text-sm text-gray-600">
               ¿Estás seguro de cancelar la reserva <strong>{r.folio}</strong>?
             </p>
@@ -370,11 +373,7 @@ export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onC
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  setShowModal(false)
-                  setCancelError(null)
-                  setMotivo('')
-                }}
+                onClick={cerrarModal}
                 className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
               >
                 No, volver
@@ -388,8 +387,7 @@ export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onC
                 {cancelando ? 'Cancelando...' : 'Sí, cancelar'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

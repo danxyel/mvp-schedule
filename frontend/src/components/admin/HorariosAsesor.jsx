@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
+import Modal from '../common/Modal'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -54,33 +55,6 @@ function formatFecha(utcString) {
 
 function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
 }
 
 export default function HorariosAsesor({ asesor, tenantSlug, token, onClose }) {
@@ -353,7 +327,7 @@ export default function HorariosAsesor({ asesor, tenantSlug, token, onClose }) {
   }
 
   return (
-    <Modal title={`Configuración de ${asesor.nombre}`} onClose={onClose}>
+    <Modal title={`Configuración de ${asesor.nombre}`} onClose={onClose} maxWidth="max-w-2xl">
       {loading ? (
         <div className="animate-pulse space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (

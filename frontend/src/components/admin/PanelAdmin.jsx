@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
+import Modal from '../common/Modal'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -125,33 +126,6 @@ function Badge({ value, map, labelMap }) {
     >
       {labelMap[value] ?? value}
     </span>
-  )
-}
-
-function Modal({ title, onClose, children, maxWidth = 'max-w-lg' }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className={`max-h-[80vh] w-full ${maxWidth} overflow-y-auto rounded-xl bg-white p-5 shadow-xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   )
 }
 
@@ -512,7 +486,7 @@ function SesionesTab({ tenantSlug, token }) {
             {formatFechaHora(reagendar.sesion.fecha_hora_inicio, reagendar.sesion.timezone)}
           </p>
 
-          <div className="mb-4 grid grid-cols-2 gap-3">
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Nueva fecha</label>
               <input
@@ -1021,9 +995,7 @@ function ReservasTab({ tenantSlug, token }) {
       )}
 
       {pagoFolio && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-3 text-base font-semibold text-gray-900">Registrar pago local</h3>
+        <Modal title="Registrar pago local" onClose={() => setPagoFolio(null)} maxWidth="max-w-sm">
             <p className="mb-4 font-mono text-xs text-gray-500">{pagoFolio}</p>
 
             <label className="mb-1 block text-xs font-medium text-gray-600">Método de cobro</label>
@@ -1093,8 +1065,7 @@ function ReservasTab({ tenantSlug, token }) {
                 {pagoEnviando ? 'Registrando...' : 'Confirmar pago'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

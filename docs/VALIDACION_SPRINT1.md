@@ -72,9 +72,9 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 3. Un admin/asesor que hace login normal (ya tiene membresía) NO debe ver esta pantalla — su `tenant_slug` ya viene resuelto, sigue directo a su panel.
 4. Si no hay ningún tenant activo, la pantalla debe mostrar un estado vacío razonable, no un error feo.
 
-## Notas de Daniel (mobile) — 3 fixes 2026-07-31
+## Notas de Daniel (mobile) — 4 fixes 2026-07-31
 
-> Salieron de probar la app en pantallas chicas (375px/390px) y del flujo de invitar usuarios. Cada uno con su commit: `bafe3fa` (header), `531e56f` (modal común), `f00e990` (contraseña inicial).
+> Salieron de probar la app en pantallas chicas (375px/390px) y del flujo de invitar usuarios. Cada uno con su commit: `bafe3fa` (header), `531e56f` (modal común), `f00e990` (contraseña inicial), `3fe9190` (min-w-0 tablas).
 
 ### Tarea 1 — Header responsive
 
@@ -97,6 +97,12 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] Invitar **sin** contraseña → comportamiento anterior: el invitado se registra solo con su email.
 - [ ] Invitar con contraseña a un email que ya se registró por su cuenta → error claro (422), no se sobrescribe su contraseña.
 - [ ] Invitar el mismo email dos veces en el mismo tenant → 409 "ya está vinculado".
+
+### Tarea 0 — Tablas no desbordan la página (min-w-0)
+
+- [ ] A 375px, la tabla de Tenants (superadmin) scrollea horizontalmente dentro de su tarjeta; la página completa no se desplaza y las columnas Nombre/Slug no quedan cortadas sin scroll posible.
+- [ ] Igual en Usuarios, Servicios y Panel admin (Sesiones y Reservas): scroll interno, página estática.
+- [ ] En desktop (> 1024px) las mismas tablas se ven exactamente igual que antes (ancho completo, sin scroll interno visible).
 
 ## Regresión general
 

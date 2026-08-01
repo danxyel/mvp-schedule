@@ -965,6 +965,7 @@ def crear_servicio_admin(
         moneda=body.moneda,
         pago_requerido=body.pago_requerido,
         visible_web=body.visible_web,
+        requiere_confirmacion=body.requiere_confirmacion,
     )
     db.add(s)
     try:

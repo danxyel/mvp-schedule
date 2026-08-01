@@ -1278,6 +1278,11 @@ export interface components {
              * @default true
              */
             visible_web: boolean;
+            /**
+             * Requiere Confirmacion
+             * @default false
+             */
+            requiere_confirmacion: boolean;
         };
         /** ServicioAdminOut */
         ServicioAdminOut: {
@@ -1368,6 +1373,8 @@ export interface components {
             pago_requerido?: boolean | null;
             /** Visible Web */
             visible_web?: boolean | null;
+            /** Requiere Confirmacion */
+            requiere_confirmacion?: boolean | null;
         };
         /** ServicioPublicOut */
         ServicioPublicOut: {

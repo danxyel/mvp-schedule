@@ -151,7 +151,19 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] `DELETE /admin/servicios/{servicio_id}/horarios/{h_id}` → `OperacionOut` ok; un `h_id` que no pertenezca al servicio o a otro tenant → 404.
 - [ ] Sin token → 401; con token de cliente → 403. Servicio inexistente o de otro tenant → 404 en los tres verbos.
 
-### Horario de servicio — calendario público (listar_slots_disponibles)
+### `requiere_confirmacion` en la API de servicios (POST/PATCH admin)
+
+> Bug bloqueante resuelto: `ServicioAdminIn`/`ServicioAdminUpdate` usaban `extra="forbid"` y nunca expusieron el campo → no había forma de activar confirmación manual desde la API/UI. Ahora lo aceptan (POST default `false`, PATCH opcional).
+
+- [ ] `POST /admin/servicios` con `requiere_confirmacion: true` → 201 y el `ServicioAdminOut` de la respuesta trae `requiere_confirmacion: true`.
+- [ ] `POST /admin/servicios` sin el campo → 201 con `requiere_confirmacion: false` (default igual que el modelo).
+- [ ] `PATCH /admin/servicios/{id}` con `{ "requiere_confirmacion": true }` → 200 y el `ServicioAdminOut` de la respuesta (y de un `GET` posterior) lo refleja; el valor persiste al recargar.
+- [ ] `PATCH` con `requiere_confirmacion: false` vuelve el servicio a reserva directa (su calendario vuelve a generar slots desde horarios de asesores).
+- [ ] Un PATCH que NO manda `requiere_confirmacion` no cambia el valor actual (campo opcional, `exclude_unset`).
+- [ ] Regresión: al crear un servicio en GestionServicios (frontend), este campo sigue sin UI dedicada — no rompe nada (solo no se muestra).
+
+#
+## Horario de servicio — calendario público (listar_slots_disponibles)
 
 - [ ] Con `requiere_confirmacion=True` y franja de servicio creada (ej. lunes 09:00–12:00): `GET /servicios/{id}/disponibilidad` de ese lunes devuelve los slots **dentro de la franja del servicio**, cada uno con `asesor: null` y `disponible: true`.
 - [ ] Días/horas fuera de la franja del servicio → sin slots.

@@ -505,6 +505,7 @@ class ServicioAdminIn(BaseModel):
     moneda: str = Field("MXN", min_length=3, max_length=3)
     pago_requerido: bool = True
     visible_web: bool = True
+    requiere_confirmacion: bool = False
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -534,6 +535,7 @@ class ServicioAdminUpdate(BaseModel):
     moneda: Optional[str] = Field(None, min_length=3, max_length=3)
     pago_requerido: Optional[bool] = None
     visible_web: Optional[bool] = None
+    requiere_confirmacion: Optional[bool] = None
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")

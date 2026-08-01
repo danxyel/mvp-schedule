@@ -4335,6 +4335,11 @@
             "type": "boolean",
             "title": "Visible Web",
             "default": true
+          },
+          "requiere_confirmacion": {
+            "type": "boolean",
+            "title": "Requiere Confirmacion",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -4684,6 +4689,17 @@
               }
             ],
             "title": "Visible Web"
+          },
+          "requiere_confirmacion": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requiere Confirmacion"
           }
         },
         "additionalProperties": false,

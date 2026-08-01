@@ -21,6 +21,7 @@ from app.dependencies import (
 )
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
+    SolicitudReserva,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
     ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
@@ -33,6 +34,7 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn,
+    SolicitudCreate, SolicitudOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -128,6 +130,9 @@ _CODIGO_HTTP = {
     "sesion_cerrada": status.HTTP_409_CONFLICT,
     "permiso_denegado": status.HTTP_403_FORBIDDEN,
     "sesion_no_encontrada": status.HTTP_404_NOT_FOUND,
+    "servicio_no_encontrado": status.HTTP_404_NOT_FOUND,
+    "no_requiere_confirmacion": status.HTTP_409_CONFLICT,
+    "fecha_ambigua": status.HTTP_400_BAD_REQUEST,
     "identidad_requerida": status.HTTP_401_UNAUTHORIZED,
     "not_found": status.HTTP_404_NOT_FOUND,
     "estado_invalido": status.HTTP_409_CONFLICT,
@@ -168,6 +173,23 @@ def _sesion_list_out(s: Sesion) -> SesionListOut:
         lugares_disponibles=max(0, s.cupo_maximo - s.inscritos),
         asesor=_asesor_out(s),
         sede=SedeOut.model_validate(s.sede) if s.sede else None,
+    )
+
+
+def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
+    servicio = db.get(Servicio, s.servicio_id)
+    return SolicitudOut(
+        id=s.id,
+        servicio_id=s.servicio_id,
+        servicio_nombre=servicio.nombre if servicio else None,
+        fecha_hora_propuesta=s.fecha_hora_propuesta,
+        duracion_minutos=s.duracion_minutos,
+        notas_cliente=s.notas_cliente,
+        estado=s.estado.value,
+        asesor_id=s.asesor_id,
+        motivo_rechazo=s.motivo_rechazo,
+        reserva_id=s.reserva_id,
+        creado_en=s.creado_en,
     )
 
 
@@ -573,6 +595,53 @@ def listar_mis_reservas(
             creado_en=r.creado_en,
         ))
     return salida
+
+
+# ============================================================
+# SOLICITUDES DE RESERVA — confirmación manual (Tarea 2)
+# ============================================================
+@router.post("/solicitudes", response_model=SolicitudOut, status_code=status.HTTP_201_CREATED)
+def crear_solicitud_reserva_endpoint(
+    payload: SolicitudCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        solicitud = svc.crear_solicitud_reserva(db, tenant, payload, usuario, ip=ip, user_agent=ua)
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error de base de datos al crear solicitud de reserva")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(solicitud)
+    return _solicitud_out(db, solicitud)
+
+
+@router.get("/mis-solicitudes", response_model=List[SolicitudOut])
+def listar_mis_solicitudes(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    filas = db.execute(
+        select(SolicitudReserva).where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.cliente_usuario_id == usuario.id,
+        ).order_by(SolicitudReserva.creado_en.desc())
+    ).scalars().all()
+    return [_solicitud_out(db, s) for s in filas]
 
 
 # ============================================================

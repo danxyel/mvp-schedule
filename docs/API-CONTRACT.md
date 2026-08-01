@@ -56,6 +56,14 @@ El frontend SOLO puede renderizar estos valores. Cualquier otro es un bug.
 - **Método de pago:** `online` · `local` · `registro`
 - **Canal:** `web` · `admin` · `whatsapp` · `api`
 
+### Estado de Solicitud
+| Valor | Qué significa | Qué mostrar |
+|-------|--------------|-------------|
+| `pendiente` | En espera de revisión del staff | "En revisión" |
+| `aceptada` | El staff la convirtió en reserva real | "Aceptada" + link a la reserva (`reserva_id`) |
+| `rechazada` | El staff la rechazó | "Rechazada" + `motivo_rechazo` si existe |
+| `cancelada` | Cancelada por el cliente o el staff | "Cancelada" |
+
 ---
 
 ## ERRORES DE NEGOCIO
@@ -72,6 +80,9 @@ Estos errores tienen HTTP 4xx con este formato:
 | `conflicto_concurrencia` | 409 | "Alguien más reservó al mismo tiempo. Intenta de nuevo." |
 | `sesion_cerrada` | 409 | "Esta sesión ya no acepta inscripciones." |
 | `sesion_no_encontrada` | 404 | "La sesión no existe." |
+| `servicio_no_encontrado` | 404 | "El servicio no existe o no está disponible." |
+| `no_requiere_confirmacion` | 409 | "Este servicio no requiere confirmación; reserva directamente." |
+| `fecha_ambigua` | 400 | "La fecha debe ser futura e incluir zona horaria." |
 | `fuera_de_politica` | 400 | "El plazo para cancelar ya venció." |
 | `estado_no_cancelable` | 400 | "Esta reserva no se puede cancelar." |
 | `identidad_requerida` | 401 | Redirigir a login |
@@ -272,6 +283,64 @@ Igual que el detalle público más:
 - `limit` / `offset`
 
 Devuelve array de ReservaOut.
+
+---
+
+### 7b. Crear solicitud de reserva (confirmación manual)
+**`POST /solicitudes`** — 🔒 Autenticado
+
+Solo para servicios con `requiere_confirmacion: true`. El cliente **propone**
+una fecha/hora; no reserva nada todavía. El staff la convierte en reserva real
+solo al aceptarla (Tarea 3).
+
+**Body:**
+```json
+{
+  "servicio_id": 1,
+  "fecha_hora_propuesta": "2026-08-15T10:00:00-06:00",
+  "notas_cliente": "Me gustaría sesión para un tema laboral"
+}
+```
+
+**Reglas:**
+- `fecha_hora_propuesta` **debe** incluir offset; sin zona se rechaza con 422
+- Debe ser futura
+- `duracion_minutos` se toma del servicio (no se recibe en el body)
+- **Duplicados permitidos**: un cliente puede crear varias solicitudes
+  `pendiente` para el mismo servicio y fecha — el staff las resuelve (ver
+  sección 13 de HANDOFF.md)
+
+**Respuesta `201` — SolicitudOut:**
+```json
+{
+  "id": 1,
+  "servicio_id": 1,
+  "servicio_nombre": "Consultoría Individual",
+  "fecha_hora_propuesta": "2026-08-15T16:00:00Z",
+  "duracion_minutos": 60,
+  "notas_cliente": "Me gustaría sesión para un tema laboral",
+  "estado": "pendiente",
+  "asesor_id": null,
+  "motivo_rechazo": null,
+  "reserva_id": null,
+  "creado_en": "2026-07-31T20:30:00Z"
+}
+```
+
+**Errores posibles:** `servicio_no_encontrado` (404),
+`no_requiere_confirmacion` (409), `fecha_ambigua` (400),
+`identidad_requerida` (401).
+
+---
+
+### 7c. Mis solicitudes
+**`GET /mis-solicitudes`** — 🔒 Autenticado
+
+Devuelve **todas** las solicitudes del cliente (cualquier estado), ordenadas por
+`creado_en` descendente. **Sin paginación** (decisión registrada en sección 13
+de HANDOFF.md).
+
+Devuelve array de SolicitudOut.
 
 ---
 

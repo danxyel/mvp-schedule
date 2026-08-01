@@ -208,6 +208,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/solicitudes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Crear Solicitud Reserva Endpoint */
+        post: operations["crear_solicitud_reserva_endpoint_api_v2__tenant_slug__solicitudes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/mis-solicitudes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Mis Solicitudes */
+        get: operations["listar_mis_solicitudes_api_v2__tenant_slug__mis_solicitudes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/reservas": {
         parameters: {
             query?: never;
@@ -804,6 +838,11 @@ export interface components {
          * @enum {string}
          */
         EstadoSesionEnum: "abierta" | "confirmada" | "llena" | "cancelada" | "completada";
+        /**
+         * EstadoSolicitudEnum
+         * @enum {string}
+         */
+        EstadoSolicitudEnum: "pendiente" | "aceptada" | "rechazada" | "cancelada";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1400,6 +1439,55 @@ export interface components {
             /** Motivo No Disponible */
             motivo_no_disponible?: string | null;
         };
+        /**
+         * SolicitudCreate
+         * @description El cliente propone una fecha/hora libre para un servicio con
+         *     `requiere_confirmacion=True`. No reserva nada todavía.
+         */
+        SolicitudCreate: {
+            /** Servicio Id */
+            servicio_id: number;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+        };
+        /**
+         * SolicitudOut
+         * @description Vista del cliente: sin datos de resolución internos.
+         */
+        SolicitudOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+            estado: components["schemas"]["EstadoSolicitudEnum"];
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Motivo Rechazo */
+            motivo_rechazo?: string | null;
+            /** Reserva Id */
+            reserva_id?: number | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
         /** TenantAdminOut */
         TenantAdminOut: {
             /** Id */
@@ -1935,6 +2023,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReservaOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_solicitud_reserva_endpoint_api_v2__tenant_slug__solicitudes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_mis_solicitudes_api_v2__tenant_slug__mis_solicitudes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"][];
                 };
             };
             /** @description Validation Error */

@@ -677,6 +677,114 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/solicitudes": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Solicitud Reserva Endpoint",
+        "operationId": "crear_solicitud_reserva_endpoint_api_v2__tenant_slug__solicitudes_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/mis-solicitudes": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Mis Solicitudes",
+        "operationId": "listar_mis_solicitudes_api_v2__tenant_slug__mis_solicitudes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SolicitudOut"
+                  },
+                  "title": "Response Listar Mis Solicitudes Api V2  Tenant Slug  Mis Solicitudes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/reservas": {
       "get": {
         "tags": [
@@ -2939,6 +3047,16 @@
         ],
         "title": "EstadoSesionEnum"
       },
+      "EstadoSolicitudEnum": {
+        "type": "string",
+        "enum": [
+          "pendiente",
+          "aceptada",
+          "rechazada",
+          "cancelada"
+        ],
+        "title": "EstadoSolicitudEnum"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -4778,6 +4896,135 @@
           "disponible"
         ],
         "title": "SlotDisponible"
+      },
+      "SolicitudCreate": {
+        "properties": {
+          "servicio_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Servicio Id"
+          },
+          "fecha_hora_propuesta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora Propuesta"
+          },
+          "notas_cliente": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notas Cliente"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "servicio_id",
+          "fecha_hora_propuesta"
+        ],
+        "title": "SolicitudCreate",
+        "description": "El cliente propone una fecha/hora libre para un servicio con\n`requiere_confirmacion=True`. No reserva nada todavía."
+      },
+      "SolicitudOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "fecha_hora_propuesta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora Propuesta"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "title": "Duracion Minutos"
+          },
+          "notas_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notas Cliente"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSolicitudEnum"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "reserva_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserva Id"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "servicio_id",
+          "fecha_hora_propuesta",
+          "duracion_minutos",
+          "estado",
+          "creado_en"
+        ],
+        "title": "SolicitudOut",
+        "description": "Vista del cliente: sin datos de resolución internos."
       },
       "TenantAdminOut": {
         "properties": {

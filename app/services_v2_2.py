@@ -26,13 +26,14 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sede, Servicio, Sesion, Reserva,
+    SolicitudReserva, EstadoSolicitud,
     HorarioDisponibilidad, HorarioBloqueo, Bitacora, AsesorServicio,
     CampoFormulario, RespuestaFormulario,
     EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
     TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad,
     ESTADOS_OCUPAN_CUPO, ESTADOS_SESION_ACTIVA, utcnow,
 )
-from app.schemas_v2_2 import ReservaCreate, CheckoutUrlOut
+from app.schemas_v2_2 import ReservaCreate, SolicitudCreate, CheckoutUrlOut
 
 log = logging.getLogger(__name__)
 
@@ -818,6 +819,76 @@ def crear_reserva(
             else "Reserva en espera de pago"
         ),
     }
+
+
+# ============================================================
+# SOLICITUDES DE RESERVA — confirmación manual (Tarea 2)
+# El cliente propone una fecha/hora para un servicio con
+# requiere_confirmacion=True. No reserva nada todavía.
+# ============================================================
+def crear_solicitud_reserva(
+    db: Session,
+    tenant: Tenant,
+    payload: SolicitudCreate,
+    usuario: Usuario,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> SolicitudReserva:
+    tenant_id = tenant.id
+
+    servicio = db.execute(
+        select(Servicio).where(
+            Servicio.tenant_id == tenant_id,
+            Servicio.id == payload.servicio_id,
+            Servicio.activo.is_(True),
+            Servicio.visible_web.is_(True),
+        )
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
+    if not servicio.requiere_confirmacion:
+        raise ReservaError(
+            "Este servicio no requiere confirmación; reserva directamente.",
+            codigo="no_requiere_confirmacion",
+        )
+
+    propuesta = _a_utc(payload.fecha_hora_propuesta)
+    if propuesta <= utcnow():
+        raise ReservaError("La fecha propuesta debe ser futura", codigo="fecha_ambigua")
+
+    _vincular_a_tenant(db, usuario.id, tenant_id)
+
+    pendientes_previos = db.execute(
+        select(func.count()).select_from(SolicitudReserva).where(
+            SolicitudReserva.tenant_id == tenant_id,
+            SolicitudReserva.cliente_usuario_id == usuario.id,
+            SolicitudReserva.servicio_id == servicio.id,
+            SolicitudReserva.estado == EstadoSolicitud.PENDIENTE.value,
+        )
+    ).scalar_one()
+
+    solicitud = SolicitudReserva(
+        tenant_id=tenant_id,
+        servicio_id=servicio.id,
+        cliente_usuario_id=usuario.id,
+        fecha_hora_propuesta=propuesta,
+        duracion_minutos=servicio.duracion_minutos,
+        notas_cliente=payload.notas_cliente,
+    )
+    db.add(solicitud)
+    db.flush()
+
+    registrar_bitacora(
+        db, tenant_id, "solicitud_reserva", solicitud.id, "solicitud_reserva_creada",
+        usuario_id=usuario.id,
+        detalles={
+            "servicio_id": servicio.id,
+            "fecha_hora_propuesta": propuesta.isoformat(),
+            "pendientes_previos": pendientes_previos,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+    return solicitud
 
 
 # ============================================================

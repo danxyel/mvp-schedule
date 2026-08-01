@@ -569,6 +569,7 @@ function ahoraEn(timezone) {
 
 function ReservasTab({ tenantSlug, token }) {
   const [fecha, setFecha] = useState(() => toDateInputValue(new Date()))
+  const [pickerAbierto, setPickerAbierto] = useState(false)
   const [estado, setEstado] = useState('todas')
   const [offset, setOffset] = useState(0)
   const [items, setItems] = useState([])
@@ -767,12 +768,32 @@ function ReservasTab({ tenantSlug, token }) {
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Día</span>
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => cambiarFecha(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
-          />
+          <span className="relative">
+            <button
+              type="button"
+              onClick={() => setPickerAbierto((v) => !v)}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
+            >
+              {fecha}
+            </button>
+            {pickerAbierto && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setPickerAbierto(false)}
+                />
+                <div className="absolute left-0 top-full z-50 mt-1">
+                  <SelectorFecha
+                    value={new Date(`${fecha}T00:00:00`)}
+                    onChange={(day) => {
+                      cambiarFecha(toDateInputValue(day))
+                      setPickerAbierto(false)
+                    }}
+                  />
+                </div>
+              </>
+            )}
+          </span>
         </label>
         <label className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Estado</span>

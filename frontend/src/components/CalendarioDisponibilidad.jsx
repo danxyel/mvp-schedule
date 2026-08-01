@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
 import { getLocalOffset } from '../utils/fechas'
+import SelectorFecha from './common/SelectorFecha'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -50,7 +51,9 @@ export default function CalendarioDisponibilidad({
   servicioId,
   onSlotSelect,
 }) {
-  const [currentDate, setCurrentDate] = useState(() => new Date())
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const [currentDate, setCurrentDate] = useState(() => hoy)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -85,29 +88,13 @@ export default function CalendarioDisponibilidad({
     fetchDisponibilidad()
   }, [fetchDisponibilidad])
 
-  const goToPreviousDay = () => {
-    const prev = new Date(currentDate)
-    prev.setDate(prev.getDate() - 1)
-    setCurrentDate(prev)
-  }
-
-  const goToNextDay = () => {
-    const next = new Date(currentDate)
-    next.setDate(next.getDate() + 1)
-    setCurrentDate(next)
-  }
-
   const motivoLabel = (motivo) => MOTIVO_LABELS[motivo] ?? motivo
 
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="h-9 w-24 animate-pulse rounded-lg bg-gray-200" />
-          <div className="h-6 w-48 animate-pulse rounded bg-gray-200" />
-          <div className="h-9 w-24 animate-pulse rounded-lg bg-gray-200" />
-        </div>
-        <div className="grid gap-3">
+        <div className="h-9 w-24 animate-pulse rounded-lg bg-gray-200" />
+        <div className="mt-6 grid gap-3">
           <SlotSkeleton />
           <SlotSkeleton />
           <SlotSkeleton />
@@ -143,87 +130,83 @@ export default function CalendarioDisponibilidad({
   const timezone = data?.timezone ?? 'America/Mexico_City'
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={goToPreviousDay}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-        >
-          &larr; Anterior
-        </button>
-        <h2 className="text-lg font-semibold capitalize text-gray-900">
-          {data ? formatDateTitle(new Date(data.fecha)) : formatDateTitle(currentDate)}
-        </h2>
-        <button
-          type="button"
-          onClick={goToNextDay}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-        >
-          Siguiente &rarr;
-        </button>
-      </div>
+    <div className="mx-auto max-w-3xl">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr]">
+        <div className="md:sticky md:top-4 md:self-start">
+          <SelectorFecha
+            value={currentDate}
+            onChange={setCurrentDate}
+            minDate={hoy}
+          />
+        </div>
 
-      {data && data.slots.length === 0 && (
-        <p className="py-8 text-center text-gray-500">
-          No hay horarios disponibles para este d&iacute;a.
-        </p>
-      )}
+        <div>
+          <h2 className="mb-4 text-lg font-semibold capitalize text-gray-900">
+            {data ? formatDateTitle(new Date(data.fecha)) : formatDateTitle(currentDate)}
+          </h2>
 
-      <div className="grid gap-3">
-        {data?.slots.map((slot, idx) => {
-          if (!slot.disponible) {
-            const label = motivoLabel(slot.motivo_no_disponible)
-            const isLleno = slot.motivo_no_disponible === 'cupo_lleno'
+          {data && data.slots.length === 0 && (
+            <p className="py-8 text-center text-gray-500">
+              No hay horarios disponibles para este d&iacute;a.
+            </p>
+          )}
 
-            return (
-              <div
-                key={idx}
-                className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
-                  isLleno
-                    ? 'border-yellow-200 bg-yellow-50'
-                    : 'border-gray-200 bg-gray-50'
-                }`}
-              >
-                <p className="text-sm font-medium text-gray-500">
-                  {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
-                  {toLocalTime(slot.fecha_hora_fin, timezone)}
-                </p>
-                {isLleno ? (
-                  <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                    {label}
+          <div className="grid gap-3">
+            {data?.slots.map((slot, idx) => {
+              if (!slot.disponible) {
+                const label = motivoLabel(slot.motivo_no_disponible)
+                const isLleno = slot.motivo_no_disponible === 'cupo_lleno'
+
+                return (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
+                      isLleno
+                        ? 'border-yellow-200 bg-yellow-50'
+                        : 'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-gray-500">
+                      {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
+                      {toLocalTime(slot.fecha_hora_fin, timezone)}
+                    </p>
+                    {isLleno ? (
+                      <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+                        {label}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-gray-400">{label}</span>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => onSlotSelect(slot)}
+                  className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left transition hover:bg-blue-100 hover:shadow-sm"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-blue-800">
+                      {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
+                      {toLocalTime(slot.fecha_hora_fin, timezone)}
+                    </p>
+                    {slot.asesor && (
+                      <p className="text-xs text-blue-600">{slot.asesor.nombre}</p>
+                    )}
+                  </div>
+                  <span className="text-xs font-medium text-blue-500">
+                    {slot.cupo_disponible != null && slot.cupo_disponible > 0
+                      ? `${slot.cupo_disponible} lugar${slot.cupo_disponible !== 1 ? 'es' : ''}`
+                      : 'Disponible'}
                   </span>
-                ) : (
-                  <span className="text-xs font-medium text-gray-400">{label}</span>
-                )}
-              </div>
-            )
-          }
-
-          return (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => onSlotSelect(slot)}
-              className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left transition hover:bg-blue-100 hover:shadow-sm"
-            >
-              <div>
-                <p className="text-sm font-semibold text-blue-800">
-                  {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
-                  {toLocalTime(slot.fecha_hora_fin, timezone)}
-                </p>
-                {slot.asesor && (
-                  <p className="text-xs text-blue-600">{slot.asesor.nombre}</p>
-                )}
-              </div>
-              <span className="text-xs font-medium text-blue-500">
-                {slot.cupo_disponible != null && slot.cupo_disponible > 0
-                  ? `${slot.cupo_disponible} lugar${slot.cupo_disponible !== 1 ? 'es' : ''}`
-                  : 'Disponible'}
-              </span>
-            </button>
-          )
-        })}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
     </div>
   )

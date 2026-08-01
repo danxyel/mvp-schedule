@@ -22,18 +22,16 @@ function formatDateLong(utcString, timezone) {
   }).format(new Date(utcString))
 }
 
-function getLocalOffset() {
-  const offset = -new Date().getTimezoneOffset()
-  const sign = offset >= 0 ? '+' : '-'
-  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')
-  const mins = String(Math.abs(offset) % 60).padStart(2, '0')
-  return `${sign}${hours}:${mins}`
-}
-
 function utcToOffset(utcString) {
   const date = new Date(utcString)
-  const iso = date.toISOString().replace('Z', '')
-  return `${iso}${getLocalOffset()}`
+  const offsetMin = -date.getTimezoneOffset()
+  const local = new Date(date.getTime() + offsetMin * 60000)
+  const sign = offsetMin >= 0 ? '+' : '-'
+  const abs = Math.abs(offsetMin)
+  const hours = String(Math.floor(abs / 60)).padStart(2, '0')
+  const mins = String(abs % 60).padStart(2, '0')
+  const iso = local.toISOString().replace('Z', '')
+  return `${iso}${sign}${hours}:${mins}`
 }
 
 function CountdownTimer({ expiraEn }) {

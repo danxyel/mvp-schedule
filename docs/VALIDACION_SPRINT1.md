@@ -73,6 +73,15 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 3. Un admin/asesor que hace login normal (ya tiene membresía) NO debe ver esta pantalla — su `tenant_slug` ya viene resuelto, sigue directo a su panel.
 4. Si no hay ningún tenant activo, la pantalla debe mostrar un estado vacío razonable, no un error feo.
 
+## Fix 2026-07-31 — `utcToOffset` en FlujReserva (fecha_hora_inicio con offset correcto)
+
+> Bug crítico: `utcToOffset()` tomaba los dígitos de `date.toISOString()` (siempre UTC) y les concatenaba el offset local sin desplazar el reloj. Cualquier slot en un timezone distinto a UTC+0 se enviaba desfasado por el valor del offset (ej. 6 horas y hasta un día distinto en timezones negativos). El fix convierte el reloj antes de generar el ISO.
+
+- [ ] Elige un slot que se muestre a las **18:00 hora local**, confirma la reserva y verifica en el backend/BD que `Sesion.fecha_hora_inicio` corresponde exactamente a las 18:00 local (no a otra hora ni otro día).
+- [ ] Con un slot que tiene `sesion_existente_id` (sesión del calendario): el POST ya no debe rechazar con `horario_incongruente` ni `franja_ocupada` — antes el desfase hacía que el horario enviado no coincidiera con el de la sesión.
+- [ ] Con un slot sin `sesion_id` (el backend crea la sesión): la sesión creada debe quedar a la hora exacta que el cliente vio, no una hora desplazada.
+- [ ] Probado desde un navegador en un timezone distinto a UTC-6: la reserva aterriza en el mismo instante que el slot mostrado (el reloj se desplaza con el offset real del navegador y el sufijo usa ese mismo offset).
+
 ## Notas de Daniel (mobile) — 4 fixes 2026-07-31
 
 > Salieron de probar la app en pantallas chicas (375px/390px) y del flujo de invitar usuarios. Cada uno con su commit: `bafe3fa` (header), `531e56f` (modal común), `f00e990` (contraseña inicial), `3fe9190` (min-w-0 tablas).

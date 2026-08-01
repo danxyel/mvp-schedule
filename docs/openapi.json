@@ -4447,6 +4447,11 @@
             "type": "boolean",
             "title": "Pago Requerido"
           },
+          "requiere_confirmacion": {
+            "type": "boolean",
+            "title": "Requiere Confirmacion",
+            "default": false
+          },
           "visible_web": {
             "type": "boolean",
             "title": "Visible Web"

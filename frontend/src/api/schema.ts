@@ -483,9 +483,9 @@ export interface paths {
          *     Solo aplica a servicios con requiere_confirmacion=True: el cliente
          *     propone un horario dentro de esta franja y el staff valida la
          *     disponibilidad real del asesor al asignarlo. Para servicios con
-         *     confirmaciÃ³n automÃ¡tica NO aplica: su disponibilidad sale del horario
+         *     confirmación automática NO aplica: su disponibilidad sale del horario
          *     de cada asesor vinculado. Se responde 422 si el servicio no es de
-         *     confirmaciÃ³n manual.
+         *     confirmación manual.
          */
         post: operations["crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post"];
         delete?: never;
@@ -727,7 +727,7 @@ export interface components {
     schemas: {
         /**
          * AsesorPublicOut
-         * @description Datos de asesor visibles al pÃºblico. Sin email, sin comisiÃ³n, sin metadata.
+         * @description Datos de asesor visibles al público. Sin email, sin comisión, sin metadata.
          */
         AsesorPublicOut: {
             /** Id */
@@ -760,7 +760,7 @@ export interface components {
         AsignarAsesorIn: {
             /**
              * Asesor Id
-             * @description UsuarioTenant (rol asesor/admin) a asignar a la sesiÃ³n
+             * @description UsuarioTenant (rol asesor/admin) a asignar a la sesión
              */
             asesor_id: number;
         };
@@ -1006,7 +1006,7 @@ export interface components {
         PagoLocalIn: {
             /**
              * Metodo
-             * @description MÃ©todo de cobro presencial del staff
+             * @description Método de cobro presencial del staff
              * @default efectivo
              */
             metodo: string;
@@ -1080,7 +1080,7 @@ export interface components {
             fecha_hora_inicio: string;
             /**
              * Sesion Id
-             * @description ID de la sesiÃ³n existente a la que el cliente eligiÃ³ unirse. Si se omite, el sistema busca o crea una sesiÃ³n.
+             * @description ID de la sesión existente a la que el cliente eligió unirse. Si se omite, el sistema busca o crea una sesión.
              */
             sesion_id?: number | null;
             /**
@@ -1110,8 +1110,8 @@ export interface components {
          * ReservaCreateResponse
          * @description Respuesta del POST /reservas.
          *
-         *     v2.1 devolvÃ­a `SesionOut`, un nombre que nunca se importÃ³ en el router: el
-         *     endpoint lanzaba NameError DESPUÃS de haber creado la reserva y cobrado.
+         *     v2.1 devolvía `SesionOut`, un nombre que nunca se importó en el router: el
+         *     endpoint lanzaba NameError DESPUÉS de haber creado la reserva y cobrado.
          */
         ReservaCreateResponse: {
             reserva: components["schemas"]["ReservaOut"];
@@ -1122,7 +1122,7 @@ export interface components {
             sesion_asignada_id: number;
             /**
              * Sesion Creada
-             * @description True si se creÃ³ una sesiÃ³n nueva; False si el cliente se uniÃ³ a una existente.
+             * @description True si se creó una sesión nueva; False si el cliente se unió a una existente.
              */
             sesion_creada: boolean;
         };
@@ -1313,6 +1313,11 @@ export interface components {
             moneda: string;
             /** Pago Requerido */
             pago_requerido: boolean;
+            /**
+             * Requiere Confirmacion
+             * @default false
+             */
+            requiere_confirmacion: boolean;
             /** Visible Web */
             visible_web: boolean;
             /** Activo */
@@ -1330,7 +1335,7 @@ export interface components {
         };
         /**
          * ServicioAdminUpdate
-         * @description PATCH parcial. `activo` NO se edita aquÃ­: se usa activar/desactivar.
+         * @description PATCH parcial. `activo` NO se edita aquí: se usa activar/desactivar.
          */
         ServicioAdminUpdate: {
             /** Nombre */
@@ -1438,13 +1443,13 @@ export interface components {
         };
         /**
          * SesionDetailOut
-         * @description Detalle pÃºblico de una sesiÃ³n.
+         * @description Detalle público de una sesión.
          *
          *     ELIMINADO respecto de v2.1: la lista `reservas` con folio y estado de cada
-         *     inscrito, y `notas_internas`. El endpoint era anÃ³nimo y sesion_id es
-         *     autoincremental, asÃ­ que cualquiera podÃ­a iterar IDs, cosechar folios y
+         *     inscrito, y `notas_internas`. El endpoint era anónimo y sesion_id es
+         *     autoincremental, así que cualquiera podía iterar IDs, cosechar folios y
          *     consultar el historial de pago ajeno. Para la vista completa existe
-         *     SesionAdminOut, detrÃ¡s de autenticaciÃ³n con rol.
+         *     SesionAdminOut, detrás de autenticación con rol.
          */
         SesionDetailOut: {
             /** Id */
@@ -1546,7 +1551,7 @@ export interface components {
         /**
          * SolicitudCreate
          * @description El cliente propone una fecha/hora libre para un servicio con
-         *     `requiere_confirmacion=True`. No reserva nada todavÃ­a.
+         *     `requiere_confirmacion=True`. No reserva nada todavía.
          */
         SolicitudCreate: {
             /** Servicio Id */
@@ -1561,7 +1566,7 @@ export interface components {
         };
         /**
          * SolicitudOut
-         * @description Vista del cliente: sin datos de resoluciÃ³n internos.
+         * @description Vista del cliente: sin datos de resolución internos.
          */
         SolicitudOut: {
             /** Id */
@@ -2211,7 +2216,7 @@ export interface operations {
     listar_reservas_admin_api_v2__tenant_slug__admin_reservas_get: {
         parameters: {
             query?: {
-                /** @description Filtra por fecha de la sesiÃ³n. Default: hoy (omitir junto con estado para listar todas las fechas) */
+                /** @description Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas) */
                 fecha?: string | null;
                 /** @description Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas */
                 estado?: string | null;

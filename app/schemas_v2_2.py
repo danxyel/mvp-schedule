@@ -588,6 +588,7 @@ class ServicioAdminOut(BaseModel):
     precio: Optional[Decimal] = None
     moneda: str
     pago_requerido: bool
+    requiere_confirmacion: bool = False
     visible_web: bool
     activo: bool
     creado_en: datetime

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import HorarioServicio from './HorarioServicio'
+import CrearSerieModal from './CrearSerieModal'
 const TIPO_BADGE = {
   individual: 'border-blue-200 bg-blue-100 text-blue-700',
   grupal: 'border-purple-200 bg-purple-100 text-purple-700',
@@ -116,6 +117,7 @@ export default function GestionServicios({ tenantSlug, token }) {
   const [horarioDe, setHorarioDe] = useState(null)
   const [franjasNuevas, setFranjasNuevas] = useState([])
   const [form, setForm] = useState(FORM_VACIO)
+  const [serieDe, setSerieDe] = useState(null)
 
   const fetchServicios = useCallback(async () => {
     setLoading(true)
@@ -443,6 +445,15 @@ export default function GestionServicios({ tenantSlug, token }) {
                   className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
                 >
                   Horario
+                </button>
+              )}
+              {s.tipo_agenda === 'recurrente' && (
+                <button
+                  type="button"
+                  onClick={() => setSerieDe(s)}
+                  className="rounded-lg border border-orange-200 px-2.5 py-1 text-xs font-medium text-orange-700 transition hover:bg-orange-50"
+                >
+                  Crear Serie
                 </button>
               )}
               <button
@@ -1115,6 +1126,17 @@ export default function GestionServicios({ tenantSlug, token }) {
           tenantSlug={tenantSlug}
           token={token}
           onClose={() => setHorarioDe(null)}
+        />
+      )}
+
+      {serieDe && (
+        <CrearSerieModal
+          servicio={serieDe}
+          onClose={() => setSerieDe(null)}
+          onCreado={(serie) => {
+            console.log('Serie creada:', serie)
+            // Opcional: refrescar la lista de servicios o mostrar notificación
+          }}
         />
       )}
     </div>

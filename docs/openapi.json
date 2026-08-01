@@ -1302,6 +1302,258 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/series": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Serie Admin",
+        "description": "Crea una serie de reservas recurrentes.",
+        "operationId": "crear_serie_admin_api_v2__tenant_slug__admin_series_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SerieReservaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SerieReservaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Series Admin",
+        "description": "Lista todas las series de reservas del tenant.",
+        "operationId": "listar_series_admin_api_v2__tenant_slug__admin_series_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EstadoSerie"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por estado",
+              "title": "Estado"
+            },
+            "description": "Filtrar por estado"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SerieReservaOut"
+                  },
+                  "title": "Response Listar Series Admin Api V2  Tenant Slug  Admin Series Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Detalle Serie Admin",
+        "description": "Detalle de una serie de reservas.",
+        "operationId": "detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SerieReservaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/reservas/serie/{serie_id}/pago-local": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Registrar Pago Serie Local",
+        "description": "Registra el pago de un paquete completo.\nMarca estado_pago=COMPLETADO en TODAS las reservas de la serie a la vez.",
+        "operationId": "registrar_pago_serie_local_api_v2__tenant_slug__admin_reservas_serie__serie_id__pago_local_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoLocalIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/servicios": {
       "get": {
         "tags": [
@@ -3613,6 +3865,24 @@
         ],
         "title": "EstadoReservaEnum"
       },
+      "EstadoSerie": {
+        "type": "string",
+        "enum": [
+          "activa",
+          "completada",
+          "cancelada"
+        ],
+        "title": "EstadoSerie"
+      },
+      "EstadoSerieEnum": {
+        "type": "string",
+        "enum": [
+          "activa",
+          "completada",
+          "cancelada"
+        ],
+        "title": "EstadoSerieEnum"
+      },
       "EstadoSesionEnum": {
         "type": "string",
         "enum": [
@@ -3706,6 +3976,14 @@
           "registro"
         ],
         "title": "MetodoPagoEnum"
+      },
+      "ModalidadCobroEnum": {
+        "type": "string",
+        "enum": [
+          "sesion",
+          "paquete"
+        ],
+        "title": "ModalidadCobroEnum"
       },
       "ModalidadEnum": {
         "type": "string",
@@ -4282,6 +4560,27 @@
             ],
             "title": "Notas Cliente"
           },
+          "serie_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serie Id"
+          },
+          "modalidad_cobro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalidadCobroEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -4531,6 +4830,284 @@
           "timezone"
         ],
         "title": "SedeOut"
+      },
+      "SerieReservaCreate": {
+        "properties": {
+          "servicio_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Servicio Id"
+          },
+          "cliente_usuario_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cliente Usuario Id"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "frecuencia": {
+            "type": "string",
+            "pattern": "^(semanal|quincenal|mensual)$",
+            "title": "Frecuencia"
+          },
+          "dia_semana": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Duracion Minutos",
+            "default": 60
+          },
+          "num_repeticiones": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Num Repeticiones",
+            "default": 1
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Inicio"
+          },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado",
+            "default": true
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado",
+            "default": false
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
+          "modalidad_cobro": {
+            "$ref": "#/components/schemas/ModalidadCobroEnum",
+            "default": "sesion"
+          },
+          "metodo_pago": {
+            "$ref": "#/components/schemas/MetodoPagoEnum",
+            "default": "local"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "servicio_id",
+          "cliente_usuario_id",
+          "frecuencia",
+          "hora_inicio",
+          "fecha_inicio"
+        ],
+        "title": "SerieReservaCreate",
+        "description": "Crear una serie de reservas recurrentes."
+      },
+      "SerieReservaOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "cliente_usuario_id": {
+            "type": "integer",
+            "title": "Cliente Usuario Id"
+          },
+          "nombre_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Cliente"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "nombre_asesor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Asesor"
+          },
+          "frecuencia": {
+            "type": "string",
+            "title": "Frecuencia"
+          },
+          "dia_semana": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "title": "Duracion Minutos"
+          },
+          "num_repeticiones": {
+            "type": "integer",
+            "title": "Num Repeticiones"
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Inicio"
+          },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado"
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSerieEnum"
+          },
+          "num_reservas_creadas": {
+            "type": "integer",
+            "title": "Num Reservas Creadas",
+            "default": 0
+          },
+          "num_reservas_omitidas": {
+            "type": "integer",
+            "title": "Num Reservas Omitidas",
+            "default": 0
+          },
+          "fechas_omitidas": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechas Omitidas"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Actualizado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "servicio_id",
+          "cliente_usuario_id",
+          "frecuencia",
+          "hora_inicio",
+          "duracion_minutos",
+          "num_repeticiones",
+          "fecha_inicio",
+          "cobro_por_sesion_habilitado",
+          "cobro_por_paquete_habilitado",
+          "estado",
+          "creado_en",
+          "actualizado_en"
+        ],
+        "title": "SerieReservaOut",
+        "description": "Vista de una serie de reservas."
       },
       "ServicioAdminIn": {
         "properties": {
@@ -6109,6 +6686,11 @@
             "type": "integer",
             "title": "Max Reservas Mes"
           },
+          "max_reservas_serie": {
+            "type": "integer",
+            "title": "Max Reservas Serie",
+            "default": 20
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -6211,6 +6793,13 @@
             "minimum": 1.0,
             "title": "Max Reservas Mes",
             "default": 1000
+          },
+          "max_reservas_serie": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Reservas Serie",
+            "default": 20
           }
         },
         "type": "object",
@@ -6384,6 +6973,19 @@
               }
             ],
             "title": "Max Reservas Mes"
+          },
+          "max_reservas_serie": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Reservas Serie"
           },
           "smtp_config": {
             "anyOf": [

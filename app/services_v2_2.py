@@ -27,13 +27,14 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sede, Servicio, Sesion, Reserva,
     SolicitudReserva, EstadoSolicitud,
+    SerieReserva, ModalidadCobro, EstadoSerie,
     HorarioDisponibilidad, HorarioBloqueo, Bitacora, AsesorServicio,
     CampoFormulario, RespuestaFormulario,
     EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
     TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad,
     ESTADOS_OCUPAN_CUPO, ESTADOS_SESION_ACTIVA, utcnow,
 )
-from app.schemas_v2_2 import ReservaCreate, SolicitudCreate, CheckoutUrlOut
+from app.schemas_v2_2 import ReservaCreate, SolicitudCreate, SerieReservaCreate, CheckoutUrlOut
 
 log = logging.getLogger(__name__)
 
@@ -1002,6 +1003,224 @@ def crear_solicitud_reserva(
         ip=ip, user_agent=user_agent,
     )
     return solicitud
+
+
+# ============================================================
+# SERIES DE RESERVAS — reservas recurrentes (Sprint 2 #11)
+# ============================================================
+def generar_fechas_recurrencia(
+    fecha_inicio: date,
+    dia_semana: Optional[int],
+    frecuencia: str,
+    num_repeticiones: int,
+) -> List[date]:
+    """Genera lista de fechas según patrón de recurrencia.
+    
+    Args:
+        fecha_inicio: Fecha de inicio de la serie
+        dia_semana: Día de la semana (0=lunes, 6=domingo). Si es None, usa fecha_inicio
+        frecuencia: "semanal", "quincenal", o "mensual"
+        num_repeticiones: Número de fechas a generar
+    
+    Returns:
+        Lista de fechas ordenadas
+    """
+    from datetime import timedelta
+
+    fechas = []
+    
+    # Si dia_semana está definido, ajustar fecha_inicio a ese día
+    if dia_semana is not None:
+        dias_hasta = (dia_semana - fecha_inicio.weekday()) % 7
+        # Si la fecha_inicio ya es el día correcto, usarla; sino avanzar al siguiente
+        if dias_hasta > 0 or fecha_inicio.weekday() != dia_semana:
+            fecha_inicio = fecha_inicio + timedelta(days=dias_hasta)
+    
+    fecha_actual = fecha_inicio
+
+    for _ in range(num_repeticiones):
+        fechas.append(fecha_actual)
+
+        # Avanzar según frecuencia
+        if frecuencia == "semanal":
+            fecha_actual = fecha_actual + timedelta(weeks=1)
+        elif frecuencia == "quincenal":
+            fecha_actual = fecha_actual + timedelta(weeks=2)
+        elif frecuencia == "mensual":
+            # Avanzar un mes (manejar cambio de mes)
+            mes_siguiente = fecha_actual.month + 1
+            anio = fecha_actual.year
+            if mes_siguiente > 12:
+                mes_siguiente = 1
+                anio += 1
+            try:
+                fecha_actual = fecha_actual.replace(year=anio, month=mes_siguiente)
+            except ValueError:
+                # Si el día no existe en el mes siguiente (ej. 31 -> febrero)
+                # usar el último día del mes
+                import calendar
+                ultimo_dia = calendar.monthrange(anio, mes_siguiente)[1]
+                fecha_actual = fecha_actual.replace(year=anio, month=mes_siguiente, day=ultimo_dia)
+
+    return fechas
+
+
+def crear_serie_reservas(
+    db: Session,
+    tenant: Tenant,
+    payload: SerieReservaCreate,
+    usuario: Usuario,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> SerieReserva:
+    """
+    Crea una serie de reservas recurrentes.
+    Genera N reservas independientes usando crear_reserva() para cada fecha.
+    Si una fecha falla (asesor ocupado, cupo lleno), se salta y continúa.
+    """
+    from datetime import datetime as dt, timedelta
+    from app.schemas_v2_2 import ReservaCreate
+
+    tenant_id = tenant.id
+
+    # Validar que el número de repeticiones no exceda el límite del tenant
+    if payload.num_repeticiones > tenant.max_reservas_serie:
+        raise ReservaError(
+            f"El número de repeticiones ({payload.num_repeticiones}) excede el máximo permitido ({tenant.max_reservas_serie})",
+            codigo="serie_demasiado_larga",
+        )
+
+    # Validar servicio
+    servicio = db.execute(
+        select(Servicio).where(
+            Servicio.tenant_id == tenant_id,
+            Servicio.id == payload.servicio_id,
+            Servicio.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
+
+    # Validar cliente
+    cliente = db.get(Usuario, payload.cliente_usuario_id)
+    if cliente is None:
+        raise ReservaError("Cliente no encontrado", codigo="cliente_no_encontrado")
+
+    # Validar asesor si se proporciona
+    if payload.asesor_id:
+        asesor = db.execute(
+            select(UsuarioTenant).where(
+                UsuarioTenant.tenant_id == tenant_id,
+                UsuarioTenant.id == payload.asesor_id,
+                UsuarioTenant.activo.is_(True),
+            )
+        ).scalar_one_or_none()
+        if asesor is None:
+            raise ReservaError("Asesor no encontrado o inactivo", codigo="asesor_no_encontrado")
+
+    # Convertir fecha_inicio a date
+    fecha_inicio_date = payload.fecha_inicio.date() if isinstance(payload.fecha_inicio, dt) else payload.fecha_inicio
+
+    # Crear la serie
+    serie = SerieReserva(
+        tenant_id=tenant_id,
+        servicio_id=payload.servicio_id,
+        cliente_usuario_id=payload.cliente_usuario_id,
+        asesor_id=payload.asesor_id,
+        frecuencia=payload.frecuencia,
+        dia_semana=payload.dia_semana,
+        hora_inicio=payload.hora_inicio,
+        duracion_minutos=payload.duracion_minutos,
+        num_repeticiones=payload.num_repeticiones,
+        fecha_inicio=fecha_inicio_date,
+        cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
+        cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
+        precio_paquete=payload.precio_paquete,
+    )
+    db.add(serie)
+    db.flush()
+
+    # Generar fechas
+    fechas = generar_fechas_recurrencia(
+        fecha_inicio=fecha_inicio_date,
+        dia_semana=payload.dia_semana,
+        frecuencia=payload.frecuencia,
+        num_repeticiones=payload.num_repeticiones,
+    )
+
+    # Crear reservas para cada fecha
+    reservas_creadas = []
+    fechas_omitidas = []
+
+    for fecha in fechas:
+        try:
+            # Construir datetime con hora
+            fecha_hora = dt.combine(fecha, payload.hora_inicio, tzinfo=timezone.utc)
+
+            # Construir payload para crear_reserva()
+            reserva_payload = ReservaCreate(
+                servicio_id=payload.servicio_id,
+                fecha_hora_inicio=fecha_hora,
+                asesor_id=payload.asesor_id,
+                metodo_pago=MetodoPago(payload.metodo_pago.value),
+                canal=Canal.ADMIN,
+            )
+
+            # Crear reserva reutilizando crear_reserva()
+            resultado = crear_reserva(db, tenant, reserva_payload, cliente, ip=ip, user_agent=user_agent)
+            reserva = resultado["reserva"]
+
+            # Marcar como parte de la serie
+            reserva.serie_id = serie.id
+            reserva.modalidad_cobro = payload.modalidad_cobro.value
+
+            # NOTA: Si es paquete, estado_pago se mantiene en PENDIENTE.
+            # El pago del paquete completo se registra después con el endpoint
+            # POST /admin/reservas/serie/{serie_id}/pago-local, que marca
+            # COMPLETADO en todas las reservas de la serie a la vez.
+
+            reservas_creadas.append(reserva)
+
+        except ReservaError as e:
+            # Fecha conflictiva: saltar y continuar
+            fechas_omitidas.append({
+                "fecha": fecha.isoformat(),
+                "razon": e.mensaje,
+                "codigo": e.codigo,
+            })
+            continue
+        except IntegrityError as e:
+            # Conflicto de base de datos (ej. reserva duplicada)
+            fechas_omitidas.append({
+                "fecha": fecha.isoformat(),
+                "razon": "Conflicto de base de datos",
+                "codigo": "conflicto_db",
+            })
+            continue
+        except StaleDataError:
+            # Conflicto de concurrencia
+            fechas_omitidas.append({
+                "fecha": fecha.isoformat(),
+                "razon": "Conflicto de concurrencia",
+                "codigo": "conflicto_concurrencia",
+            })
+            continue
+
+    # Registrar bitácora
+    registrar_bitacora(
+        db, tenant_id, "serie_reserva", serie.id, "serie_reserva_creada",
+        usuario_id=usuario.id,
+        detalles={
+            "servicio_id": servicio.id,
+            "num_repeticiones": payload.num_repeticiones,
+            "num_reservas_creadas": len(reservas_creadas),
+            "num_reservas_omitidas": len(fechas_omitidas),
+            "modalidad_cobro": payload.modalidad_cobro.value,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+
+    return serie
 
 
 # ============================================================

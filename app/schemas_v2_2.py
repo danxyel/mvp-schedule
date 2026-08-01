@@ -80,6 +80,17 @@ class EstadoSolicitudEnum(str, Enum):
     CANCELADA = "cancelada"
 
 
+class ModalidadCobroEnum(str, Enum):
+    SESION = "sesion"
+    PAQUETE = "paquete"
+
+
+class EstadoSerieEnum(str, Enum):
+    ACTIVA = "activa"
+    COMPLETADA = "completada"
+    CANCELADA = "cancelada"
+
+
 # ============================================================
 # HELPERS DE TIMEZONE
 # ============================================================
@@ -333,6 +344,8 @@ class ReservaOut(BaseModel):
     asesor: Optional[AsesorPublicOut] = None
     hold_expira_en: Optional[datetime] = None
     notas_cliente: Optional[str] = None
+    serie_id: Optional[int] = None
+    modalidad_cobro: Optional[ModalidadCobroEnum] = None
     creado_en: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -460,6 +473,88 @@ class SolicitudRechazarIn(BaseModel):
 
 
 # ============================================================
+# SERIES DE RESERVAS — reservas recurrentes
+# ============================================================
+class SerieReservaCreate(BaseModel):
+    """Crear una serie de reservas recurrentes."""
+    servicio_id: int = Field(..., gt=0)
+    cliente_usuario_id: int = Field(..., gt=0)
+    asesor_id: Optional[int] = Field(default=None, gt=0)
+
+    # Patrón de recurrencia
+    frecuencia: str = Field(..., pattern=r"^(semanal|quincenal|mensual)$")
+    dia_semana: Optional[int] = Field(default=None, ge=0, le=6)
+    hora_inicio: time
+    duracion_minutos: int = Field(default=60, gt=0)
+    num_repeticiones: int = Field(default=1, ge=1, le=50)
+    fecha_inicio: datetime
+
+    # Modalidades de cobro
+    cobro_por_sesion_habilitado: bool = Field(default=True)
+    cobro_por_paquete_habilitado: bool = Field(default=False)
+    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
+    modalidad_cobro: ModalidadCobroEnum = Field(default=ModalidadCobroEnum.SESION)
+    
+    # Método de pago (online/local/registro)
+    metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
+
+    @field_validator("fecha_inicio")
+    @classmethod
+    def validar_fecha_inicio(cls, v: datetime) -> datetime:
+        v = exigir_aware(v, "fecha_inicio")
+        return v
+
+    @model_validator(mode="after")
+    def validar_modalidades(self):
+        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
+            raise ValueError("Debe habilitar al menos una modalidad de cobro")
+        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
+            raise ValueError("precio_paquete es obligatorio cuando cobro_por_paquete_habilitado=True")
+        if self.modalidad_cobro == ModalidadCobroEnum.PAQUETE and not self.cobro_por_paquete_habilitado:
+            raise ValueError("No puede seleccionar modalidad 'paquete' si no está habilitada")
+        if self.modalidad_cobro == ModalidadCobroEnum.SESION and not self.cobro_por_sesion_habilitado:
+            raise ValueError("No puede seleccionar modalidad 'sesion' si no está habilitada")
+        return self
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SerieReservaOut(BaseModel):
+    """Vista de una serie de reservas."""
+    id: int
+    servicio_id: int
+    servicio_nombre: Optional[str] = None
+    cliente_usuario_id: int
+    nombre_cliente: Optional[str] = None
+    asesor_id: Optional[int] = None
+    nombre_asesor: Optional[str] = None
+
+    # Patrón de recurrencia
+    frecuencia: str
+    dia_semana: Optional[int] = None
+    hora_inicio: time
+    duracion_minutos: int
+    num_repeticiones: int
+    fecha_inicio: datetime
+
+    # Modalidades de cobro
+    cobro_por_sesion_habilitado: bool
+    cobro_por_paquete_habilitado: bool
+    precio_paquete: Optional[Decimal] = None
+
+    # Estado
+    estado: EstadoSerieEnum
+    num_reservas_creadas: int = 0
+    num_reservas_omitidas: int = 0
+    fechas_omitidas: Optional[List[Dict[str, Any]]] = None
+
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================
 # SUPERADMIN — TENANTS
 # ============================================================
 class TenantCreate(BaseModel):
@@ -472,6 +567,7 @@ class TenantCreate(BaseModel):
     max_servicios: int = Field(10, ge=1)
     max_clientes: int = Field(500, ge=1)
     max_reservas_mes: int = Field(1000, ge=1)
+    max_reservas_serie: int = Field(20, ge=1, le=50)
 
 
 class TenantAdminOut(BaseModel):
@@ -486,6 +582,7 @@ class TenantAdminOut(BaseModel):
     max_servicios: int
     max_clientes: int
     max_reservas_mes: int
+    max_reservas_serie: int = 20
     creado_en: datetime
     total_usuarios: int = 0
     smtp_configurado: bool = False
@@ -505,6 +602,7 @@ class TenantUpdate(BaseModel):
     max_servicios: Optional[int] = Field(None, ge=1)
     max_clientes: Optional[int] = Field(None, ge=1)
     max_reservas_mes: Optional[int] = Field(None, ge=1)
+    max_reservas_serie: Optional[int] = Field(None, ge=1, le=50)
     smtp_config: Optional[dict] = None
 
 

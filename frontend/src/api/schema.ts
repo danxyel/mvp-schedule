@@ -367,6 +367,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Series Admin
+         * @description Lista todas las series de reservas del tenant.
+         */
+        get: operations["listar_series_admin_api_v2__tenant_slug__admin_series_get"];
+        put?: never;
+        /**
+         * Crear Serie Admin
+         * @description Crea una serie de reservas recurrentes.
+         */
+        post: operations["crear_serie_admin_api_v2__tenant_slug__admin_series_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle Serie Admin
+         * @description Detalle de una serie de reservas.
+         */
+        get: operations["detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/reservas/serie/{serie_id}/pago-local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar Pago Serie Local
+         * @description Registra el pago de un paquete completo.
+         *     Marca estado_pago=COMPLETADO en TODAS las reservas de la serie a la vez.
+         */
+        post: operations["registrar_pago_serie_local_api_v2__tenant_slug__admin_reservas_serie__serie_id__pago_local_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/servicios": {
         parameters: {
             query?: never;
@@ -993,6 +1058,16 @@ export interface components {
          */
         EstadoReservaEnum: "pendiente" | "en_espera" | "confirmada" | "cancelada" | "no_show" | "completada";
         /**
+         * EstadoSerie
+         * @enum {string}
+         */
+        EstadoSerie: "activa" | "completada" | "cancelada";
+        /**
+         * EstadoSerieEnum
+         * @enum {string}
+         */
+        EstadoSerieEnum: "activa" | "completada" | "cancelada";
+        /**
          * EstadoSesionEnum
          * @enum {string}
          */
@@ -1041,6 +1116,11 @@ export interface components {
          * @enum {string}
          */
         MetodoPagoEnum: "online" | "local" | "registro";
+        /**
+         * ModalidadCobroEnum
+         * @enum {string}
+         */
+        ModalidadCobroEnum: "sesion" | "paquete";
         /**
          * ModalidadEnum
          * @enum {string}
@@ -1234,6 +1314,9 @@ export interface components {
             hold_expira_en?: string | null;
             /** Notas Cliente */
             notas_cliente?: string | null;
+            /** Serie Id */
+            serie_id?: number | null;
+            modalidad_cobro?: components["schemas"]["ModalidadCobroEnum"] | null;
             /**
              * Creado En
              * Format: date-time
@@ -1322,6 +1405,125 @@ export interface components {
             telefono?: string | null;
             /** Timezone */
             timezone: string;
+        };
+        /**
+         * SerieReservaCreate
+         * @description Crear una serie de reservas recurrentes.
+         */
+        SerieReservaCreate: {
+            /** Servicio Id */
+            servicio_id: number;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /**
+             * Duracion Minutos
+             * @default 60
+             */
+            duracion_minutos: number;
+            /**
+             * Num Repeticiones
+             * @default 1
+             */
+            num_repeticiones: number;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+            /**
+             * Cobro Por Sesion Habilitado
+             * @default true
+             */
+            cobro_por_sesion_habilitado: boolean;
+            /**
+             * Cobro Por Paquete Habilitado
+             * @default false
+             */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
+            /** @default sesion */
+            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
+            /** @default local */
+            metodo_pago: components["schemas"]["MetodoPagoEnum"];
+        };
+        /**
+         * SerieReservaOut
+         * @description Vista de una serie de reservas.
+         */
+        SerieReservaOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Nombre Asesor */
+            nombre_asesor?: string | null;
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Num Repeticiones */
+            num_repeticiones: number;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+            /** Cobro Por Sesion Habilitado */
+            cobro_por_sesion_habilitado: boolean;
+            /** Cobro Por Paquete Habilitado */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: string | null;
+            estado: components["schemas"]["EstadoSerieEnum"];
+            /**
+             * Num Reservas Creadas
+             * @default 0
+             */
+            num_reservas_creadas: number;
+            /**
+             * Num Reservas Omitidas
+             * @default 0
+             */
+            num_reservas_omitidas: number;
+            /** Fechas Omitidas */
+            fechas_omitidas?: Record<string, never>[] | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Actualizado En
+             * Format: date-time
+             */
+            actualizado_en: string;
         };
         /** ServicioAdminIn */
         ServicioAdminIn: {
@@ -1834,6 +2036,11 @@ export interface components {
             /** Max Reservas Mes */
             max_reservas_mes: number;
             /**
+             * Max Reservas Serie
+             * @default 20
+             */
+            max_reservas_serie: number;
+            /**
              * Creado En
              * Format: date-time
              */
@@ -1892,6 +2099,11 @@ export interface components {
              * @default 1000
              */
             max_reservas_mes: number;
+            /**
+             * Max Reservas Serie
+             * @default 20
+             */
+            max_reservas_serie: number;
         };
         /** TenantPublicOut */
         TenantPublicOut: {
@@ -1928,6 +2140,8 @@ export interface components {
             max_clientes?: number | null;
             /** Max Reservas Mes */
             max_reservas_mes?: number | null;
+            /** Max Reservas Serie */
+            max_reservas_serie?: number | null;
             /** Smtp Config */
             smtp_config?: Record<string, never> | null;
         };
@@ -2659,6 +2873,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SolicitudAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_series_admin_api_v2__tenant_slug__admin_series_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por estado */
+                estado?: components["schemas"]["EstadoSerie"] | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_serie_admin_api_v2__tenant_slug__admin_series_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SerieReservaCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    registrar_pago_serie_local_api_v2__tenant_slug__admin_reservas_serie__serie_id__pago_local_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagoLocalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
                 };
             };
             /** @description Validation Error */

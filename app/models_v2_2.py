@@ -148,6 +148,14 @@ class CreadoPorTipo(str, PyEnum):
     ADMIN = "admin"; ALUMNO = "alumno"; SISTEMA = "sistema"
 
 
+class ModalidadCobro(str, PyEnum):
+    SESION = "sesion"; PAQUETE = "paquete"
+
+
+class EstadoSerie(str, PyEnum):
+    ACTIVA = "activa"; COMPLETADA = "completada"; CANCELADA = "cancelada"
+
+
 class EstadoSolicitud(str, PyEnum):
     PENDIENTE = "pendiente"
     ACEPTADA = "aceptada"
@@ -227,6 +235,7 @@ class Tenant(Base):
     max_servicios: Mapped[int] = mapped_column(default=10)
     max_clientes: Mapped[int] = mapped_column(default=500)
     max_reservas_mes: Mapped[int] = mapped_column(default=1000)
+    max_reservas_serie: Mapped[int] = mapped_column(default=20)
     config_json: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'::json"))
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -491,6 +500,8 @@ class Reserva(Base, TenantScopedMixin):
     motivo_cancelacion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     checked_in: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    serie_id: Mapped[Optional[int]] = mapped_column(ForeignKey("series_reservas.id", ondelete="SET NULL"), nullable=True)
+    modalidad_cobro: Mapped[Optional[ModalidadCobro]] = mapped_column(SQLEnum(ModalidadCobro), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -530,6 +541,7 @@ class Reserva(Base, TenantScopedMixin):
     servicio: Mapped["Servicio"] = relationship()
     creado_por: Mapped["Usuario"] = relationship(foreign_keys=[creado_por_usuario_id], back_populates="reservas_creadas")
     beneficiario: Mapped[Optional["Beneficiario"]] = relationship(back_populates="reservas")
+    serie: Mapped[Optional["SerieReserva"]] = relationship(back_populates="reservas")
     respuestas_formulario: Mapped[List["RespuestaFormulario"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
     integrantes: Mapped[List["ReservaIntegrante"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
 
@@ -559,6 +571,53 @@ class SolicitudReserva(Base, TenantScopedMixin):
         Index("idx_solicitudes_estado", "tenant_id", "estado"),
         Index("idx_solicitudes_cliente", "tenant_id", "cliente_usuario_id", "creado_en"),
     )
+
+
+# ============================================================
+# 7c. SERIE DE RESERVAS — reservas recurrentes (Sprint 2 #11)
+# Agrupa múltiples reservas independientes con el mismo patrón.
+# Cada reserva mantiene su ciclo de vida individual.
+# ============================================================
+class SerieReserva(Base, TenantScopedMixin):
+    __tablename__ = "series_reservas"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    servicio_id: Mapped[int] = mapped_column(ForeignKey("servicios.id", ondelete="RESTRICT"))
+    cliente_usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    asesor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
+
+    # Patrón de recurrencia
+    frecuencia: Mapped[str] = mapped_column(String(20))  # "semanal", "quincenal", "mensual"
+    dia_semana: Mapped[Optional[int]] = mapped_column(nullable=True)  # 0=lunes, 6=domingo
+    hora_inicio: Mapped[time] = mapped_column(Time)
+    duracion_minutos: Mapped[int] = mapped_column(default=60)
+    num_repeticiones: Mapped[int] = mapped_column(default=1)
+    fecha_inicio: Mapped[date] = mapped_column(Date)
+
+    # Modalidades de cobro habilitadas por admin
+    cobro_por_sesion_habilitado: Mapped[bool] = mapped_column(default=True)
+    cobro_por_paquete_habilitado: Mapped[bool] = mapped_column(default=False)
+    precio_paquete: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+
+    # Estado
+    estado: Mapped[EstadoSerie] = mapped_column(SQLEnum(EstadoSerie), default=EstadoSerie.ACTIVA)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        CheckConstraint("num_repeticiones >= 1", name="ck_serie_repeticiones_minimo"),
+        CheckConstraint("num_repeticiones <= 50", name="ck_serie_repeticiones_maximo"),
+        CheckConstraint("dia_semana IS NULL OR (dia_semana >= 0 AND dia_semana <= 6)", name="ck_serie_dia_semana_rango"),
+        CheckConstraint("duracion_minutos > 0", name="ck_serie_duracion_positiva"),
+        CheckConstraint("precio_paquete IS NULL OR precio_paquete >= 0", name="ck_serie_precio_no_negativo"),
+        Index("idx_series_cliente", "tenant_id", "cliente_usuario_id"),
+        Index("idx_series_estado", "tenant_id", "estado"),
+    )
+
+    tenant: Mapped["Tenant"] = relationship()
+    servicio: Mapped["Servicio"] = relationship()
+    cliente: Mapped["Usuario"] = relationship()
+    asesor: Mapped[Optional["UsuarioTenant"]] = relationship()
+    reservas: Mapped[List["Reserva"]] = relationship(back_populates="serie")
 
 
 # ============================================================

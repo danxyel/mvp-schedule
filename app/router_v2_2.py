@@ -21,9 +21,9 @@ from app.dependencies import (
 )
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
-    SolicitudReserva,
+    SolicitudReserva, SerieReserva, Bitacora,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
-    EstadoSolicitud, ESTADOS_SESION_ACTIVA, PlanTenant,
+    EstadoSolicitud, EstadoSerie, ModalidadCobro, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
     TipoBloqueo, utcnow,
 )
@@ -36,6 +36,7 @@ from app.schemas_v2_2 import (
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
     SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudRechazarIn, CanalEnum,
+    SerieReservaCreate, SerieReservaOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -1196,6 +1197,231 @@ def rechazar_solicitud_admin(
 
     db.refresh(solicitud)
     return _solicitud_admin_out(db, solicitud)
+
+
+# ============================================================
+# ADMIN — SERIES DE RESERVAS (reservas recurrentes)
+# ============================================================
+@router.post("/admin/series", response_model=SerieReservaOut, status_code=status.HTTP_201_CREATED)
+def crear_serie_admin(
+    payload: SerieReservaCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Crea una serie de reservas recurrentes."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        serie = svc.crear_serie_reservas(
+            db, tenant, payload, staff.usuario, ip=ip, user_agent=ua
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al crear serie de reservas")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(serie)
+    return _serie_admin_out(db, serie)
+
+
+@router.get("/admin/series", response_model=List[SerieReservaOut])
+def listar_series_admin(
+    estado: Optional[EstadoSerie] = Query(None, description="Filtrar por estado"),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    """Lista todas las series de reservas del tenant."""
+    cond = [SerieReserva.tenant_id == tenant.id]
+    if estado is not None:
+        cond.append(SerieReserva.estado == estado)
+
+    filas = db.execute(
+        select(SerieReserva)
+        .where(*cond)
+        .order_by(SerieReserva.creado_en.desc())
+    ).scalars().all()
+
+    return [_serie_admin_out(db, s) for s in filas]
+
+
+@router.get("/admin/series/{serie_id}", response_model=SerieReservaOut)
+def detalle_serie_admin(
+    serie_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    """Detalle de una serie de reservas."""
+    serie = db.execute(
+        select(SerieReserva).where(
+            SerieReserva.tenant_id == tenant.id,
+            SerieReserva.id == serie_id,
+        )
+    ).scalar_one_or_none()
+
+    if serie is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "serie_no_encontrada", "mensaje": "Serie no encontrada"},
+        )
+
+    return _serie_admin_out(db, serie)
+
+
+@router.post("/admin/reservas/serie/{serie_id}/pago-local", response_model=OperacionOut)
+def registrar_pago_serie_local(
+    payload: PagoLocalIn,
+    serie_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """
+    Registra el pago de un paquete completo.
+    Marca estado_pago=COMPLETADO en TODAS las reservas de la serie a la vez.
+    """
+    serie = db.execute(
+        select(SerieReserva).where(
+            SerieReserva.tenant_id == tenant.id,
+            SerieReserva.id == serie_id,
+        )
+    ).scalar_one_or_none()
+
+    if serie is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "serie_no_encontrada", "mensaje": "Serie no encontrada"},
+        )
+
+    # Obtener todas las reservas de la serie
+    reservas = db.execute(
+        select(Reserva).where(
+            Reserva.tenant_id == tenant.id,
+            Reserva.serie_id == serie_id,
+            Reserva.estado != EstadoReserva.CANCELADA,
+        )
+    ).scalars().all()
+
+    if not reservas:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "sin_reservas_activas", "mensaje": "No hay reservas activas en esta serie"},
+        )
+
+    # Validar que al menos una reserva tenga estado_pago pendiente
+    pendientes = [r for r in reservas if r.estado_pago == EstadoPagoReserva.PENDIENTE]
+    if not pendientes:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "ya_pagado", "mensaje": "Todas las reservas ya tienen el pago registrado"},
+        )
+
+    # Registrar pago en todas las reservas pendientes
+    for reserva in pendientes:
+        reserva.estado_pago = EstadoPagoReserva.COMPLETADO
+        reserva.pagado_en = utcnow()
+        reserva.metodo_pago_usado = MetodoPagoUsado(payload.metodo)
+
+        # Si es paquete, distribuir el monto entre las reservas
+        if payload.monto is not None and len(pendientes) > 0:
+            monto_por_reserva = payload.monto / len(pendientes)
+            reserva.precio_final = monto_por_reserva
+
+        # Confirmar reservas que estaban en_espera
+        if reserva.estado == EstadoReserva.EN_ESPERA:
+            reserva.estado = EstadoReserva.CONFIRMADA
+
+        svc.actualizar_estado_sesion(db, reserva.sesion_id, tenant.id)
+
+    # Registrar bitácora
+    svc.registrar_bitacora(
+        db, tenant.id, "serie", serie_id, "pago_serie",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "serie_id": serie_id,
+            "num_reservas": len(pendientes),
+            "metodo": payload.metodo,
+            "monto_total": str(payload.monto) if payload.monto else None,
+        },
+    )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al registrar pago de serie %s", serie_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    return OperacionOut(
+        ok=True,
+        mensaje=f"Pago registrado para {len(pendientes)} reservas de la serie",
+        detalle={"serie_id": serie_id, "num_reservas": len(pendientes)},
+    )
+
+
+def _serie_admin_out(db: Session, serie: SerieReserva) -> SerieReservaOut:
+    """Construye la salida de una serie con datos enriquecidos."""
+    servicio = db.get(Servicio, serie.servicio_id)
+    cliente = db.get(Usuario, serie.cliente_usuario_id)
+    asesor = db.get(UsuarioTenant, serie.asesor_id) if serie.asesor_id else None
+
+    # Contar reservas creadas y omitidas
+    reservas = db.execute(
+        select(Reserva).where(
+            Reserva.tenant_id == serie.tenant_id,
+            Reserva.serie_id == serie.id,
+        )
+    ).scalars().all()
+
+    num_creadas = len(reservas)
+    num_omitidas = serie.num_repeticiones - num_creadas
+
+    # Obtener fechas omitidas de la bitácora (si existe)
+    fechas_omitidas = None
+    bitacora = db.execute(
+        select(Bitacora).where(
+            Bitacora.tenant_id == serie.tenant_id,
+            Bitacora.entidad_tipo == "serie_reserva",
+            Bitacora.entidad_id == serie.id,
+            Bitacora.accion == "serie_reserva_creada",
+        )
+    ).scalar_one_or_none()
+
+    if bitacora and bitacora.detalles:
+        fechas_omitidas = bitacora.detalles.get("fechas_omitidas")
+
+    return SerieReservaOut(
+        id=serie.id,
+        servicio_id=serie.servicio_id,
+        servicio_nombre=servicio.nombre if servicio else None,
+        cliente_usuario_id=serie.cliente_usuario_id,
+        nombre_cliente=cliente.nombre if cliente else None,
+        asesor_id=serie.asesor_id,
+        nombre_asesor=asesor.usuario.nombre if asesor and asesor.usuario else None,
+        frecuencia=serie.frecuencia,
+        dia_semana=serie.dia_semana,
+        hora_inicio=serie.hora_inicio,
+        duracion_minutos=serie.duracion_minutos,
+        num_repeticiones=serie.num_repeticiones,
+        fecha_inicio=serie.fecha_inicio,
+        cobro_por_sesion_habilitado=serie.cobro_por_sesion_habilitado,
+        cobro_por_paquete_habilitado=serie.cobro_por_paquete_habilitado,
+        precio_paquete=serie.precio_paquete,
+        estado=serie.estado.value,
+        num_reservas_creadas=num_creadas,
+        num_reservas_omitidas=num_omitidas,
+        fechas_omitidas=fechas_omitidas,
+        creado_en=serie.creado_en,
+        actualizado_en=serie.actualizado_en,
+    )
 
 
 # ============================================================

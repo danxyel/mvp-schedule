@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
 import Modal from '../common/Modal'
+import { getLocalOffset } from '../../utils/fechas'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -28,14 +29,6 @@ const TIPO_BADGE = {
   feriado: 'border-amber-200 bg-amber-100 text-amber-700',
   mantenimiento: 'border-gray-200 bg-gray-100 text-gray-600',
   otro: 'border-gray-200 bg-gray-100 text-gray-600',
-}
-
-function getLocalOffset() {
-  const offset = -new Date().getTimezoneOffset()
-  const sign = offset >= 0 ? '+' : '-'
-  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')
-  const mins = String(Math.abs(offset) % 60).padStart(2, '0')
-  return `${sign}${hours}:${mins}`
 }
 
 function conOffset(valor) {

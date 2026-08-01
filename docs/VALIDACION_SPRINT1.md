@@ -82,6 +82,14 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] Con un slot sin `sesion_id` (el backend crea la sesión): la sesión creada debe quedar a la hora exacta que el cliente vio, no una hora desplazada.
 - [ ] Probado desde un navegador en un timezone distinto a UTC-6: la reserva aterriza en el mismo instante que el slot mostrado (el reloj se desplaza con el offset real del navegador y el sufijo usa ese mismo offset).
 
+## Fix 2026-07-31 — Reagendar sin offset hardcodeado (PanelAdmin.jsx)
+
+> Bug: `guardarReagendar()` armaba `nueva_fecha_hora_inicio` con `-06:00` fijo en vez del offset real del navegador. En un navegador fuera de UTC-6 el reagendamiento aterrizaba desfasado respecto a lo seleccionado en el formulario. Fix: usa `getLocalOffset()` (helper compartido en `src/utils/fechas.js`, se migraron las copias duplicadas de `CalendarioDisponibilidad` y `HorariosAsesor`).
+
+- [ ] Reagenda una sesión y confirma que la fecha/hora que queda en `Sesion.fecha_hora_inicio` corresponde **exactamente** a lo que se seleccionó en el formulario (fecha + hora del modal), no desfasada ni en otro día.
+- [ ] Probado desde un navegador con timezone distinto a UTC-6: reagendar un slot a las 10:00 local → en DB queda exactamente 10:00 local (el offset real del navegador acompaña el reloj local del `<input type="date">`/`<input type="time">`).
+- [ ] El campo `Sesion.fecha_hora_inicio` en la tabla de sesiones del panel muestra la nueva fecha/hora correcta tras reagendar, y la reserva asociada conserva su folio/estado.
+
 ## Notas de Daniel (mobile) — 4 fixes 2026-07-31
 
 > Salieron de probar la app en pantallas chicas (375px/390px) y del flujo de invitar usuarios. Cada uno con su commit: `bafe3fa` (header), `531e56f` (modal común), `f00e990` (contraseña inicial), `3fe9190` (min-w-0 tablas).

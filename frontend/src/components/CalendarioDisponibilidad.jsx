@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import createClient from 'openapi-fetch'
+import { getLocalOffset } from '../utils/fechas'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -33,14 +34,6 @@ function toDateInputValue(date) {
   const m = String(date.getMonth() + 1).padStart(2, '0')
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
-}
-
-function getLocalOffset() {
-  const offset = -new Date().getTimezoneOffset()
-  const sign = offset >= 0 ? '+' : '-'
-  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')
-  const mins = String(Math.abs(offset) % 60).padStart(2, '0')
-  return `${sign}${hours}:${mins}`
 }
 
 function SlotSkeleton() {

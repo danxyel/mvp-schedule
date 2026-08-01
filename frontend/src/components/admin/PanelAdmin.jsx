@@ -3,6 +3,7 @@ import createClient from 'openapi-fetch'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
 import Modal from '../common/Modal'
+import { getLocalOffset } from '../../utils/fechas'
 
 const client = createClient({ baseUrl: 'http://localhost:8000' })
 
@@ -255,7 +256,7 @@ function SesionesTab({ tenantSlug, token }) {
     if (!reagendar?.fecha || !reagendar?.hora) return
     setReagendarLoading(true)
     setReagendarError(null)
-    const nuevaFechaHora = `${reagendar.fecha}T${reagendar.hora}-06:00`
+    const nuevaFechaHora = `${reagendar.fecha}T${reagendar.hora}${getLocalOffset()}`
 
     const { error: fetchErr } = await client.POST(
       '/api/v2/{tenant_slug}/sesiones/{sesion_id}/reagendar',

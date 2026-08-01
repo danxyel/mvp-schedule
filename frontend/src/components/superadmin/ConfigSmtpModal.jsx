@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react'
-import createClient from 'openapi-fetch'
+import client from '../../api/client'
 import Modal from '../common/Modal'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
 const CAMPO = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500'
 
 export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) {

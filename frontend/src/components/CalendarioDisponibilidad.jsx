@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import createClient from 'openapi-fetch'
+import client from '../api/client'
 import { getLocalOffset } from '../utils/fechas'
 import SelectorFecha from './common/SelectorFecha'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
 const MOTIVO_LABELS = {
   bloqueado: 'No disponible',
   ocupado: 'Ocupado',

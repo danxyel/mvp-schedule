@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import createClient from 'openapi-fetch'
+import client from '../../api/client'
 import Modal from '../common/Modal'
 import HorarioServicio from './HorarioServicio'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
 const TIPO_BADGE = {
   individual: 'border-blue-200 bg-blue-100 text-blue-700',
   grupal: 'border-purple-200 bg-purple-100 text-purple-700',

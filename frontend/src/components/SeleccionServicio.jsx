@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import createClient from 'openapi-fetch'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
+import client from '../api/client'
 const MODALIDAD_INFO = {
   virtual: { icon: '💻', label: 'Virtual' },
   presencial: { icon: '📍', label: 'Presencial' },

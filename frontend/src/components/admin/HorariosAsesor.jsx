@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import createClient from 'openapi-fetch'
+import client from '../../api/client'
 import Modal from '../common/Modal'
 import { getLocalOffset } from '../../utils/fechas'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
 const DIAS = [
   'Lunes',
   'Martes',

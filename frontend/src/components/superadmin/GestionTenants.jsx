@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Modal from '../common/Modal'
 import ConfigSmtpModal from './ConfigSmtpModal'
 
-const API_BASE = 'http://localhost:8000'
+import { API_BASE } from '../../api/client'
 const LIMIT = 20
 
 const PLAN_LABEL = { starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' }

@@ -1,8 +1,5 @@
 import { useState } from 'react'
-import createClient from 'openapi-fetch'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
+import client from '../api/client'
 export default function Login({ onLogin, onIrARegistro }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import createClient from 'openapi-fetch'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
+import client from '../api/client'
 function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }

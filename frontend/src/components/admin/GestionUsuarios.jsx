@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import createClient from 'openapi-fetch'
+import client from '../../api/client'
 import HorariosAsesor from './HorariosAsesor'
 import Modal from '../common/Modal'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
 const ROL_BADGE = {
   superadmin: 'border-gray-900 bg-gray-900 text-white',
   admin: 'border-purple-200 bg-purple-100 text-purple-700',

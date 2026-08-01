@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import createClient from 'openapi-fetch'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
+import client from '../api/client'
 const BADGE = {
   confirmada: 'bg-green-100 text-green-700 border-green-200',
   en_espera: 'bg-yellow-100 text-yellow-700 border-yellow-200',

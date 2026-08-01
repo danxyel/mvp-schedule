@@ -1,8 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import createClient from 'openapi-fetch'
-
-const client = createClient({ baseUrl: 'http://localhost:8000' })
-
+import client from '../api/client'
 const ERROR_MESSAGES = {
   cupo_agotado: 'Este lugar ya no está disponible.',
   reserva_duplicada: 'Ya tienes una reserva en esta sesión.',

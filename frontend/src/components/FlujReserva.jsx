@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import client from '../api/client'
 const ERROR_MESSAGES = {
   cupo_agotado: 'Este lugar ya no está disponible.',
@@ -59,7 +60,14 @@ function CountdownTimer({ expiraEn }) {
   )
 }
 
-export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, servicioNombre, precio, moneda }) {
+export default function FlujReserva() {
+  const { tenantSlug, servicioId } = useParams()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const slot = location.state?.slot
+  const token = sessionStorage.getItem('token')
+  
+  const [servicio, setServicio] = useState(null)
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({ email: '', nombre: '', telefono: '', notas: '' })
   const [errors, setErrors] = useState({})
@@ -70,6 +78,22 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
   const submitLockRef = useRef(false)
 
   const timezone = 'America/Mexico_City'
+
+  // Obtener datos del servicio
+  useEffect(() => {
+    const fetchServicio = async () => {
+      const { data, error } = await client.GET(
+        '/api/v2/{tenant_slug}/servicios/{servicio_id}',
+        {
+          params: { path: { tenant_slug: tenantSlug, servicio_id: servicioId } },
+        },
+      )
+      if (!error) {
+        setServicio(data)
+      }
+    }
+    fetchServicio()
+  }, [tenantSlug, servicioId])
 
   const validar = () => {
     const errs = {}
@@ -97,11 +121,15 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
 
     const { data, error } = await client.POST(
       '/api/v2/{tenant_slug}/reservas',
-      { params: { path: { tenant_slug: tenantSlug } }, body },
+      {
+        params: { path: { tenant_slug: tenantSlug } },
+        body,
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+      },
     )
 
     return { data, error }
-  }, [tenantSlug, slot, servicioId, form])
+  }, [tenantSlug, token, slot, servicioId, form])
 
   const handleSubmit = async () => {
     if (!validar() || submitLockRef.current) return
@@ -158,16 +186,16 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
                 <span className="font-medium text-gray-500">Asesor:</span> {slot.asesor.nombre}
               </p>
             )}
-            {servicioNombre && (
+            {servicio && (
               <p>
-                <span className="font-medium text-gray-500">Servicio:</span> {servicioNombre}
+                <span className="font-medium text-gray-500">Servicio:</span> {servicio.nombre}
               </p>
             )}
-            {precio && (
+            {servicio?.precio && (
               <p>
                 <span className="font-medium text-gray-500">Precio:</span>{' '}
-                {moneda === 'MXN' ? '$' : moneda}{' '}
-                {new Intl.NumberFormat('es-MX').format(precio)}
+                {servicio.moneda === 'MXN' ? '$' : servicio.moneda}{' '}
+                {new Intl.NumberFormat('es-MX').format(servicio.precio)}
               </p>
             )}
           </div>
@@ -175,7 +203,7 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={onVolver}
+              onClick={() => navigate(-1)}
               className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             >
               Volver
@@ -314,7 +342,7 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
             <p className="mb-4 text-sm text-red-700">{errorMensaje}</p>
             <button
               type="button"
-              onClick={onVolver}
+              onClick={() => navigate(-1)}
               className="w-full rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
             >
               {errorCodigo === 'cupo_agotado' || errorCodigo === 'reserva_duplicada'
@@ -354,7 +382,7 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
             </div>
             <button
               type="button"
-              onClick={onVolver}
+              onClick={() => navigate(-1)}
               className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700"
             >
               Volver al calendario
@@ -383,7 +411,7 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
             </div>
             <button
               type="button"
-              onClick={onVolver}
+              onClick={() => navigate(-1)}
               className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               Volver al calendario
@@ -420,7 +448,7 @@ export default function FlujReserva({ tenantSlug, slot, servicioId, onVolver, se
             )}
             <button
               type="button"
-              onClick={onVolver}
+              onClick={() => navigate(-1)}
               className="w-full rounded-lg border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-800 transition hover:bg-yellow-100"
             >
               Volver al calendario

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Modal from '../common/Modal'
 import ConfigSmtpModal from './ConfigSmtpModal'
 
@@ -44,7 +45,9 @@ function Badge({ value, color, children }) {
   )
 }
 
-export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
+export default function GestionTenants() {
+  const navigate = useNavigate()
+  const token = sessionStorage.getItem('token')
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -289,15 +292,13 @@ export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
     <div className="mx-auto min-w-0 max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Gestión de Tenants</h2>
-        {onVolver && (
-          <button
-            type="button"
-            onClick={onVolver}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-          >
-            Volver
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+        >
+          Volver
+        </button>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -342,7 +343,11 @@ export default function GestionTenants({ token, onEntrarTenant, onVolver }) {
             {tenants.map((t) => (
               <tr
                 key={t.id}
-                onClick={() => onEntrarTenant?.(t.slug, t.nombre)}
+                onClick={() => {
+                  sessionStorage.setItem('tenantSlug', t.slug)
+                  sessionStorage.setItem('tenantNombre', t.nombre)
+                  navigate('/admin')
+                }}
                 className={`cursor-pointer transition hover:bg-blue-50 ${
                   toggleLoadingId === t.id ? 'opacity-60' : ''
                 }`}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 const MODALIDAD_INFO = {
   virtual: { icon: '💻', label: 'Virtual' },
@@ -24,7 +25,9 @@ function formatPrecio(precio, moneda) {
   }).format(Number(precio))
 }
 
-export default function SeleccionServicio({ tenantSlug, onSeleccionar }) {
+export default function SeleccionServicio() {
+  const { tenantSlug } = useParams()
+  const navigate = useNavigate()
   const [servicios, setServicios] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -128,7 +131,7 @@ export default function SeleccionServicio({ tenantSlug, onSeleccionar }) {
                 <span className="text-base font-bold text-gray-900">{precio ?? 'Sin costo'}</span>
                 <button
                   type="button"
-                  onClick={() => onSeleccionar(s)}
+                  onClick={() => navigate(`/t/${tenantSlug}/servicio/${s.id}`)}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
                   Agendar

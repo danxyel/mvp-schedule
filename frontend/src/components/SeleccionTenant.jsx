@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
-export default function SeleccionTenant({ onSeleccionar }) {
+export default function SeleccionTenant() {
+  const navigate = useNavigate()
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -93,7 +95,11 @@ export default function SeleccionTenant({ onSeleccionar }) {
             <div className="mt-auto flex justify-end">
               <button
                 type="button"
-                onClick={() => onSeleccionar(t.slug, t.nombre)}
+                onClick={() => {
+                  sessionStorage.setItem('tenantSlug', t.slug)
+                  sessionStorage.setItem('tenantNombre', t.nombre)
+                  navigate(`/t/${t.slug}`)
+                }}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
               >
                 Elegir

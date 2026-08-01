@@ -191,6 +191,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/reservas/{folio}/publica": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar Reserva Publica
+         * @description Consulta pública de reserva mediante folio + código de confirmación.
+         *
+         *     No requiere autenticación. Devuelve vista limitada (sin meet_url, notas, sede, asesor).
+         *     Rate limited a 10 requests/minuto por IP.
+         */
+        get: operations["consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/mis-reservas": {
         parameters: {
             query?: never;
@@ -287,6 +310,57 @@ export interface paths {
         put?: never;
         /** Asignar Asesor Reserva */
         post: operations["asignar_asesor_reserva_api_v2__tenant_slug__admin_reservas__reserva_id__asignar_asesor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/solicitudes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Solicitudes Admin */
+        get: operations["listar_solicitudes_admin_api_v2__tenant_slug__admin_solicitudes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirmar Solicitud Admin */
+        post: operations["confirmar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechazar Solicitud Admin */
+        post: operations["rechazar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__rechazar_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -924,6 +998,11 @@ export interface components {
          */
         EstadoSesionEnum: "abierta" | "confirmada" | "llena" | "cancelada" | "completada";
         /**
+         * EstadoSolicitud
+         * @enum {string}
+         */
+        EstadoSolicitud: "pendiente" | "aceptada" | "rechazada" | "cancelada";
+        /**
          * EstadoSolicitudEnum
          * @enum {string}
          */
@@ -1155,6 +1234,48 @@ export interface components {
             hold_expira_en?: string | null;
             /** Notas Cliente */
             notas_cliente?: string | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /**
+         * ReservaPublicaOut
+         * @description Vista pública de reserva (solo lectura, sin datos sensibles).
+         *
+         *     Accesible sin autenticación mediante folio + codigo_confirmacion.
+         *     No incluye: meet_url, notas_cliente, sede, asesor (privados).
+         */
+        ReservaPublicaOut: {
+            /** Folio */
+            folio: string;
+            /** Codigo Confirmacion */
+            codigo_confirmacion: string;
+            estado: components["schemas"]["EstadoReservaEnum"];
+            estado_pago: components["schemas"]["EstadoPagoEnum"];
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Inicio
+             * Format: date-time
+             */
+            fecha_hora_inicio: string;
+            /**
+             * Fecha Hora Fin
+             * Format: date-time
+             */
+            fecha_hora_fin: string;
+            /** Timezone */
+            timezone: string;
+            modalidad?: components["schemas"]["ModalidadEnum"] | null;
+            /** Precio Final */
+            precio_final?: string | null;
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
             /**
              * Creado En
              * Format: date-time
@@ -1541,6 +1662,97 @@ export interface components {
             motivo_no_disponible?: string | null;
         };
         /**
+         * SolicitudAdminOut
+         * @description Vista del staff: agrega datos del cliente y de resolución.
+         */
+        SolicitudAdminOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+            estado: components["schemas"]["EstadoSolicitudEnum"];
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Motivo Rechazo */
+            motivo_rechazo?: string | null;
+            /** Reserva Id */
+            reserva_id?: number | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Email Cliente */
+            email_cliente?: string | null;
+            /** Resuelto Por Id */
+            resuelto_por_id?: number | null;
+            /** Resuelto En */
+            resuelto_en?: string | null;
+        };
+        /**
+         * SolicitudConfirmarOut
+         * @description El staff confirmó la solicitud: la Reserva PENDIENTE ya existe y el
+         *     staff la termina de confirmar vía POST /admin/reservas/{id}/asignar-asesor.
+         */
+        SolicitudConfirmarOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+            estado: components["schemas"]["EstadoSolicitudEnum"];
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Motivo Rechazo */
+            motivo_rechazo?: string | null;
+            /** Reserva Id */
+            reserva_id?: number | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Email Cliente */
+            email_cliente?: string | null;
+            /** Resuelto Por Id */
+            resuelto_por_id?: number | null;
+            /** Resuelto En */
+            resuelto_en?: string | null;
+            /** Folio Reserva */
+            folio_reserva?: string | null;
+            /** Sesion Id */
+            sesion_id?: number | null;
+        };
+        /**
          * SolicitudCreate
          * @description El cliente propone una fecha/hora libre para un servicio con
          *     `requiere_confirmacion=True`. No reserva nada todavía.
@@ -1588,6 +1800,14 @@ export interface components {
              * Format: date-time
              */
             creado_en: string;
+        };
+        /**
+         * SolicitudRechazarIn
+         * @description El staff rechaza una solicitud pendiente.
+         */
+        SolicitudRechazarIn: {
+            /** Motivo */
+            motivo?: string | null;
         };
         /** TenantAdminOut */
         TenantAdminOut: {
@@ -2104,6 +2324,40 @@ export interface operations {
             };
         };
     };
+    consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get: {
+        parameters: {
+            query: {
+                codigo_confirmacion: string;
+            };
+            header?: never;
+            path: {
+                folio: string;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservaPublicaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_mis_reservas_api_v2__tenant_slug__mis_reservas_get: {
         parameters: {
             query?: {
@@ -2302,6 +2556,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_solicitudes_admin_api_v2__tenant_slug__admin_solicitudes_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por estado. Default: todas */
+                estado?: components["schemas"]["EstadoSolicitud"] | null;
+                servicio_id?: number | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudConfirmarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rechazar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__rechazar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudRechazarIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudAdminOut"];
                 };
             };
             /** @description Validation Error */

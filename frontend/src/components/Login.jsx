@@ -1,6 +1,20 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
-export default function Login({ onLogin, onIrARegistro }) {
+
+function persistirSesion({ token, usuario, tenantSlug, tenantNombre }) {
+  const guardar = (clave, valor) => {
+    if (valor) sessionStorage.setItem(clave, valor)
+    else sessionStorage.removeItem(clave)
+  }
+  guardar('token', token)
+  guardar('usuario', usuario ? JSON.stringify(usuario) : null)
+  guardar('tenantSlug', tenantSlug)
+  guardar('tenantNombre', tenantNombre)
+}
+
+export default function Login() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -35,7 +49,26 @@ export default function Login({ onLogin, onIrARegistro }) {
         tenant_slug: data.tenant_slug ?? null,
         tenant_nombre: data.tenant_nombre ?? null,
       }
-      onLogin(data.token, usuario)
+      
+      persistirSesion({
+        token: data.token,
+        usuario,
+        tenantSlug: usuario.tenant_slug,
+        tenantNombre: usuario.tenant_nombre,
+      })
+
+      // Redirigir según el rol
+      if (usuario.rol === 'superadmin') {
+        navigate('/superadmin')
+      } else if (usuario.rol === 'admin' || usuario.rol === 'asesor') {
+        navigate('/admin')
+      } else if (usuario.rol === 'cliente' && !usuario.tenant_slug) {
+        navigate('/seleccion-tenant')
+      } else if (usuario.rol === 'cliente') {
+        navigate('/mis-reservas')
+      } else {
+        navigate('/')
+      }
     } catch {
       setError('No se pudo conectar al servidor')
     } finally {
@@ -112,7 +145,7 @@ export default function Login({ onLogin, onIrARegistro }) {
           ¿No tienes cuenta?{' '}
           <button
             type="button"
-            onClick={onIrARegistro}
+            onClick={() => navigate('/registro')}
             className="font-medium text-blue-600 transition hover:text-blue-700"
           >
             Regístrate

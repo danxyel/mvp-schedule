@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 const BADGE = {
   confirmada: 'bg-green-100 text-green-700 border-green-200',
@@ -82,7 +83,11 @@ function CountdownTimer({ expiraEn }) {
 
 const LIMIT = 10
 
-export default function MisReservas({ tenantSlug, token, onVerDetalle }) {
+export default function MisReservas() {
+  const navigate = useNavigate()
+  const tenantSlug = sessionStorage.getItem('tenantSlug')
+  const token = sessionStorage.getItem('token')
+  
   const [incluirPasadas, setIncluirPasadas] = useState(false)
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState(null)
@@ -255,7 +260,7 @@ export default function MisReservas({ tenantSlug, token, onVerDetalle }) {
             <div className="mt-3 border-t border-gray-100 pt-3">
               <button
                 type="button"
-                onClick={() => onVerDetalle(r.folio)}
+                onClick={() => navigate(`/mis-reservas/${r.folio}`)}
                 className="text-xs font-medium text-blue-600 transition hover:text-blue-800"
               >
                 Ver detalle &rarr;

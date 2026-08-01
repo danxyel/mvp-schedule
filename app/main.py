@@ -19,11 +19,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.database import verificar_conexion
+from app.rate_limiter import limiter
 from app.router_v2_2 import router, superadmin_router
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -85,7 +84,6 @@ app.add_middleware(
 # Protege /auth/login y /auth/register contra fuerza bruta. El contador vive en
 # memoria por IP (suficiente para MVP); detrás de un proxy (Render) conviene
 # leer X-Forwarded-For en vez de request.client.host.
-limiter = Limiter(key_func=get_remote_address, default_limits=[])
 app.state.limiter = limiter
 
 

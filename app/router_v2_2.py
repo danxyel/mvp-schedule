@@ -10,7 +10,7 @@ from typing import Optional, List
 
 import bcrypt
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm.exc import StaleDataError
@@ -20,21 +20,22 @@ from app.dependencies import (
     get_current_tenant, get_current_user, get_current_user_optional,
 )
 from app.models_v2_2 import (
-    Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede,
+    Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
     SolicitudReserva,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
-    ESTADOS_SESION_ACTIVA, PlanTenant,
+    EstadoSolicitud, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
     TipoBloqueo, utcnow,
 )
+from app.rate_limiter import limiter
 from app.schemas_v2_2 import (
-    ReservaCreate, ReservaOut, ReservaCreateResponse, ReagendarSesionIn,
+    ReservaCreate, ReservaOut, ReservaPublicaOut, ReservaCreateResponse, ReagendarSesionIn,
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
-    SolicitudCreate, SolicitudOut,
+    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudRechazarIn, CanalEnum,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -120,6 +121,20 @@ def _es_staff(db: Session, tenant_id: int, usuario_id: int) -> bool:
     return m is not None and m.rol in (RolUsuario.ASESOR, RolUsuario.ADMIN, RolUsuario.SUPERADMIN)
 
 
+def _es_propietario_reserva(db: Session, tenant_id: int, reserva: Reserva, usuario_id: int) -> bool:
+    """Devuelve True si el usuario es el creador de la reserva o su beneficiario."""
+    if reserva.creado_por_usuario_id == usuario_id:
+        return True
+    if reserva.beneficiario_id is None:
+        return False
+    beneficiario = db.get(Beneficiario, reserva.beneficiario_id)
+    return (
+        beneficiario is not None
+        and beneficiario.tenant_id == tenant_id
+        and beneficiario.usuario_id == usuario_id
+    )
+
+
 # ============================================================
 # TRADUCCIÓN DE ERRORES
 # ============================================================
@@ -190,6 +205,29 @@ def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
         motivo_rechazo=s.motivo_rechazo,
         reserva_id=s.reserva_id,
         creado_en=s.creado_en,
+    )
+
+
+def _solicitud_admin_out(db: Session, s: SolicitudReserva) -> SolicitudAdminOut:
+    servicio = db.get(Servicio, s.servicio_id)
+    cliente = db.get(Usuario, s.cliente_usuario_id)
+    return SolicitudAdminOut(
+        id=s.id,
+        servicio_id=s.servicio_id,
+        servicio_nombre=servicio.nombre if servicio else None,
+        fecha_hora_propuesta=s.fecha_hora_propuesta,
+        duracion_minutos=s.duracion_minutos,
+        notas_cliente=s.notas_cliente,
+        estado=s.estado.value,
+        asesor_id=s.asesor_id,
+        motivo_rechazo=s.motivo_rechazo,
+        reserva_id=s.reserva_id,
+        creado_en=s.creado_en,
+        cliente_usuario_id=s.cliente_usuario_id,
+        nombre_cliente=cliente.nombre if cliente else None,
+        email_cliente=cliente.email if cliente else None,
+        resuelto_por_id=s.resuelto_por_id,
+        resuelto_en=s.resuelto_en,
     )
 
 
@@ -525,7 +563,8 @@ def consultar_reserva(
     ).scalars().unique().one_or_none()
 
     if r is None or (
-        r.creado_por_usuario_id != usuario.id and not _es_staff(db, tenant.id, usuario.id)
+        not _es_propietario_reserva(db, tenant.id, r, usuario.id)
+        and not _es_staff(db, tenant.id, usuario.id)
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
 
@@ -548,6 +587,46 @@ def consultar_reserva(
     )
 
 
+@router.get("/reservas/{folio}/publica", response_model=ReservaPublicaOut)
+@limiter.limit("10/minute")
+def consultar_reserva_publica(
+    request: Request,
+    folio: str = Path(..., min_length=8, max_length=32),
+    codigo_confirmacion: str = Query(..., min_length=8, max_length=8),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    """Consulta pública de reserva mediante folio + código de confirmación.
+    
+    No requiere autenticación. Devuelve vista limitada (sin meet_url, notas, sede, asesor).
+    Rate limited a 10 requests/minuto por IP.
+    """
+    r = db.execute(
+        select(Reserva)
+        .options(joinedload(Reserva.servicio))
+        .where(Reserva.tenant_id == tenant.id, Reserva.folio == folio)
+    ).scalars().unique().one_or_none()
+
+    if r is None or r.codigo_confirmacion != codigo_confirmacion:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+
+    s = r.sesion
+    return ReservaPublicaOut(
+        folio=r.folio,
+        codigo_confirmacion=r.codigo_confirmacion,
+        estado=r.estado.value,
+        estado_pago=r.estado_pago.value,
+        servicio_nombre=r.servicio.nombre if r.servicio else None,
+        fecha_hora_inicio=s.fecha_hora_inicio,
+        fecha_hora_fin=s.fecha_hora_fin,
+        timezone=s.timezone,
+        modalidad=r.servicio.modalidad.value if r.servicio else None,
+        precio_final=r.precio_final,
+        moneda=r.moneda,
+        creado_en=r.creado_en,
+    )
+
+
 @router.get("/mis-reservas", response_model=List[ReservaOut])
 def listar_mis_reservas(
     incluir_pasadas: bool = Query(False),
@@ -557,16 +636,22 @@ def listar_mis_reservas(
     tenant: Tenant = Depends(get_current_tenant),
     usuario: Usuario = Depends(get_current_user),
 ):
-    cond = [Reserva.tenant_id == tenant.id, Reserva.creado_por_usuario_id == usuario.id]
     stmt = (
         select(Reserva)
+        .outerjoin(Beneficiario, Beneficiario.id == Reserva.beneficiario_id)
         .join(Sesion, Sesion.id == Reserva.sesion_id)
         .options(
             joinedload(Reserva.sesion).joinedload(Sesion.sede),
             joinedload(Reserva.sesion).joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
             joinedload(Reserva.servicio),
         )
-        .where(*cond)
+        .where(
+            Reserva.tenant_id == tenant.id,
+            or_(
+                Reserva.creado_por_usuario_id == usuario.id,
+                Beneficiario.usuario_id == usuario.id,
+            ),
+        )
     )
     if not incluir_pasadas:
         stmt = stmt.where(Sesion.fecha_hora_inicio >= datetime.now(timezone.utc))
@@ -907,6 +992,209 @@ def asignar_asesor_reserva(
             "asesor_id": payload.asesor_id,
         },
     )
+
+
+# ============================================================
+# ADMIN — SOLICITUDES DE RESERVA (confirmación manual, Tarea 10)
+# El cliente propone fecha/hora (POST /solicitudes) y no reserva nada.
+# El staff lista las pendientes y las confirma: esto crea la Reserva
+# PENDIENTE real (crear_reserva) y el staff la termina de confirmar con
+# POST /admin/reservas/{id}/asignar-asesor (email + calendario post-commit).
+# ============================================================
+@router.get("/admin/solicitudes", response_model=List[SolicitudAdminOut])
+def listar_solicitudes_admin(
+    estado: Optional[EstadoSolicitud] = Query(
+        None, description="Filtrar por estado. Default: todas",
+    ),
+    servicio_id: Optional[int] = Query(None, gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    cond = [SolicitudReserva.tenant_id == tenant.id]
+    if estado is not None:
+        cond.append(SolicitudReserva.estado == estado)
+    if servicio_id is not None:
+        cond.append(SolicitudReserva.servicio_id == servicio_id)
+
+    filas = db.execute(
+        select(SolicitudReserva)
+        .where(*cond)
+        .order_by(SolicitudReserva.creado_en.asc())
+    ).scalars().all()
+    return [_solicitud_admin_out(db, s) for s in filas]
+
+
+@router.post("/admin/solicitudes/{solicitud_id}/confirmar", response_model=SolicitudConfirmarOut)
+def confirmar_solicitud_admin(
+    solicitud_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if solicitud is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "solicitud_no_encontrada", "mensaje": "Solicitud no encontrada"},
+        )
+
+    if solicitud.estado != EstadoSolicitud.PENDIENTE:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "solicitud_no_pendiente",
+             "mensaje": "La solicitud ya fue resuelta"},
+        )
+
+    if solicitud.fecha_hora_propuesta <= utcnow():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "fecha_ambigua",
+             "mensaje": "La fecha propuesta ya pasó; ya no se puede confirmar"},
+        )
+
+    servicio = db.get(Servicio, solicitud.servicio_id)
+    if servicio is None or not servicio.activo:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "servicio_no_encontrado",
+             "mensaje": "El servicio no existe o no está disponible"},
+        )
+
+    cliente = db.get(Usuario, solicitud.cliente_usuario_id)
+    if cliente is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "cliente_no_encontrado",
+             "mensaje": "El cliente que propuso la cita ya no existe"},
+        )
+
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    payload = ReservaCreate(
+        servicio_id=solicitud.servicio_id,
+        fecha_hora_inicio=solicitud.fecha_hora_propuesta,
+        sesion_id=None,
+        asesor_id=None,
+        sede_id=None,
+        notas_cliente=solicitud.notas_cliente,
+        canal=CanalEnum.ADMIN,
+    )
+    try:
+        resultado = svc.crear_reserva(
+            db, tenant, payload, usuario_actual=cliente, ip=ip, user_agent=ua,
+        )
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La sesión cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error de base de datos al confirmar solicitud %s", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    reserva = resultado["reserva"]
+    sesion = resultado["sesion"]
+
+    solicitud.estado = EstadoSolicitud.ACEPTADA
+    solicitud.reserva_id = reserva.id
+    solicitud.resuelto_por_id = staff.usuario_id
+    solicitud.resuelto_en = utcnow()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_confirmada",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "reserva_id": reserva.id,
+            "folio": reserva.folio,
+            "sesion_id": sesion.id,
+            "sesion_creada": resultado["sesion_creada"],
+        },
+        ip=ip, user_agent=ua,
+    )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al confirmar solicitud %s", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(solicitud)
+    out = _solicitud_admin_out(db, solicitud)
+    return SolicitudConfirmarOut(
+        **out.model_dump(),
+        folio_reserva=reserva.folio,
+        sesion_id=sesion.id,
+    )
+
+
+@router.post("/admin/solicitudes/{solicitud_id}/rechazar", response_model=SolicitudAdminOut)
+def rechazar_solicitud_admin(
+    payload: SolicitudRechazarIn,
+    solicitud_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if solicitud is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "solicitud_no_encontrada", "mensaje": "Solicitud no encontrada"},
+        )
+
+    if solicitud.estado != EstadoSolicitud.PENDIENTE:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "solicitud_no_pendiente",
+             "mensaje": "La solicitud ya fue resuelta"},
+        )
+
+    solicitud.estado = EstadoSolicitud.RECHAZADA
+    solicitud.motivo_rechazo = payload.motivo
+    solicitud.resuelto_por_id = staff.usuario_id
+    solicitud.resuelto_en = utcnow()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_rechazada",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "motivo_rechazo": payload.motivo,
+        },
+    )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al rechazar solicitud %s", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(solicitud)
+    return _solicitud_admin_out(db, solicitud)
 
 
 # ============================================================
@@ -1735,7 +2023,9 @@ def cancelar_reserva_endpoint(
     ).scalar_one_or_none()
 
     es_staff = _es_staff(db, tenant.id, usuario.id)
-    if r is None or (r.creado_por_usuario_id != usuario.id and not es_staff):
+    if r is None or (
+        not _es_propietario_reserva(db, tenant.id, r, usuario.id) and not es_staff
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
 
     try:

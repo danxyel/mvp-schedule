@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import { getLocalOffset } from '../utils/fechas'
 import SelectorFecha from './common/SelectorFecha'
@@ -43,11 +44,9 @@ function SlotSkeleton() {
   )
 }
 
-export default function CalendarioDisponibilidad({
-  tenantSlug,
-  servicioId,
-  onSlotSelect,
-}) {
+export default function CalendarioDisponibilidad() {
+  const { tenantSlug, servicioId } = useParams()
+  const navigate = useNavigate()
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   const [currentDate, setCurrentDate] = useState(() => hoy)
@@ -182,7 +181,7 @@ export default function CalendarioDisponibilidad({
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => onSlotSelect(slot)}
+                  onClick={() => navigate(`/t/${tenantSlug}/reservar/${servicioId}`, { state: { slot } })}
                   className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left transition hover:bg-blue-100 hover:shadow-sm"
                 >
                   <div>

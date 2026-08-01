@@ -711,6 +711,7 @@ def listar_reservas_admin(
             estado_pago=r.estado_pago.value,
             nombre_cliente=r.creado_por.nombre if r.creado_por else None,
             email_cliente=r.creado_por.email if r.creado_por else None,
+            servicio_id=r.servicio.id if r.servicio else 0,
             servicio_nombre=r.servicio.nombre if r.servicio else None,
             fecha_hora_inicio=s.fecha_hora_inicio,
             fecha_hora_fin=s.fecha_hora_fin,
@@ -844,6 +845,20 @@ def asignar_asesor_reserva(
         )
 
     servicio = db.get(Servicio, reserva.servicio_id)
+    if servicio is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "servicio_no_encontrado", "mensaje": "El servicio no existe o no está disponible"},
+        )
+
+    asesores_del_servicio = svc._asesores_del_servicio(db, tenant.id, servicio.id)
+    if payload.asesor_id not in [ut.id for ut in asesores_del_servicio]:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "asesor_no_asignado_a_servicio",
+             "mensaje": "El asesor no está asignado a este servicio"},
+        )
+
     try:
         svc.validar_disponibilidad_franja(
             db, tenant.id, servicio, sesion.fecha_hora_inicio, sesion.fecha_hora_fin,
@@ -1030,6 +1045,29 @@ def desactivar_servicio_admin(
     s.activo = False
     db.commit()
     return OperacionOut(ok=True, mensaje="Servicio desactivado", detalle={"id": servicio_id})
+
+
+# ============================================================
+# ADMIN — ASESORES VINCULADOS A UN SERVICIO
+# ============================================================
+@router.get("/admin/servicios/{servicio_id}/asesores", response_model=List[UsuarioAdminOut])
+def listar_asesores_servicio_admin(
+    servicio_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    servicio = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "servicio_no_encontrado", "mensaje": "El servicio no existe o no está disponible"},
+        )
+
+    asesores = svc._asesores_del_servicio(db, tenant.id, servicio.id)
+    return [_usuario_admin_out(ut) for ut in asesores]
 
 
 # ============================================================

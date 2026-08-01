@@ -98,9 +98,10 @@ function DetalleSkeleton() {
 const ESTADOS_CANCELABLES = ['pendiente', 'en_espera', 'confirmada']
 
 export default function DetalleReserva() {
-  const { tenantSlug, folio } = useParams()
+  const { tenantSlug: tenantSlugParam, folio } = useParams()
   const navigate = useNavigate()
   const token = sessionStorage.getItem('token')
+  const tenantSlug = tenantSlugParam || sessionStorage.getItem('tenantSlug')
   
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)

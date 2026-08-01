@@ -260,7 +260,7 @@ export default function MisReservas() {
             <div className="mt-3 border-t border-gray-100 pt-3">
               <button
                 type="button"
-                onClick={() => navigate(`/t/${tenantSlug}/r/${r.folio}?codigo=${r.codigo_confirmacion}`)}
+                onClick={() => navigate(`/mis-reservas/${r.folio}`)}
                 className="text-xs font-medium text-blue-600 transition hover:text-blue-800"
               >
                 Ver detalle &rarr;

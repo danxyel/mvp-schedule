@@ -39,6 +39,15 @@ function App() {
         />
         
         <Route 
+          path="/mis-reservas/:folio" 
+          element={
+            <ProtectedRoute allowedRoles={['cliente']}>
+              <DetalleReserva />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
           path="/admin" 
           element={
             <ProtectedRoute allowedRoles={['admin', 'asesor']}>

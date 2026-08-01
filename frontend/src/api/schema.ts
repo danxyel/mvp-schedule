@@ -466,6 +466,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/horarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Horarios Servicio */
+        get: operations["listar_horarios_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_get"];
+        put?: never;
+        /**
+         * Crear Horario Servicio
+         * @description Define la franja general del servicio (ventana de propuesta del cliente).
+         *
+         *     Solo aplica a servicios con requiere_confirmacion=True: el cliente
+         *     propone un horario dentro de esta franja y el staff valida la
+         *     disponibilidad real del asesor al asignarlo. Para servicios con
+         *     confirmaciÃ³n automÃ¡tica NO aplica: su disponibilidad sale del horario
+         *     de cada asesor vinculado. Se responde 422 si el servicio no es de
+         *     confirmaciÃ³n manual.
+         */
+        post: operations["crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/horarios/{h_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Eliminar Horario Servicio */
+        delete: operations["eliminar_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios__h_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/asesores/{ut_id}/servicios": {
         parameters: {
             query?: never;
@@ -682,7 +727,7 @@ export interface components {
     schemas: {
         /**
          * AsesorPublicOut
-         * @description Datos de asesor visibles al público. Sin email, sin comisión, sin metadata.
+         * @description Datos de asesor visibles al pÃºblico. Sin email, sin comisiÃ³n, sin metadata.
          */
         AsesorPublicOut: {
             /** Id */
@@ -715,7 +760,7 @@ export interface components {
         AsignarAsesorIn: {
             /**
              * Asesor Id
-             * @description UsuarioTenant (rol asesor/admin) a asignar a la sesión
+             * @description UsuarioTenant (rol asesor/admin) a asignar a la sesiÃ³n
              */
             asesor_id: number;
         };
@@ -787,6 +832,21 @@ export interface components {
         };
         /** Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post */
         Body_crear_horario_asesor_api_v2__tenant_slug__admin_asesores__ut_id__horarios_post: {
+            /** Dia Semana */
+            dia_semana: number;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /**
+             * Hora Fin
+             * Format: time
+             */
+            hora_fin: string;
+        };
+        /** Body_crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post */
+        Body_crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post: {
             /** Dia Semana */
             dia_semana: number;
             /**
@@ -946,7 +1006,7 @@ export interface components {
         PagoLocalIn: {
             /**
              * Metodo
-             * @description Método de cobro presencial del staff
+             * @description MÃ©todo de cobro presencial del staff
              * @default efectivo
              */
             metodo: string;
@@ -1020,7 +1080,7 @@ export interface components {
             fecha_hora_inicio: string;
             /**
              * Sesion Id
-             * @description ID de la sesión existente a la que el cliente eligió unirse. Si se omite, el sistema busca o crea una sesión.
+             * @description ID de la sesiÃ³n existente a la que el cliente eligiÃ³ unirse. Si se omite, el sistema busca o crea una sesiÃ³n.
              */
             sesion_id?: number | null;
             /**
@@ -1050,8 +1110,8 @@ export interface components {
          * ReservaCreateResponse
          * @description Respuesta del POST /reservas.
          *
-         *     v2.1 devolvía `SesionOut`, un nombre que nunca se importó en el router: el
-         *     endpoint lanzaba NameError DESPUÉS de haber creado la reserva y cobrado.
+         *     v2.1 devolvÃ­a `SesionOut`, un nombre que nunca se importÃ³ en el router: el
+         *     endpoint lanzaba NameError DESPUÃS de haber creado la reserva y cobrado.
          */
         ReservaCreateResponse: {
             reserva: components["schemas"]["ReservaOut"];
@@ -1062,7 +1122,7 @@ export interface components {
             sesion_asignada_id: number;
             /**
              * Sesion Creada
-             * @description True si se creó una sesión nueva; False si el cliente se unió a una existente.
+             * @description True si se creÃ³ una sesiÃ³n nueva; False si el cliente se uniÃ³ a una existente.
              */
             sesion_creada: boolean;
         };
@@ -1270,7 +1330,7 @@ export interface components {
         };
         /**
          * ServicioAdminUpdate
-         * @description PATCH parcial. `activo` NO se edita aquí: se usa activar/desactivar.
+         * @description PATCH parcial. `activo` NO se edita aquÃ­: se usa activar/desactivar.
          */
         ServicioAdminUpdate: {
             /** Nombre */
@@ -1378,13 +1438,13 @@ export interface components {
         };
         /**
          * SesionDetailOut
-         * @description Detalle público de una sesión.
+         * @description Detalle pÃºblico de una sesiÃ³n.
          *
          *     ELIMINADO respecto de v2.1: la lista `reservas` con folio y estado de cada
-         *     inscrito, y `notas_internas`. El endpoint era anónimo y sesion_id es
-         *     autoincremental, así que cualquiera podía iterar IDs, cosechar folios y
+         *     inscrito, y `notas_internas`. El endpoint era anÃ³nimo y sesion_id es
+         *     autoincremental, asÃ­ que cualquiera podÃ­a iterar IDs, cosechar folios y
          *     consultar el historial de pago ajeno. Para la vista completa existe
-         *     SesionAdminOut, detrás de autenticación con rol.
+         *     SesionAdminOut, detrÃ¡s de autenticaciÃ³n con rol.
          */
         SesionDetailOut: {
             /** Id */
@@ -1486,7 +1546,7 @@ export interface components {
         /**
          * SolicitudCreate
          * @description El cliente propone una fecha/hora libre para un servicio con
-         *     `requiere_confirmacion=True`. No reserva nada todavía.
+         *     `requiere_confirmacion=True`. No reserva nada todavÃ­a.
          */
         SolicitudCreate: {
             /** Servicio Id */
@@ -1501,7 +1561,7 @@ export interface components {
         };
         /**
          * SolicitudOut
-         * @description Vista del cliente: sin datos de resolución internos.
+         * @description Vista del cliente: sin datos de resoluciÃ³n internos.
          */
         SolicitudOut: {
             /** Id */
@@ -2151,7 +2211,7 @@ export interface operations {
     listar_reservas_admin_api_v2__tenant_slug__admin_reservas_get: {
         parameters: {
             query?: {
-                /** @description Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas) */
+                /** @description Filtra por fecha de la sesiÃ³n. Default: hoy (omitir junto con estado para listar todas las fechas) */
                 fecha?: string | null;
                 /** @description Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas */
                 estado?: string | null;
@@ -2667,6 +2727,107 @@ export interface operations {
             header?: never;
             path: {
                 ut_id: number;
+                h_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_horarios_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HorarioAsesorOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HorarioAsesorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    eliminar_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios__h_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
                 h_id: number;
                 tenant_slug: string;
             };

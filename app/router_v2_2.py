@@ -1281,6 +1281,15 @@ def _asesor_admin(db: Session, tenant_id: int, ut_id: int) -> UsuarioTenant:
     return ut
 
 
+def _servicio_admin(db: Session, tenant_id: int, servicio_id: int) -> Servicio:
+    s = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant_id)
+    ).scalar_one_or_none()
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+    return s
+
+
 @router.get("/admin/asesores/{ut_id}/horarios", response_model=List[HorarioAsesorOut])
 def listar_horarios_asesor(
     ut_id: int = Path(..., gt=0),
@@ -1371,6 +1380,128 @@ def eliminar_horario_asesor(
         db, tenant.id, "horario_disponibilidad", h.id, "eliminar",
         usuario_id=staff.usuario_id,
         detalles={"ut_id": ut_id, "h_id": h_id},
+    )
+
+    db.delete(h)
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Horario eliminado", detalle={"h_id": h_id})
+
+
+# ============================================================
+# HORARIOS DEL SERVICIO (confirmación manual)
+# ============================================================
+# La franja general de un servicio con requiere_confirmacion=True define la
+# ventana de propuesta del cliente (el calendario público genera sus slots
+# desde aquí, con asesor=None). La disponibilidad REAL del asesor se valida
+# al asignarlo en POST /admin/reservas/{reserva_id}/asignar-asesor.
+# Solo aplica a servicios con confirmación manual: en el flujo automático
+# la disponibilidad sale del horario de cada asesor, no de aquí.
+
+
+@router.get("/admin/servicios/{servicio_id}/horarios", response_model=List[HorarioAsesorOut])
+def listar_horarios_servicio(
+    servicio_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    _servicio_admin(db, tenant.id, servicio_id)
+    filas = db.execute(
+        select(HorarioDisponibilidad).where(
+            HorarioDisponibilidad.tenant_id == tenant.id,
+            HorarioDisponibilidad.entidad_tipo == "servicio",
+            HorarioDisponibilidad.entidad_id == servicio_id,
+        )
+    ).scalars().all()
+    filas = sorted(filas, key=lambda h: (h.dia_semana, h.hora_inicio))
+    return [HorarioAsesorOut.model_validate(h) for h in filas]
+
+
+@router.post(
+    "/admin/servicios/{servicio_id}/horarios",
+    response_model=HorarioAsesorOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_horario_servicio(
+    servicio_id: int = Path(..., gt=0),
+    dia_semana: int = Body(...),
+    hora_inicio: time = Body(...),
+    hora_fin: time = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_admin),
+):
+    """Define la franja general del servicio (ventana de propuesta del cliente).
+
+    Solo aplica a servicios con requiere_confirmacion=True: el cliente
+    propone un horario dentro de esta franja y el staff valida la
+    disponibilidad real del asesor al asignarlo. Para servicios con
+    confirmación automática NO aplica: su disponibilidad sale del horario
+    de cada asesor vinculado. Se responde 422 si el servicio no es de
+    confirmación manual.
+    """
+    servicio = _servicio_admin(db, tenant.id, servicio_id)
+    if not servicio.requiere_confirmacion:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "El horario de servicio solo aplica a servicios con requiere_confirmacion=True",
+        )
+    if not 0 <= dia_semana <= 6:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "dia_semana debe estar entre 0 y 6")
+    if hora_fin <= hora_inicio:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "hora_fin debe ser mayor a hora_inicio")
+
+    h = HorarioDisponibilidad(
+        tenant_id=tenant.id,
+        entidad_tipo="servicio",
+        entidad_id=servicio_id,
+        dia_semana=dia_semana,
+        hora_inicio=hora_inicio,
+        hora_fin=hora_fin,
+        activo=True,
+    )
+    db.add(h)
+    db.flush()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "horario_disponibilidad", h.id, "crear",
+        usuario_id=staff.usuario_id,
+        detalles={"servicio_id": servicio_id, "dia_semana": dia_semana, "hora_inicio": str(hora_inicio), "hora_fin": str(hora_fin)},
+    )
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El horario no es válido")
+    db.refresh(h)
+    return HorarioAsesorOut.model_validate(h)
+
+
+@router.delete("/admin/servicios/{servicio_id}/horarios/{h_id}", response_model=OperacionOut)
+def eliminar_horario_servicio(
+    servicio_id: int = Path(..., gt=0),
+    h_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_admin),
+):
+    _servicio_admin(db, tenant.id, servicio_id)
+    h = db.execute(
+        select(HorarioDisponibilidad).where(
+            HorarioDisponibilidad.id == h_id,
+            HorarioDisponibilidad.tenant_id == tenant.id,
+            HorarioDisponibilidad.entidad_tipo == "servicio",
+            HorarioDisponibilidad.entidad_id == servicio_id,
+        )
+    ).scalar_one_or_none()
+    if h is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Horario no encontrado")
+
+    svc.registrar_bitacora(
+        db, tenant.id, "horario_disponibilidad", h.id, "eliminar",
+        usuario_id=staff.usuario_id,
+        detalles={"servicio_id": servicio_id, "h_id": h_id},
     )
 
     db.delete(h)

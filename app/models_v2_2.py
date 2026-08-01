@@ -601,7 +601,7 @@ class HorarioDisponibilidad(Base, TenantScopedMixin):
     __table_args__ = (
         CheckConstraint("dia_semana BETWEEN 0 AND 6", name="ck_dia_semana"),
         CheckConstraint("hora_fin > hora_inicio", name="ck_hd_rango_valido"),
-        CheckConstraint("entidad_tipo IN ('asesor','recurso')", name="ck_hd_entidad_tipo"),
+        CheckConstraint("entidad_tipo IN ('asesor','recurso','servicio')", name="ck_hd_entidad_tipo"),
         Index("idx_hd_entidad", "tenant_id", "entidad_tipo", "entidad_id", "dia_semana"),
         Index("idx_hd_dia", "dia_semana", "activo"),
     )

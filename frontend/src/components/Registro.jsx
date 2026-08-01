@@ -1,10 +1,24 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
+
 function emailValido(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-export default function Registro({ onRegistro, onVolverALogin }) {
+function persistirSesion({ token, usuario, tenantSlug, tenantNombre }) {
+  const guardar = (clave, valor) => {
+    if (valor) sessionStorage.setItem(clave, valor)
+    else sessionStorage.removeItem(clave)
+  }
+  guardar('token', token)
+  guardar('usuario', usuario ? JSON.stringify(usuario) : null)
+  guardar('tenantSlug', tenantSlug)
+  guardar('tenantNombre', tenantNombre)
+}
+
+export default function Registro() {
+  const navigate = useNavigate()
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -64,7 +78,26 @@ export default function Registro({ onRegistro, onVolverALogin }) {
         tenant_slug: data.tenant_slug ?? null,
         tenant_nombre: data.tenant_nombre ?? null,
       }
-      onRegistro(data.token, usuario)
+      
+      persistirSesion({
+        token: data.token,
+        usuario,
+        tenantSlug: usuario.tenant_slug,
+        tenantNombre: usuario.tenant_nombre,
+      })
+
+      // Redirigir según el rol
+      if (usuario.rol === 'superadmin') {
+        navigate('/superadmin')
+      } else if (usuario.rol === 'admin' || usuario.rol === 'asesor') {
+        navigate('/admin')
+      } else if (usuario.rol === 'cliente' && !usuario.tenant_slug) {
+        navigate('/seleccion-tenant')
+      } else if (usuario.rol === 'cliente') {
+        navigate('/mis-reservas')
+      } else {
+        navigate('/')
+      }
     } catch {
       setError('No se pudo conectar al servidor')
     } finally {
@@ -197,7 +230,7 @@ export default function Registro({ onRegistro, onVolverALogin }) {
           ¿Ya tienes cuenta?{' '}
           <button
             type="button"
-            onClick={onVolverALogin}
+            onClick={() => navigate('/login')}
             className="font-medium text-blue-600 transition hover:text-blue-700"
           >
             Inicia sesión

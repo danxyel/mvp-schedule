@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import Modal from './common/Modal'
 const BADGE = {
@@ -96,7 +97,11 @@ function DetalleSkeleton() {
 
 const ESTADOS_CANCELABLES = ['pendiente', 'en_espera', 'confirmada']
 
-export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onCancelada }) {
+export default function DetalleReserva() {
+  const { tenantSlug, folio } = useParams()
+  const navigate = useNavigate()
+  const token = sessionStorage.getItem('token')
+  
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -149,7 +154,7 @@ export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onC
         return
       }
       setShowModal(false)
-      onCancelada()
+      navigate('/mis-reservas')
     } catch (err) {
       setCancelError(err)
     } finally {
@@ -178,7 +183,7 @@ export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onC
       <div className="mx-auto max-w-lg">
         <button
           type="button"
-          onClick={onVolver}
+          onClick={() => navigate('/mis-reservas')}
           className="mb-4 text-sm font-medium text-blue-600 transition hover:text-blue-800"
         >
           &larr; Volver
@@ -207,7 +212,7 @@ export default function DetalleReserva({ tenantSlug, folio, token, onVolver, onC
     <div className="mx-auto max-w-lg">
       <button
         type="button"
-        onClick={onVolver}
+        onClick={() => navigate('/mis-reservas')}
         className="mb-4 text-sm font-medium text-blue-600 transition hover:text-blue-800"
       >
         &larr; Volver

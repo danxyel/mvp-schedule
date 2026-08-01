@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
@@ -1796,7 +1797,10 @@ function PendientesTab({ tenantSlug, token }) {
   )
 }
 
-export default function PanelAdmin({ tenantSlug, token, onVolver }) {
+export default function PanelAdmin() {
+  const navigate = useNavigate()
+  const tenantSlug = sessionStorage.getItem('tenantSlug')
+  const token = sessionStorage.getItem('token')
   const [tab, setTab] = useState('sesiones')
 
   return (
@@ -1805,7 +1809,7 @@ export default function PanelAdmin({ tenantSlug, token, onVolver }) {
         <h2 className="text-lg font-semibold text-gray-900">Panel de administración</h2>
         <button
           type="button"
-          onClick={onVolver}
+          onClick={() => navigate(-1)}
           className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
         >
           Volver

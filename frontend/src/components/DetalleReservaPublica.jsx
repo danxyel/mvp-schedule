@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import client from '../api/client'
 
 const BADGE = {
@@ -55,7 +56,11 @@ function DetalleSkeleton() {
   )
 }
 
-export default function DetalleReservaPublica({ tenantSlug, folio, codigo }) {
+export default function DetalleReservaPublica() {
+  const { tenantSlug, folio } = useParams()
+  const [searchParams] = useSearchParams()
+  const codigo = searchParams.get('codigo')
+  
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

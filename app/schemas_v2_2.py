@@ -425,6 +425,13 @@ class SolicitudAdminOut(SolicitudOut):
     resuelto_en: Optional[datetime] = None
 
 
+class SolicitudConfirmarOut(SolicitudAdminOut):
+    """El staff confirmó la solicitud: la Reserva PENDIENTE ya existe y el
+    staff la termina de confirmar vía POST /admin/reservas/{id}/asignar-asesor."""
+    folio_reserva: Optional[str] = None
+    sesion_id: Optional[int] = None
+
+
 # ============================================================
 # SUPERADMIN — TENANTS
 # ============================================================

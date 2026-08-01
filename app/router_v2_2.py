@@ -34,7 +34,7 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
-    SolicitudCreate, SolicitudOut, SolicitudAdminOut,
+    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, CanalEnum,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -961,6 +961,125 @@ def listar_solicitudes_admin(
         .order_by(SolicitudReserva.creado_en.asc())
     ).scalars().all()
     return [_solicitud_admin_out(db, s) for s in filas]
+
+
+@router.post("/admin/solicitudes/{solicitud_id}/confirmar", response_model=SolicitudConfirmarOut)
+def confirmar_solicitud_admin(
+    solicitud_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if solicitud is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "solicitud_no_encontrada", "mensaje": "Solicitud no encontrada"},
+        )
+
+    if solicitud.estado != EstadoSolicitud.PENDIENTE:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "solicitud_no_pendiente",
+             "mensaje": "La solicitud ya fue resuelta"},
+        )
+
+    if solicitud.fecha_hora_propuesta <= utcnow():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "fecha_ambigua",
+             "mensaje": "La fecha propuesta ya pasó; ya no se puede confirmar"},
+        )
+
+    servicio = db.get(Servicio, solicitud.servicio_id)
+    if servicio is None or not servicio.activo:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "servicio_no_encontrado",
+             "mensaje": "El servicio no existe o no está disponible"},
+        )
+
+    cliente = db.get(Usuario, solicitud.cliente_usuario_id)
+    if cliente is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "cliente_no_encontrado",
+             "mensaje": "El cliente que propuso la cita ya no existe"},
+        )
+
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    payload = ReservaCreate(
+        servicio_id=solicitud.servicio_id,
+        fecha_hora_inicio=solicitud.fecha_hora_propuesta,
+        sesion_id=None,
+        asesor_id=None,
+        sede_id=None,
+        notas_cliente=solicitud.notas_cliente,
+        canal=CanalEnum.ADMIN,
+    )
+    try:
+        resultado = svc.crear_reserva(
+            db, tenant, payload, usuario_actual=cliente, ip=ip, user_agent=ua,
+        )
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La sesión cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error de base de datos al confirmar solicitud %s", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    reserva = resultado["reserva"]
+    sesion = resultado["sesion"]
+
+    solicitud.estado = EstadoSolicitud.ACEPTADA
+    solicitud.reserva_id = reserva.id
+    solicitud.resuelto_por_id = staff.usuario_id
+    solicitud.resuelto_en = utcnow()
+
+    svc.registrar_bitacora(
+        db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_confirmada",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "reserva_id": reserva.id,
+            "folio": reserva.folio,
+            "sesion_id": sesion.id,
+            "sesion_creada": resultado["sesion_creada"],
+        },
+        ip=ip, user_agent=ua,
+    )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al confirmar solicitud %s", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(solicitud)
+    out = _solicitud_admin_out(db, solicitud)
+    return SolicitudConfirmarOut(
+        **out.model_dump(),
+        folio_reserva=reserva.folio,
+        sesion_id=sesion.id,
+    )
 
 
 # ============================================================

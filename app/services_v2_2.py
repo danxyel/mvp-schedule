@@ -446,21 +446,6 @@ def listar_slots_disponibles(
     fin_dia = inicio_dia + timedelta(days=1)
     dia_semana = dia_local.weekday()
 
-    asesores = _asesores_del_servicio(db, tenant.id, servicio.id)
-    if asesor_id is not None:
-        asesores = [a for a in asesores if a.id == asesor_id]
-    ids_asesores = [a.id for a in asesores] or [None]
-
-    horarios = list(db.execute(
-        select(HorarioDisponibilidad).where(
-            HorarioDisponibilidad.tenant_id == tenant.id,
-            HorarioDisponibilidad.entidad_tipo == "asesor",
-            HorarioDisponibilidad.entidad_id.in_([i for i in ids_asesores if i]),
-            HorarioDisponibilidad.dia_semana == dia_semana,
-            HorarioDisponibilidad.activo.is_(True),
-        )
-    ).scalars().all())
-
     bloqueos = list(db.execute(
         select(HorarioBloqueo).where(
             HorarioBloqueo.tenant_id == tenant.id,
@@ -480,10 +465,9 @@ def listar_slots_disponibles(
         )
     ).scalars().unique().all())
 
-    por_asesor: Dict[int, List[Sesion]] = {}
-    for s in sesiones:
-        if s.asesor_id is not None:
-            por_asesor.setdefault(s.asesor_id, []).append(s)
+    dur = timedelta(minutes=servicio.duracion_minutos)
+    paso = timedelta(minutes=servicio.config_json.get("intervalo_slots_min", servicio.duracion_minutos))
+    ahora = utcnow()
 
     def _bloqueado(ini: datetime, fin: datetime, aid: Optional[int]) -> bool:
         for b in bloqueos:
@@ -497,9 +481,103 @@ def listar_slots_disponibles(
                 return True
         return False
 
-    dur = timedelta(minutes=servicio.duracion_minutos)
-    paso = timedelta(minutes=servicio.config_json.get("intervalo_slots_min", servicio.duracion_minutos))
-    ahora = utcnow()
+    if servicio.requiere_confirmacion:
+        # Confirmación manual: la ventana de propuesta la define el horario
+        # del SERVICIO (entidad_tipo='servicio'), no el de cada asesor. Cada
+        # slot sale con asesor=None porque aún no se sabe quién lo atenderá;
+        # la disponibilidad real del asesor se valida al asignarlo
+        # (POST /admin/reservas/{reserva_id}/asignar-asesor). Los bloqueos
+        # global/sede se respetan igual que en el flujo normal.
+        marcos = list(db.execute(
+            select(HorarioDisponibilidad).where(
+                HorarioDisponibilidad.tenant_id == tenant.id,
+                HorarioDisponibilidad.entidad_tipo == "servicio",
+                HorarioDisponibilidad.entidad_id == servicio.id,
+                HorarioDisponibilidad.dia_semana == dia_semana,
+                HorarioDisponibilidad.activo.is_(True),
+            )
+        ).scalars().all())
+        marcos = sorted(marcos, key=lambda h: h.hora_inicio)
+        sesiones_servicio = [s for s in sesiones if s.servicio_id == servicio.id]
+
+        slots = []
+        vistos = set()
+        for h in marcos:
+            cursor = datetime.combine(dia_local, h.hora_inicio, tzinfo=tzinfo).astimezone(timezone.utc)
+            limite = datetime.combine(dia_local, h.hora_fin, tzinfo=tzinfo).astimezone(timezone.utc)
+
+            while cursor + dur <= limite:
+                ini, fin = cursor, cursor + dur
+                cursor += paso
+
+                if ini <= ahora:
+                    continue
+
+                if ini in vistos:
+                    continue
+                vistos.add(ini)
+
+                sesion_existente = next(
+                    (s for s in sesiones_servicio
+                     if s.fecha_hora_inicio == ini and s.fecha_hora_fin == fin),
+                    None,
+                )
+                traslape = any(
+                    (s.fecha_hora_inicio - timedelta(minutes=s.servicio.buffer_antes_min or 0)) < fin and
+                    (s.fecha_hora_fin + timedelta(minutes=s.servicio.buffer_despues_min or 0)) > ini
+                    for s in sesiones_servicio
+                    if s is not sesion_existente
+                )
+
+                if _bloqueado(ini, fin, None):
+                    disponible, motivo, cupo = False, "bloqueado", None
+                elif traslape:
+                    disponible, motivo, cupo = False, "ocupado", None
+                elif sesion_existente is not None:
+                    cupo = sesion_existente.cupo_maximo - sesion_existente.inscritos
+                    disponible = cupo > 0
+                    motivo = None if disponible else "cupo_lleno"
+                else:
+                    disponible, motivo, cupo = True, None, servicio.cupo_maximo
+
+                slots.append({
+                    "fecha_hora_inicio": ini,
+                    "fecha_hora_fin": fin,
+                    "disponible": disponible,
+                    "sesion_existente_id": sesion_existente.id if sesion_existente else None,
+                    "cupo_disponible": cupo,
+                    "motivo_no_disponible": motivo,
+                    "asesor": None,
+                })
+
+        slots.sort(key=lambda s: s["fecha_hora_inicio"])
+        return {
+            "fecha": inicio_dia,
+            "servicio_id": servicio.id,
+            "timezone": tzname,
+            "slots": slots,
+        }
+
+    asesores = _asesores_del_servicio(db, tenant.id, servicio.id)
+    if asesor_id is not None:
+        asesores = [a for a in asesores if a.id == asesor_id]
+    ids_asesores = [a.id for a in asesores] or [None]
+
+    horarios = list(db.execute(
+        select(HorarioDisponibilidad).where(
+            HorarioDisponibilidad.tenant_id == tenant.id,
+            HorarioDisponibilidad.entidad_tipo == "asesor",
+            HorarioDisponibilidad.entidad_id.in_([i for i in ids_asesores if i]),
+            HorarioDisponibilidad.dia_semana == dia_semana,
+            HorarioDisponibilidad.activo.is_(True),
+        )
+    ).scalars().all())
+
+    por_asesor: Dict[int, List[Sesion]] = {}
+    for s in sesiones:
+        if s.asesor_id is not None:
+            por_asesor.setdefault(s.asesor_id, []).append(s)
+
     slots: List[Dict[str, Any]] = []
     vistos: set = set()
 

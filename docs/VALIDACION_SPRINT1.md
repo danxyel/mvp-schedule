@@ -140,6 +140,25 @@ Marca cada casilla solo después de probarlo en vivo, no por lectura de código.
 - [ ] Paginación funciona (Anterior/Siguiente) si hay más de 50 pendientes.
 - [ ] Mobile 375px: la tabla scrollea horizontalmente dentro de su contenedor (min-w-0 en la raíz del panel), la página no se desplaza.
 
+### Horario de servicio (confirmación manual) — endpoints staff
+
+> La franja de un servicio con `requiere_confirmacion=True` define la **ventana de propuesta** del cliente; la disponibilidad real del asesor se valida al asignarlo. No toca `crear_reserva()` ni `asignar_asesor_reserva()`.
+
+- [ ] `GET /admin/servicios/{servicio_id}/horarios` (staff) → lista los horarios `entidad_tipo='servicio'` de ese servicio, shape `HorarioAsesorOut` (`id/dia_semana/hora_inicio/hora_fin/activo/creado_en`).
+- [ ] `POST /admin/servicios/{servicio_id}/horarios` con `{ dia_semana, hora_inicio, hora_fin }` en un servicio **con** `requiere_confirmacion=True` → 201, se guarda la franja y se registra bitácora `horario_disponibilidad/crear`.
+- [ ] `POST` en un servicio **sin** `requiere_confirmacion` → 422 "El horario de servicio solo aplica a servicios con requiere_confirmacion=True" (no se crea nada).
+- [ ] `POST` con `dia_semana` fuera de 0-6 o `hora_fin <= hora_inicio` → 422.
+- [ ] `DELETE /admin/servicios/{servicio_id}/horarios/{h_id}` → `OperacionOut` ok; un `h_id` que no pertenezca al servicio o a otro tenant → 404.
+- [ ] Sin token → 401; con token de cliente → 403. Servicio inexistente o de otro tenant → 404 en los tres verbos.
+
+### Horario de servicio — calendario público (listar_slots_disponibles)
+
+- [ ] Con `requiere_confirmacion=True` y franja de servicio creada (ej. lunes 09:00–12:00): `GET /servicios/{id}/disponibilidad` de ese lunes devuelve los slots **dentro de la franja del servicio**, cada uno con `asesor: null` y `disponible: true`.
+- [ ] Días/horas fuera de la franja del servicio → sin slots.
+- [ ] Un bloqueo `global` o de la `sede` del servicio en una hora de la franja → ese slot sale `disponible: false` con `motivo_no_disponible: "bloqueado"` (los bloqueos se siguen respetando).
+- [ ] Si ya existe una sesión del servicio exactamente en ese slot → `sesion_existente_id` presente con su cupo (y `disponible: false` si está llena); una sesión traslapada → `motivo_no_disponible: "ocupado"`.
+- [ ] **Regresión flujo normal**: un servicio con `requiere_confirmacion=False` (ej. Consultoría) sigue generando sus slots desde el horario de sus asesores, con `asesor` poblado y traslapes/ocupados/bloqueados exactamente igual que antes. Nada de su calendario sale de horarios de servicio.
+
 
 ## Notas de Daniel (mobile) — 4 fixes 2026-07-31
 

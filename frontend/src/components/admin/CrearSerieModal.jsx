@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
+import { getLocalOffset } from '../../utils/fechas'
 
 const FRECUENCIAS = [
   { value: 'semanal', label: 'Semanal' },
@@ -51,6 +52,18 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
     metodo_pago: 'local',
   })
 
+  // Validar que al menos una modalidad esté habilitada
+  const modalidadesValidas = form.cobro_por_sesion_habilitado || form.cobro_por_paquete_habilitado
+  
+  // Si solo una modalidad está habilitada, forzar modalidad_cobro
+  useEffect(() => {
+    if (form.cobro_por_sesion_habilitado && !form.cobro_por_paquete_habilitado) {
+      setForm(prev => ({ ...prev, modalidad_cobro: 'sesion' }))
+    } else if (!form.cobro_por_sesion_habilitado && form.cobro_por_paquete_habilitado) {
+      setForm(prev => ({ ...prev, modalidad_cobro: 'paquete' }))
+    }
+  }, [form.cobro_por_sesion_habilitado, form.cobro_por_paquete_habilitado])
+
   // Cargar clientes y asesores
   useEffect(() => {
     const cargarDatos = async () => {
@@ -80,25 +93,6 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
   const handleChange = (campo) => (e) => {
     const valor = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     setForm(prev => ({ ...prev, [campo]: valor }))
-
-    // Si cambia modalidad_cobro, actualizar flags
-    if (campo === 'modalidad_cobro') {
-      if (valor === 'sesion') {
-        setForm(prev => ({
-          ...prev,
-          modalidad_cobro: valor,
-          cobro_por_sesion_habilitado: true,
-          cobro_por_paquete_habilitado: false,
-        }))
-      } else if (valor === 'paquete') {
-        setForm(prev => ({
-          ...prev,
-          modalidad_cobro: valor,
-          cobro_por_sesion_habilitado: false,
-          cobro_por_paquete_habilitado: true,
-        }))
-      }
-    }
   }
 
   const handleSubmit = async () => {
@@ -108,6 +102,10 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
     }
     if (!form.fecha_inicio) {
       setError('Selecciona una fecha de inicio')
+      return
+    }
+    if (!modalidadesValidas) {
+      setError('Debes habilitar al menos una modalidad de cobro')
       return
     }
     if (form.modalidad_cobro === 'paquete' && !form.precio_paquete) {
@@ -131,7 +129,7 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
       hora_inicio: form.hora_inicio,
       duracion_minutos: parseInt(form.duracion_minutos),
       num_repeticiones: parseInt(form.num_repeticiones),
-      fecha_inicio: `${form.fecha_inicio}T00:00:00-06:00`,
+      fecha_inicio: `${form.fecha_inicio}T00:00:00${getLocalOffset()}`,
       cobro_por_sesion_habilitado: form.cobro_por_sesion_habilitado,
       cobro_por_paquete_habilitado: form.cobro_por_paquete_habilitado,
       precio_paquete: form.precio_paquete ? parseFloat(form.precio_paquete) : null,
@@ -213,7 +211,7 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
           >
             <option value="">Sin asesor específico</option>
             {asesores.map(a => (
-              <option key={a.usuario_id} value={a.usuario_id}>
+              <option key={a.id} value={a.id}>
                 {a.nombre}
               </option>
             ))}
@@ -307,20 +305,55 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
           </div>
         </div>
 
-        {/* Modalidad de cobro */}
+        {/* Modalidades de cobro (checkboxes independientes) */}
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Modalidad de cobro <span className="text-red-500">*</span>
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Modalidades de cobro disponibles
           </label>
-          <select
-            value={form.modalidad_cobro}
-            onChange={handleChange('modalidad_cobro')}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="sesion">Por sesión</option>
-            <option value="paquete">Por paquete</option>
-          </select>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.cobro_por_sesion_habilitado}
+                onChange={handleChange('cobro_por_sesion_habilitado')}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm text-gray-700">Ofrecer pago por sesión</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.cobro_por_paquete_habilitado}
+                onChange={handleChange('cobro_por_paquete_habilitado')}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm text-gray-700">Ofrecer pago por paquete</span>
+            </label>
+          </div>
+          {!modalidadesValidas && (
+            <p className="mt-1 text-xs text-red-600">Debes habilitar al menos una modalidad</p>
+          )}
         </div>
+
+        {/* Selector de modalidad elegida (solo si ambas están habilitadas) */}
+        {form.cobro_por_sesion_habilitado && form.cobro_por_paquete_habilitado && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Modalidad elegida para esta serie <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.modalidad_cobro}
+              onChange={handleChange('modalidad_cobro')}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="sesion">Por sesión</option>
+              <option value="paquete">Por paquete</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Informada por las notas del cliente si viene de una solicitud
+            </p>
+          </div>
+        )}
 
         {/* Precio paquete (solo si es paquete) */}
         {form.modalidad_cobro === 'paquete' && (

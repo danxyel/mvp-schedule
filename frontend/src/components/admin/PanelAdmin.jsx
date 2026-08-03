@@ -4,6 +4,7 @@ import client from '../../api/client'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
 import SeriesTab from './SeriesTab'
+import CrearSerieModal from './CrearSerieModal'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
@@ -1140,6 +1141,7 @@ function SolicitudesTab({ tenantSlug, token }) {
   const [rechazandoLoading, setRechazandoLoading] = useState(false)
   const [errores, setErrores] = useState({})
   const [exito, setExito] = useState(null)
+  const [serieModal, setSerieModal] = useState(null)
 
   const fetchSolicitudes = useCallback(async () => {
     const query = estado !== 'todas' ? { estado } : {}
@@ -1362,6 +1364,14 @@ function SolicitudesTab({ tenantSlug, token }) {
                         </button>
                         <button
                           type="button"
+                          onClick={() => setSerieModal(s)}
+                          disabled={confirmando === s.id || rechazando === s.id}
+                          className="rounded-lg border border-orange-300 px-2.5 py-1.5 text-xs font-medium text-orange-700 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Serie
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => abrirRechazar(s)}
                           disabled={confirmando === s.id || rechazando === s.id}
                           className="rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1393,6 +1403,20 @@ function SolicitudesTab({ tenantSlug, token }) {
           </tbody>
         </table>
       </div>
+
+      {serieModal && (
+        <CrearSerieModal
+          servicio={{ id: serieModal.servicio_id, nombre: serieModal.servicio_nombre, duracion_minutos: serieModal.duracion_minutos }}
+          solicitud={serieModal}
+          onClose={() => setSerieModal(null)}
+          onCreado={() => {
+            setExito({ folio: null, mensaje: 'Serie creada desde la solicitud.' })
+            window.setTimeout(() => setExito(null), 4000)
+            setSerieModal(null)
+            fetchSolicitudes()
+          }}
+        />
+      )}
 
       {rechazarModal && (
         <Modal title="Rechazar solicitud" onClose={cerrarRechazar} maxWidth="max-w-sm">

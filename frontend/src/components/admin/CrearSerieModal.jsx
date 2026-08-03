@@ -29,22 +29,34 @@ function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
-export default function CrearSerieModal({ servicio, onClose, onCreado }) {
+function toDateInputValue(date) {
+  const offset = date.getTimezoneOffset() * 60000
+  const local = new Date(date.getTime() - offset)
+  return local.toISOString().slice(0, 10)
+}
+
+function horaDesdeStringUTC(utcString) {
+  const d = new Date(utcString)
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+export default function CrearSerieModal({ servicio, solicitud = null, onClose, onCreado }) {
   const [clientes, setClientes] = useState([])
   const [asesores, setAsesores] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [exito, setExito] = useState(null)
 
+  const fechaBase = solicitud ? new Date(solicitud.fecha_hora_propuesta) : null
   const [form, setForm] = useState({
-    cliente_usuario_id: '',
-    asesor_id: '',
+    cliente_usuario_id: solicitud ? String(solicitud.cliente_usuario_id) : '',
+    asesor_id: solicitud?.asesor_id ? String(solicitud.asesor_id) : '',
     frecuencia: 'semanal',
-    dia_semana: 0,
-    hora_inicio: '10:00',
+    dia_semana: fechaBase ? (fechaBase.getDay() + 6) % 7 : 0,
+    hora_inicio: fechaBase ? horaDesdeStringUTC(solicitud.fecha_hora_propuesta) : '10:00',
     duracion_minutos: servicio?.duracion_minutos || 60,
     num_repeticiones: 8,
-    fecha_inicio: '',
+    fecha_inicio: fechaBase ? toDateInputValue(fechaBase) : '',
     cobro_por_sesion_habilitado: true,
     cobro_por_paquete_habilitado: false,
     precio_paquete: '',
@@ -120,16 +132,13 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
     const tenantSlug = sessionStorage.getItem('tenantSlug')
     const token = sessionStorage.getItem('token')
 
-    const payload = {
-      servicio_id: servicio.id,
-      cliente_usuario_id: parseInt(form.cliente_usuario_id),
-      asesor_id: form.asesor_id ? parseInt(form.asesor_id) : null,
+    const basePayload = {
       frecuencia: form.frecuencia,
       dia_semana: parseInt(form.dia_semana),
       hora_inicio: form.hora_inicio,
       duracion_minutos: parseInt(form.duracion_minutos),
       num_repeticiones: parseInt(form.num_repeticiones),
-      fecha_inicio: `${form.fecha_inicio}T00:00:00${getLocalOffset()}`,
+      asesor_id: form.asesor_id ? parseInt(form.asesor_id) : null,
       cobro_por_sesion_habilitado: form.cobro_por_sesion_habilitado,
       cobro_por_paquete_habilitado: form.cobro_por_paquete_habilitado,
       precio_paquete: form.precio_paquete ? parseFloat(form.precio_paquete) : null,
@@ -137,10 +146,28 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
       metodo_pago: form.metodo_pago,
     }
 
+    const esDesdeSolicitud = solicitud != null
+    const payload = esDesdeSolicitud
+      ? basePayload
+      : {
+          ...basePayload,
+          servicio_id: servicio.id,
+          cliente_usuario_id: parseInt(form.cliente_usuario_id),
+          fecha_inicio: `${form.fecha_inicio}T00:00:00${getLocalOffset()}`,
+        }
+
+    const endpoint = esDesdeSolicitud
+      ? '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie'
+      : '/api/v2/{tenant_slug}/admin/series'
+
+    const params = esDesdeSolicitud
+      ? { path: { tenant_slug: tenantSlug, solicitud_id: solicitud.id } }
+      : { path: { tenant_slug: tenantSlug } }
+
     const { data, error: fetchErr } = await client.POST(
-      '/api/v2/{tenant_slug}/admin/series',
+      endpoint,
       {
-        params: { path: { tenant_slug: tenantSlug } },
+        params,
         body: payload,
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -167,6 +194,13 @@ export default function CrearSerieModal({ servicio, onClose, onCreado }) {
           <p className="text-sm font-medium text-blue-900">Servicio: {servicio?.nombre}</p>
           <p className="text-xs text-blue-700">Duración: {servicio?.duracion_minutos} min</p>
         </div>
+
+        {solicitud?.notas_cliente && (
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+            <p className="text-xs font-medium text-yellow-800">Notas del cliente</p>
+            <p className="text-sm text-yellow-900">{solicitud.notas_cliente}</p>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3">

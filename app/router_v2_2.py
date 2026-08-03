@@ -21,7 +21,7 @@ from app.dependencies import (
 )
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
-    SolicitudReserva, SerieReserva, Bitacora,
+    SolicitudReserva, SerieReserva, InscripcionSerie, Bitacora,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
     EstadoSolicitud, EstadoSerie, ModalidadCobro, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
@@ -36,7 +36,7 @@ from app.schemas_v2_2 import (
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
     SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn, SolicitudRechazarIn, CanalEnum,
-    SerieReservaCreate, SerieReservaOut,
+    SerieReservaCreate, SerieReservaOut, InscripcionSerieCreate, InscripcionSerieOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -153,6 +153,8 @@ _CODIGO_HTTP = {
     "not_found": status.HTTP_404_NOT_FOUND,
     "estado_invalido": status.HTTP_409_CONFLICT,
     "pago_pendiente": status.HTTP_409_CONFLICT,
+    "cliente_ya_inscrito": status.HTTP_409_CONFLICT,
+    "modalidad_no_permitida": status.HTTP_422_UNPROCESSABLE_ENTITY,
 }
 
 
@@ -1251,16 +1253,13 @@ def crear_serie_admin(
     tenant: Tenant = Depends(get_current_tenant),
     staff: UsuarioTenant = Depends(requiere_staff),
 ):
-    """Crea una serie de reservas recurrentes."""
+    """Crea el patrón de horario de una serie recurrente."""
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
 
-    cliente = db.get(Usuario, payload.cliente_usuario_id)
-
     try:
-        serie = svc.crear_serie_reservas(
+        serie = svc.crear_serie(
             db, tenant, payload,
-            cliente=cliente,
             registrado_por=staff.usuario,
             ip=ip, user_agent=ua,
         )
@@ -1275,6 +1274,45 @@ def crear_serie_admin(
 
     db.refresh(serie)
     return _serie_admin_out(db, serie)
+
+
+@router.post("/admin/series/{serie_id}/inscripciones", response_model=InscripcionSerieOut, status_code=status.HTTP_201_CREATED)
+def inscribir_cliente_en_serie_admin(
+    payload: InscripcionSerieCreate,
+    serie_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Inscribe un cliente a una serie recurrente existente."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        inscripcion = svc.inscribir_cliente_en_serie(
+            db, tenant, serie_id, payload,
+            registrado_por=staff.usuario,
+            ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La serie cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al inscribir cliente en serie %s", serie_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(inscripcion)
+    return _inscripcion_admin_out(db, inscripcion)
 
 
 @router.get("/admin/series", response_model=List[SerieReservaOut])
@@ -1295,7 +1333,7 @@ def listar_series_admin(
         .order_by(SerieReserva.creado_en.desc())
     ).scalars().all()
 
-    return [_serie_admin_out(db, s) for s in filas]
+    return [_serie_admin_out(db, s, con_inscripciones=False) for s in filas]
 
 
 @router.get("/admin/series/{serie_id}", response_model=SerieReservaOut)
@@ -1305,7 +1343,7 @@ def detalle_serie_admin(
     tenant: Tenant = Depends(get_current_tenant),
     _: UsuarioTenant = Depends(requiere_staff),
 ):
-    """Detalle de una serie de reservas."""
+    """Detalle de una serie de reservas, incluyendo sus inscripciones."""
     serie = db.execute(
         select(SerieReserva).where(
             SerieReserva.tenant_id == tenant.id,
@@ -1319,45 +1357,50 @@ def detalle_serie_admin(
             {"codigo": "serie_no_encontrada", "mensaje": "Serie no encontrada"},
         )
 
-    return _serie_admin_out(db, serie)
+    return _serie_admin_out(db, serie, con_inscripciones=True)
 
 
-@router.post("/admin/reservas/serie/{serie_id}/pago-local", response_model=OperacionOut)
-def registrar_pago_serie_local(
+@router.post("/admin/series/{serie_id}/inscripciones/{inscripcion_id}/pago-local", response_model=OperacionOut)
+def registrar_pago_inscripcion_local(
     payload: PagoLocalIn,
     serie_id: int = Path(..., gt=0),
+    inscripcion_id: int = Path(..., gt=0),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     staff: UsuarioTenant = Depends(requiere_staff),
 ):
-    """
-    Registra el pago de un paquete completo.
-    Marca estado_pago=COMPLETADO en TODAS las reservas de la serie a la vez.
-    """
+    """Registra el pago de un paquete para un cliente específico de una serie."""
+    inscripcion = db.execute(
+        select(InscripcionSerie)
+        .where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.serie_id == serie_id,
+            InscripcionSerie.id == inscripcion_id,
+        )
+    ).scalar_one_or_none()
+
+    if inscripcion is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "inscripcion_no_encontrada", "mensaje": "Inscripción no encontrada"},
+        )
+
     serie = db.execute(
         select(SerieReserva).where(
             SerieReserva.tenant_id == tenant.id,
             SerieReserva.id == serie_id,
         )
     ).scalar_one_or_none()
-
-    if serie is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            {"codigo": "serie_no_encontrada", "mensaje": "Serie no encontrada"},
-        )
-
-    if serie.estado == EstadoSerie.CANCELADA:
+    if serie is None or serie.estado == EstadoSerie.CANCELADA:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {"codigo": "serie_cancelada", "mensaje": "La serie está cancelada"},
         )
 
-    # Obtener todas las reservas de la serie
     reservas = db.execute(
         select(Reserva).where(
             Reserva.tenant_id == tenant.id,
-            Reserva.serie_id == serie_id,
+            Reserva.inscripcion_id == inscripcion_id,
             Reserva.estado != EstadoReserva.CANCELADA,
         )
     ).scalars().all()
@@ -1365,10 +1408,9 @@ def registrar_pago_serie_local(
     if not reservas:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            {"codigo": "sin_reservas_activas", "mensaje": "No hay reservas activas en esta serie"},
+            {"codigo": "sin_reservas_activas", "mensaje": "No hay reservas activas para esta inscripción"},
         )
 
-    # Validar que al menos una reserva tenga estado_pago pendiente
     pendientes = [r for r in reservas if r.estado_pago == EstadoPagoReserva.PENDIENTE]
     if not pendientes:
         raise HTTPException(
@@ -1376,31 +1418,28 @@ def registrar_pago_serie_local(
             {"codigo": "ya_pagado", "mensaje": "Todas las reservas ya tienen el pago registrado"},
         )
 
-    # Registrar pago en todas las reservas pendientes
+    monto_a_distribuir = payload.monto if payload.monto is not None else inscripcion.precio_paquete
+
     for reserva in pendientes:
         reserva.estado_pago = EstadoPagoReserva.COMPLETADO
         reserva.pagado_en = utcnow()
         reserva.metodo_pago_usado = MetodoPagoUsado(payload.metodo)
 
-        # Si es paquete, distribuir el monto entre las reservas
-        # Si payload.monto es null, usar serie.precio_paquete si existe
-        monto_a_distribuir = payload.monto if payload.monto is not None else serie.precio_paquete
         if monto_a_distribuir is not None and len(pendientes) > 0:
-            monto_por_reserva = monto_a_distribuir / len(pendientes)
-            reserva.precio_final = monto_por_reserva
+            reserva.precio_final = monto_a_distribuir / len(pendientes)
 
-        # Confirmar reservas que estaban en_espera
         if reserva.estado == EstadoReserva.EN_ESPERA:
             reserva.estado = EstadoReserva.CONFIRMADA
 
         svc.actualizar_estado_sesion(db, reserva.sesion_id, tenant.id)
 
-    # Registrar bitácora
     svc.registrar_bitacora(
-        db, tenant.id, "serie", serie_id, "pago_serie",
+        db, tenant.id, "inscripcion_serie", inscripcion_id, "pago_inscripcion",
         usuario_id=staff.usuario_id,
         detalles={
             "serie_id": serie_id,
+            "inscripcion_id": inscripcion_id,
+            "cliente_usuario_id": inscripcion.cliente_usuario_id,
             "num_reservas": len(pendientes),
             "metodo": payload.metodo,
             "monto_total": str(payload.monto) if payload.monto else None,
@@ -1412,53 +1451,104 @@ def registrar_pago_serie_local(
         db.commit()
     except SQLAlchemyError:
         db.rollback()
-        log.exception("Error DB al registrar pago de serie %s", serie_id)
+        log.exception("Error DB al registrar pago de inscripción %s", inscripcion_id)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
 
     return OperacionOut(
         ok=True,
-        mensaje=f"Pago registrado para {len(pendientes)} reservas de la serie",
-        detalle={"serie_id": serie_id, "num_reservas": len(pendientes)},
+        mensaje=f"Pago registrado para {len(pendientes)} reservas de la inscripción",
+        detalle={"serie_id": serie_id, "inscripcion_id": inscripcion_id, "num_reservas": len(pendientes)},
     )
 
 
-def _serie_admin_out(db: Session, serie: SerieReserva) -> SerieReservaOut:
-    """Construye la salida de una serie con datos enriquecidos."""
-    servicio = db.get(Servicio, serie.servicio_id)
-    cliente = db.get(Usuario, serie.cliente_usuario_id)
-    asesor = db.get(UsuarioTenant, serie.asesor_id) if serie.asesor_id else None
+def _estado_pago_inscripcion(reservas: List[Reserva]) -> str:
+    if not reservas:
+        return "pendiente"
+    if all(r.estado_pago == EstadoPagoReserva.EXENTO for r in reservas):
+        return "exento"
+    if all(r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO) for r in reservas):
+        return "completo"
+    if any(r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO) for r in reservas):
+        return "parcial"
+    return "pendiente"
 
-    # Contar reservas creadas y omitidas
+
+def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> InscripcionSerieOut:
+    cliente = db.get(Usuario, inscripcion.cliente_usuario_id)
+
     reservas = db.execute(
         select(Reserva).where(
-            Reserva.tenant_id == serie.tenant_id,
-            Reserva.serie_id == serie.id,
+            Reserva.tenant_id == inscripcion.tenant_id,
+            Reserva.inscripcion_id == inscripcion.id,
         )
     ).scalars().all()
 
     num_creadas = len(reservas)
-    num_omitidas = serie.num_repeticiones - num_creadas
+    num_omitidas = inscripcion.serie.num_repeticiones - num_creadas if inscripcion.serie else 0
 
-    # Obtener fechas omitidas de la bitácora (si existe)
     fechas_omitidas = None
     bitacora = db.execute(
         select(Bitacora).where(
-            Bitacora.tenant_id == serie.tenant_id,
-            Bitacora.entidad_tipo == "serie_reserva",
-            Bitacora.entidad_id == serie.id,
-            Bitacora.accion == "serie_reserva_creada",
+            Bitacora.tenant_id == inscripcion.tenant_id,
+            Bitacora.entidad_tipo == "inscripcion_serie",
+            Bitacora.entidad_id == inscripcion.id,
+            Bitacora.accion == "inscripcion_serie_creada",
         )
     ).scalar_one_or_none()
-
     if bitacora and bitacora.detalles:
         fechas_omitidas = bitacora.detalles.get("fechas_omitidas")
+
+    return InscripcionSerieOut(
+        id=inscripcion.id,
+        serie_id=inscripcion.serie_id,
+        cliente_usuario_id=inscripcion.cliente_usuario_id,
+        nombre_cliente=cliente.nombre if cliente else None,
+        email_cliente=cliente.email if cliente else None,
+        modalidad_cobro=inscripcion.modalidad_cobro.value,
+        precio_paquete=inscripcion.precio_paquete,
+        num_reservas_creadas=num_creadas,
+        num_reservas_omitidas=num_omitidas,
+        fechas_omitidas=fechas_omitidas,
+        estado_pago=_estado_pago_inscripcion(reservas),
+        creado_en=inscripcion.creado_en,
+    )
+
+
+def _serie_admin_out(
+    db: Session,
+    serie: SerieReserva,
+    con_inscripciones: bool = True,
+) -> SerieReservaOut:
+    """Construye la salida de una serie con datos enriquecidos."""
+    servicio = db.get(Servicio, serie.servicio_id)
+    asesor = db.get(UsuarioTenant, serie.asesor_id) if serie.asesor_id else None
+
+    num_inscripciones = db.execute(
+        select(func.count(InscripcionSerie.id)).where(
+            InscripcionSerie.serie_id == serie.id,
+        )
+    ).scalar_one()
+
+    num_reservas_creadas_total = db.execute(
+        select(func.count(Reserva.id)).where(
+            Reserva.tenant_id == serie.tenant_id,
+            Reserva.serie_id == serie.id,
+        )
+    ).scalar_one()
+
+    inscripciones_out = None
+    if con_inscripciones:
+        inscripciones = db.execute(
+            select(InscripcionSerie)
+            .where(InscripcionSerie.serie_id == serie.id)
+            .order_by(InscripcionSerie.creado_en.desc())
+        ).scalars().all()
+        inscripciones_out = [_inscripcion_admin_out(db, i) for i in inscripciones]
 
     return SerieReservaOut(
         id=serie.id,
         servicio_id=serie.servicio_id,
         servicio_nombre=servicio.nombre if servicio else None,
-        cliente_usuario_id=serie.cliente_usuario_id,
-        nombre_cliente=cliente.nombre if cliente else None,
         asesor_id=serie.asesor_id,
         nombre_asesor=asesor.usuario.nombre if asesor and asesor.usuario else None,
         frecuencia=serie.frecuencia,
@@ -1469,11 +1559,10 @@ def _serie_admin_out(db: Session, serie: SerieReserva) -> SerieReservaOut:
         fecha_inicio=serie.fecha_inicio,
         cobro_por_sesion_habilitado=serie.cobro_por_sesion_habilitado,
         cobro_por_paquete_habilitado=serie.cobro_por_paquete_habilitado,
-        precio_paquete=serie.precio_paquete,
         estado=serie.estado.value,
-        num_reservas_creadas=num_creadas,
-        num_reservas_omitidas=num_omitidas,
-        fechas_omitidas=fechas_omitidas,
+        num_inscripciones=num_inscripciones,
+        num_reservas_creadas_total=num_reservas_creadas_total,
+        inscripciones=inscripciones_out,
         creado_en=serie.creado_en,
         actualizado_en=serie.actualizado_en,
     )

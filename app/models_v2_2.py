@@ -501,6 +501,7 @@ class Reserva(Base, TenantScopedMixin):
     checked_in: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     serie_id: Mapped[Optional[int]] = mapped_column(ForeignKey("series_reservas.id", ondelete="SET NULL"), nullable=True)
+    inscripcion_id: Mapped[Optional[int]] = mapped_column(ForeignKey("inscripciones_serie.id", ondelete="SET NULL"), nullable=True)
     modalidad_cobro: Mapped[Optional[ModalidadCobro]] = mapped_column(SQLEnum(ModalidadCobro), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -523,6 +524,7 @@ class Reserva(Base, TenantScopedMixin):
             name="ck_reserva_hold_solo_en_espera",
         ),
         Index("idx_reservas_sesion", "sesion_id"),
+        Index("idx_reservas_inscripcion", "inscripcion_id"),
         Index("idx_reservas_estado", "tenant_id", "estado"),
         Index("idx_reservas_folio", "tenant_id", "folio"),
         Index("idx_reservas_cliente", "tenant_id", "creado_por_usuario_id"),
@@ -542,6 +544,7 @@ class Reserva(Base, TenantScopedMixin):
     creado_por: Mapped["Usuario"] = relationship(foreign_keys=[creado_por_usuario_id], back_populates="reservas_creadas")
     beneficiario: Mapped[Optional["Beneficiario"]] = relationship(back_populates="reservas")
     serie: Mapped[Optional["SerieReserva"]] = relationship(back_populates="reservas")
+    inscripcion: Mapped[Optional["InscripcionSerie"]] = relationship(back_populates="reservas")
     respuestas_formulario: Mapped[List["RespuestaFormulario"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
     integrantes: Mapped[List["ReservaIntegrante"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
 
@@ -575,15 +578,42 @@ class SolicitudReserva(Base, TenantScopedMixin):
 
 
 # ============================================================
-# 7c. SERIE DE RESERVAS — reservas recurrentes (Sprint 2 #11)
-# Agrupa múltiples reservas independientes con el mismo patrón.
+# 7c. INSCRIPCIÓN A SERIE — cliente inscrito a un patrón recurrente
+# Cada inscripción genera N reservas independientes para ese cliente.
+# ============================================================
+class InscripcionSerie(Base):
+    __tablename__ = "inscripciones_serie"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    serie_id: Mapped[int] = mapped_column(ForeignKey("series_reservas.id", ondelete="CASCADE"))
+    cliente_usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    modalidad_cobro: Mapped[ModalidadCobro] = mapped_column(SQLEnum(ModalidadCobro), nullable=False)
+    precio_paquete: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("serie_id", "cliente_usuario_id", name="uq_inscripcion_serie_cliente"),
+        CheckConstraint("modalidad_cobro IN ('sesion', 'paquete')", name="ck_inscripcion_modalidad"),
+        CheckConstraint("precio_paquete IS NULL OR precio_paquete >= 0", name="ck_inscripcion_precio_no_negativo"),
+        Index("idx_inscripciones_serie_serie", "serie_id"),
+        Index("idx_inscripciones_serie_cliente", "tenant_id", "cliente_usuario_id"),
+    )
+
+    tenant: Mapped["Tenant"] = relationship()
+    serie: Mapped["SerieReserva"] = relationship(back_populates="inscripciones")
+    cliente: Mapped["Usuario"] = relationship()
+    reservas: Mapped[List["Reserva"]] = relationship(back_populates="inscripcion")
+
+
+# ============================================================
+# 7d. SERIE DE RESERVAS — patrón de horario recurrente (Sprint 2 #11)
+# Ya no guarda cliente ni precio: eso vive en InscripcionSerie.
 # Cada reserva mantiene su ciclo de vida individual.
 # ============================================================
 class SerieReserva(Base, TenantScopedMixin):
     __tablename__ = "series_reservas"
     id: Mapped[int] = mapped_column(primary_key=True)
     servicio_id: Mapped[int] = mapped_column(ForeignKey("servicios.id", ondelete="RESTRICT"))
-    cliente_usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
     asesor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
 
     # Patrón de recurrencia
@@ -597,7 +627,6 @@ class SerieReserva(Base, TenantScopedMixin):
     # Modalidades de cobro habilitadas por admin
     cobro_por_sesion_habilitado: Mapped[bool] = mapped_column(default=True)
     cobro_por_paquete_habilitado: Mapped[bool] = mapped_column(default=False)
-    precio_paquete: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
 
     # Estado
     estado: Mapped[EstadoSerie] = mapped_column(SQLEnum(EstadoSerie), default=EstadoSerie.ACTIVA)
@@ -609,16 +638,14 @@ class SerieReserva(Base, TenantScopedMixin):
         CheckConstraint("num_repeticiones <= 50", name="ck_serie_repeticiones_maximo"),
         CheckConstraint("dia_semana IS NULL OR (dia_semana >= 0 AND dia_semana <= 6)", name="ck_serie_dia_semana_rango"),
         CheckConstraint("duracion_minutos > 0", name="ck_serie_duracion_positiva"),
-        CheckConstraint("precio_paquete IS NULL OR precio_paquete >= 0", name="ck_serie_precio_no_negativo"),
-        Index("idx_series_cliente", "tenant_id", "cliente_usuario_id"),
         Index("idx_series_estado", "tenant_id", "estado"),
     )
 
     tenant: Mapped["Tenant"] = relationship()
     servicio: Mapped["Servicio"] = relationship()
-    cliente: Mapped["Usuario"] = relationship()
     asesor: Mapped[Optional["UsuarioTenant"]] = relationship()
     reservas: Mapped[List["Reserva"]] = relationship(back_populates="serie")
+    inscripciones: Mapped[List["InscripcionSerie"]] = relationship(back_populates="serie")
 
 
 # ============================================================

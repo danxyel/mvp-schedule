@@ -85,6 +85,31 @@ class ModalidadCobroEnum(str, Enum):
     PAQUETE = "paquete"
 
 
+def validar_modalidad_cobro(
+    modalidad: ModalidadCobroEnum,
+    precio_paquete: Optional[Decimal],
+    cobro_por_sesion_habilitado: bool,
+    cobro_por_paquete_habilitado: bool,
+) -> None:
+    """Valida coherencia entre modalidad elegida y modalidades habilitadas.
+
+    Usado por los model_validators de entrada y por la lógica de negocio
+    cuando la serie ya existe y las modalidades habilitadas viven en ella.
+    """
+    if not cobro_por_sesion_habilitado and not cobro_por_paquete_habilitado:
+        raise ValueError("Debe habilitar al menos una modalidad de cobro")
+    if (
+        cobro_por_paquete_habilitado
+        and modalidad == ModalidadCobroEnum.PAQUETE
+        and precio_paquete is None
+    ):
+        raise ValueError("precio_paquete es obligatorio cuando la modalidad es 'paquete'")
+    if modalidad == ModalidadCobroEnum.PAQUETE and not cobro_por_paquete_habilitado:
+        raise ValueError("No puede seleccionar modalidad 'paquete' si no está habilitada")
+    if modalidad == ModalidadCobroEnum.SESION and not cobro_por_sesion_habilitado:
+        raise ValueError("No puede seleccionar modalidad 'sesion' si no está habilitada")
+
+
 class EstadoSerieEnum(str, Enum):
     ACTIVA = "activa"
     COMPLETADA = "completada"
@@ -486,14 +511,12 @@ class SolicitudConfirmarSerieIn(BaseModel):
 
     @model_validator(mode="after")
     def validar_modalidades(self):
-        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
-            raise ValueError("Debe habilitar al menos una modalidad de cobro")
-        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
-            raise ValueError("precio_paquete es obligatorio cuando cobro_por_paquete_habilitado=True")
-        if self.modalidad_cobro == ModalidadCobroEnum.PAQUETE and not self.cobro_por_paquete_habilitado:
-            raise ValueError("No puede seleccionar modalidad 'paquete' si no está habilitada")
-        if self.modalidad_cobro == ModalidadCobroEnum.SESION and not self.cobro_por_sesion_habilitado:
-            raise ValueError("No puede seleccionar modalidad 'sesion' si no está habilitada")
+        validar_modalidad_cobro(
+            self.modalidad_cobro,
+            self.precio_paquete,
+            self.cobro_por_sesion_habilitado,
+            self.cobro_por_paquete_habilitado,
+        )
         return self
 
     model_config = ConfigDict(extra="forbid")
@@ -509,9 +532,11 @@ class SolicitudRechazarIn(BaseModel):
 # SERIES DE RESERVAS — reservas recurrentes
 # ============================================================
 class SerieReservaCreate(BaseModel):
-    """Crear una serie de reservas recurrentes."""
+    """Crear el patrón de horario de una serie recurrente.
+
+    La inscripción de clientes es un paso posterior.
+    """
     servicio_id: int = Field(..., gt=0)
-    cliente_usuario_id: int = Field(..., gt=0)
     asesor_id: Optional[int] = Field(default=None, gt=0)
 
     # Patrón de recurrencia
@@ -522,14 +547,9 @@ class SerieReservaCreate(BaseModel):
     num_repeticiones: int = Field(default=1, ge=1, le=50)
     fecha_inicio: datetime
 
-    # Modalidades de cobro
+    # Modalidades de cobro que se ofrecerán a quienes se inscriban
     cobro_por_sesion_habilitado: bool = Field(default=True)
     cobro_por_paquete_habilitado: bool = Field(default=False)
-    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
-    modalidad_cobro: ModalidadCobroEnum = Field(default=ModalidadCobroEnum.SESION)
-    
-    # Método de pago (online/local/registro)
-    metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
 
     @field_validator("fecha_inicio")
     @classmethod
@@ -541,15 +561,43 @@ class SerieReservaCreate(BaseModel):
     def validar_modalidades(self):
         if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
             raise ValueError("Debe habilitar al menos una modalidad de cobro")
-        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
-            raise ValueError("precio_paquete es obligatorio cuando cobro_por_paquete_habilitado=True")
-        if self.modalidad_cobro == ModalidadCobroEnum.PAQUETE and not self.cobro_por_paquete_habilitado:
-            raise ValueError("No puede seleccionar modalidad 'paquete' si no está habilitada")
-        if self.modalidad_cobro == ModalidadCobroEnum.SESION and not self.cobro_por_sesion_habilitado:
-            raise ValueError("No puede seleccionar modalidad 'sesion' si no está habilitada")
         return self
 
     model_config = ConfigDict(extra="forbid")
+
+
+class InscripcionSerieCreate(BaseModel):
+    """Inscribir un cliente a una serie recurrente existente."""
+    cliente_usuario_id: int = Field(..., gt=0)
+    modalidad_cobro: ModalidadCobroEnum = Field(default=ModalidadCobroEnum.SESION)
+    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
+    metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
+
+    @model_validator(mode="after")
+    def validar_precio_paquete(self):
+        if self.modalidad_cobro == ModalidadCobroEnum.PAQUETE and self.precio_paquete is None:
+            raise ValueError("precio_paquete es obligatorio cuando la modalidad es 'paquete'")
+        return self
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class InscripcionSerieOut(BaseModel):
+    """Vista de una inscripción a serie."""
+    id: int
+    serie_id: int
+    cliente_usuario_id: int
+    nombre_cliente: Optional[str] = None
+    email_cliente: Optional[str] = None
+    modalidad_cobro: ModalidadCobroEnum
+    precio_paquete: Optional[Decimal] = None
+    num_reservas_creadas: int = 0
+    num_reservas_omitidas: int = 0
+    fechas_omitidas: Optional[List[Dict[str, Any]]] = None
+    estado_pago: str  # pendiente | completo | parcial | exento
+    creado_en: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SerieReservaOut(BaseModel):
@@ -557,8 +605,6 @@ class SerieReservaOut(BaseModel):
     id: int
     servicio_id: int
     servicio_nombre: Optional[str] = None
-    cliente_usuario_id: int
-    nombre_cliente: Optional[str] = None
     asesor_id: Optional[int] = None
     nombre_asesor: Optional[str] = None
 
@@ -570,16 +616,17 @@ class SerieReservaOut(BaseModel):
     num_repeticiones: int
     fecha_inicio: datetime
 
-    # Modalidades de cobro
+    # Modalidades de cobro habilitadas por admin
     cobro_por_sesion_habilitado: bool
     cobro_por_paquete_habilitado: bool
-    precio_paquete: Optional[Decimal] = None
 
     # Estado
     estado: EstadoSerieEnum
-    num_reservas_creadas: int = 0
-    num_reservas_omitidas: int = 0
-    fechas_omitidas: Optional[List[Dict[str, Any]]] = None
+    num_inscripciones: int = 0
+    num_reservas_creadas_total: int = 0
+
+    # Detalle completo; se incluye solo en GET /admin/series/{serie_id}
+    inscripciones: Optional[List[InscripcionSerieOut]] = None
 
     creado_en: datetime
     actualizado_en: datetime

@@ -27,16 +27,16 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sede, Servicio, Sesion, Reserva,
     SolicitudReserva, EstadoSolicitud,
-    SerieReserva, ModalidadCobro, EstadoSerie,
+    SerieReserva, InscripcionSerie, ModalidadCobro, EstadoSerie,
     HorarioDisponibilidad, HorarioBloqueo, Bitacora, AsesorServicio,
     CampoFormulario, RespuestaFormulario,
     EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
-    TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad,
+    TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad, Canal,
     ESTADOS_OCUPAN_CUPO, ESTADOS_SESION_ACTIVA, utcnow,
 )
 from app.schemas_v2_2 import (
-    ReservaCreate, SolicitudCreate, SerieReservaCreate,
-    SolicitudConfirmarSerieIn, CheckoutUrlOut,
+    ReservaCreate, SolicitudCreate, SerieReservaCreate, InscripcionSerieCreate,
+    SolicitudConfirmarSerieIn, validar_modalidad_cobro, CheckoutUrlOut,
 )
 
 log = logging.getLogger(__name__)
@@ -1068,36 +1068,29 @@ def generar_fechas_recurrencia(
     return fechas
 
 
-def crear_serie_reservas(
+def crear_serie(
     db: Session,
     tenant: Tenant,
     payload: SerieReservaCreate,
-    cliente: Usuario,
     registrado_por: Optional[Usuario] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> SerieReserva:
-    """
-    Crea una serie de reservas recurrentes a nombre de `cliente`.
-    Genera N reservas independientes usando crear_reserva() para cada fecha.
-    Si una fecha falla (asesor ocupado, cupo lleno), se salta y continúa.
+    """Crea el patrón de horario de una serie recurrente.
 
-    `registrado_por` es el usuario que aparece en la bitácora (staff);
-    si no se proporciona, se asume que el cliente mismo creó la serie.
+    No genera reservas ni inscripciones; eso se hace en
+    inscribir_cliente_en_serie().
     """
-    from datetime import datetime as dt, timedelta
-    from app.schemas_v2_2 import ReservaCreate
+    from datetime import datetime as dt
 
     tenant_id = tenant.id
 
-    # Validar que el número de repeticiones no exceda el límite del tenant
     if payload.num_repeticiones > tenant.max_reservas_serie:
         raise ReservaError(
             f"El número de repeticiones ({payload.num_repeticiones}) excede el máximo permitido ({tenant.max_reservas_serie})",
             codigo="serie_demasiado_larga",
         )
 
-    # Validar servicio
     servicio = db.execute(
         select(Servicio).where(
             Servicio.tenant_id == tenant_id,
@@ -1108,12 +1101,6 @@ def crear_serie_reservas(
     if servicio is None:
         raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
 
-    # Validar cliente
-    cliente = db.get(Usuario, payload.cliente_usuario_id)
-    if cliente is None:
-        raise ReservaError("Cliente no encontrado", codigo="cliente_no_encontrado")
-
-    # Validar asesor si se proporciona
     if payload.asesor_id:
         asesor = db.execute(
             select(UsuarioTenant).where(
@@ -1126,17 +1113,11 @@ def crear_serie_reservas(
         if asesor is None:
             raise ReservaError("Asesor no encontrado o inactivo", codigo="asesor_no_encontrado")
 
-    # Convertir fecha_inicio a date
     fecha_inicio_date = payload.fecha_inicio.date() if isinstance(payload.fecha_inicio, dt) else payload.fecha_inicio
 
-    # Timezone del contexto para interpretar correctamente la hora local
-    tzname = _tz_del_contexto(tenant, servicio, servicio.sede)
-
-    # Crear la serie
     serie = SerieReserva(
         tenant_id=tenant_id,
         servicio_id=payload.servicio_id,
-        cliente_usuario_id=payload.cliente_usuario_id,
         asesor_id=payload.asesor_id,
         frecuencia=payload.frecuencia,
         dia_semana=payload.dia_semana,
@@ -1146,63 +1127,149 @@ def crear_serie_reservas(
         fecha_inicio=fecha_inicio_date,
         cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
         cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
-        precio_paquete=payload.precio_paquete,
     )
     db.add(serie)
     db.flush()
 
-    # Generar fechas
-    fechas = generar_fechas_recurrencia(
-        fecha_inicio=fecha_inicio_date,
-        dia_semana=payload.dia_semana,
-        frecuencia=payload.frecuencia,
-        num_repeticiones=payload.num_repeticiones,
+    registrar_bitacora(
+        db, tenant_id, "serie_reserva", serie.id, "serie_reserva_creada",
+        usuario_id=registrado_por.id if registrado_por is not None else None,
+        detalles={
+            "servicio_id": servicio.id,
+            "num_repeticiones": payload.num_repeticiones,
+            "asesor_id": payload.asesor_id,
+            "cobro_por_sesion_habilitado": payload.cobro_por_sesion_habilitado,
+            "cobro_por_paquete_habilitado": payload.cobro_por_paquete_habilitado,
+        },
+        ip=ip, user_agent=user_agent,
     )
 
-    # Crear reservas para cada fecha
+    return serie
+
+
+def inscribir_cliente_en_serie(
+    db: Session,
+    tenant: Tenant,
+    serie_id: int,
+    payload: InscripcionSerieCreate,
+    registrado_por: Optional[Usuario] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> InscripcionSerie:
+    """Inscribe un cliente a una serie existente y genera sus N reservas.
+
+    Reutiliza crear_reserva() para cada fecha. Si una fecha falla, se salta
+    y continúa (éxito parcial reportado).
+    """
+    from datetime import datetime as dt
+    from app.schemas_v2_2 import ReservaCreate
+
+    tenant_id = tenant.id
+
+    serie = db.execute(
+        select(SerieReserva).where(
+            SerieReserva.tenant_id == tenant_id,
+            SerieReserva.id == serie_id,
+        )
+    ).scalar_one_or_none()
+    if serie is None:
+        raise ReservaError("Serie no encontrada", codigo="serie_no_encontrada")
+    if serie.estado == EstadoSerie.CANCELADA:
+        raise ReservaError("La serie está cancelada", codigo="serie_cancelada")
+
+    cliente = db.get(Usuario, payload.cliente_usuario_id)
+    if cliente is None:
+        raise ReservaError("Cliente no encontrado", codigo="cliente_no_encontrado")
+
+    # Validar que el cliente pertenezca al tenant (rol cliente)
+    ut_cliente = db.execute(
+        select(UsuarioTenant).where(
+            UsuarioTenant.tenant_id == tenant_id,
+            UsuarioTenant.usuario_id == payload.cliente_usuario_id,
+            UsuarioTenant.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if ut_cliente is None:
+        raise ReservaError("El cliente no está vinculado a este tenant", codigo="cliente_no_vinculado")
+
+    # Validar modalidad contra las habilitadas por la serie
+    try:
+        validar_modalidad_cobro(
+            payload.modalidad_cobro,
+            payload.precio_paquete,
+            serie.cobro_por_sesion_habilitado,
+            serie.cobro_por_paquete_habilitado,
+        )
+    except ValueError as e:
+        raise ReservaError(str(e), codigo="modalidad_no_permitida")
+
+    inscripcion_existente = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.serie_id == serie_id,
+            InscripcionSerie.cliente_usuario_id == payload.cliente_usuario_id,
+        )
+    ).scalar_one_or_none()
+    if inscripcion_existente is not None:
+        raise ReservaError("El cliente ya está inscrito en esta serie", codigo="cliente_ya_inscrito")
+
+    inscripcion = InscripcionSerie(
+        tenant_id=tenant_id,
+        serie_id=serie_id,
+        cliente_usuario_id=payload.cliente_usuario_id,
+        modalidad_cobro=payload.modalidad_cobro,
+        precio_paquete=payload.precio_paquete,
+    )
+    db.add(inscripcion)
+    db.flush()
+
+    servicio = db.get(Servicio, serie.servicio_id)
+    tzname = _tz_del_contexto(tenant, servicio, servicio.sede if servicio else None)
+
+    fechas = generar_fechas_recurrencia(
+        fecha_inicio=serie.fecha_inicio,
+        dia_semana=serie.dia_semana,
+        frecuencia=serie.frecuencia,
+        num_repeticiones=serie.num_repeticiones,
+    )
+
     reservas_creadas = []
     fechas_omitidas = []
 
+    precio_por_reserva = None
+    if payload.modalidad_cobro == ModalidadCobro.PAQUETE and payload.precio_paquete is not None and fechas:
+        precio_por_reserva = payload.precio_paquete / Decimal(len(fechas))
+
     for fecha in fechas:
         try:
-            # Construir datetime con hora en el timezone del contexto
-            fecha_hora = dt.combine(fecha, payload.hora_inicio, tzinfo=ZoneInfo(tzname))
+            fecha_hora = dt.combine(fecha, serie.hora_inicio, tzinfo=ZoneInfo(tzname))
 
-            # Construir payload para crear_reserva()
             reserva_payload = ReservaCreate(
-                servicio_id=payload.servicio_id,
+                servicio_id=serie.servicio_id,
                 fecha_hora_inicio=fecha_hora,
-                asesor_id=payload.asesor_id,
+                asesor_id=serie.asesor_id,
                 metodo_pago=MetodoPago(payload.metodo_pago.value),
                 canal=Canal.ADMIN,
             )
 
-            # Crear reserva reutilizando crear_reserva(). La reserva queda a
-            # nombre del cliente; la bitácora de la serie la registra el staff.
             resultado = crear_reserva(db, tenant, reserva_payload, cliente, ip=ip, user_agent=user_agent)
             reserva = resultado["reserva"]
 
-            # Marcar como parte de la serie
             reserva.serie_id = serie.id
+            reserva.inscripcion_id = inscripcion.id
             reserva.modalidad_cobro = payload.modalidad_cobro.value
-
-            # NOTA: Si es paquete, estado_pago se mantiene en PENDIENTE.
-            # El pago del paquete completo se registra después con el endpoint
-            # POST /admin/reservas/serie/{serie_id}/pago-local, que marca
-            # COMPLETADO en todas las reservas de la serie a la vez.
+            if precio_por_reserva is not None:
+                reserva.precio_final = precio_por_reserva
 
             reservas_creadas.append(reserva)
 
         except ReservaError as e:
-            # Fecha conflictiva: saltar y continuar
             fechas_omitidas.append({
                 "fecha": fecha.isoformat(),
                 "razon": e.mensaje,
                 "codigo": e.codigo,
             })
             continue
-        except IntegrityError as e:
-            # Conflicto de base de datos (ej. reserva duplicada)
+        except IntegrityError:
             fechas_omitidas.append({
                 "fecha": fecha.isoformat(),
                 "razon": "Conflicto de base de datos",
@@ -1210,7 +1277,6 @@ def crear_serie_reservas(
             })
             continue
         except StaleDataError:
-            # Conflicto de concurrencia
             fechas_omitidas.append({
                 "fecha": fecha.isoformat(),
                 "razon": "Conflicto de concurrencia",
@@ -1218,23 +1284,21 @@ def crear_serie_reservas(
             })
             continue
 
-    # Registrar bitácora (atribuida a quien hizo la acción)
-    bitacora_usuario_id = registrado_por.id if registrado_por is not None else cliente.id
     registrar_bitacora(
-        db, tenant_id, "serie_reserva", serie.id, "serie_reserva_creada",
-        usuario_id=bitacora_usuario_id,
+        db, tenant_id, "inscripcion_serie", inscripcion.id, "inscripcion_serie_creada",
+        usuario_id=registrado_por.id if registrado_por is not None else None,
         detalles={
-            "servicio_id": servicio.id,
-            "num_repeticiones": payload.num_repeticiones,
+            "serie_id": serie.id,
+            "cliente_usuario_id": payload.cliente_usuario_id,
+            "modalidad_cobro": payload.modalidad_cobro.value,
             "num_reservas_creadas": len(reservas_creadas),
             "num_reservas_omitidas": len(fechas_omitidas),
-            "modalidad_cobro": payload.modalidad_cobro.value,
             "fechas_omitidas": fechas_omitidas,
         },
         ip=ip, user_agent=user_agent,
     )
 
-    return serie
+    return inscripcion
 
 
 def confirmar_solicitud_como_serie(
@@ -1249,10 +1313,8 @@ def confirmar_solicitud_como_serie(
     """Convierte una SolicitudReserva pendiente en una SerieReserva.
 
     La fecha de inicio, servicio y cliente se toman de la solicitud.
-    El staff define el patrón y las modalidades de cobro.
+    El staff define el patrón y la modalidad de cobro del único cliente.
     """
-    from app.schemas_v2_2 import ReservaCreate
-
     solicitud = db.execute(
         select(SolicitudReserva)
         .where(
@@ -1288,13 +1350,11 @@ def confirmar_solicitud_como_serie(
     if cliente is None:
         raise ReservaError("Cliente no encontrado", codigo="cliente_no_encontrado")
 
-    # Fecha de inicio = fecha local de la propuesta en el timezone del contexto
     tzname = _tz_del_contexto(tenant, servicio, servicio.sede)
     fecha_inicio_local = solicitud.fecha_hora_propuesta.astimezone(ZoneInfo(tzname)).date()
 
     serie_payload = SerieReservaCreate(
         servicio_id=solicitud.servicio_id,
-        cliente_usuario_id=solicitud.cliente_usuario_id,
         asesor_id=payload.asesor_id,
         frecuencia=payload.frecuencia,
         dia_semana=payload.dia_semana,
@@ -1304,14 +1364,23 @@ def confirmar_solicitud_como_serie(
         fecha_inicio=datetime.combine(fecha_inicio_local, time.min, tzinfo=ZoneInfo(tzname)),
         cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
         cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
-        precio_paquete=payload.precio_paquete,
+    )
+
+    serie = crear_serie(
+        db, tenant, serie_payload,
+        registrado_por=staff.usuario,
+        ip=ip, user_agent=user_agent,
+    )
+
+    inscripcion_payload = InscripcionSerieCreate(
+        cliente_usuario_id=solicitud.cliente_usuario_id,
         modalidad_cobro=payload.modalidad_cobro,
+        precio_paquete=payload.precio_paquete,
         metodo_pago=payload.metodo_pago,
     )
 
-    serie = crear_serie_reservas(
-        db, tenant, serie_payload,
-        cliente=cliente,
+    inscribir_cliente_en_serie(
+        db, tenant, serie.id, inscripcion_payload,
         registrado_por=staff.usuario,
         ip=ip, user_agent=user_agent,
     )
@@ -1328,6 +1397,8 @@ def confirmar_solicitud_como_serie(
             "serie_id": serie.id,
             "servicio_id": servicio.id,
             "num_repeticiones": payload.num_repeticiones,
+            "cliente_usuario_id": solicitud.cliente_usuario_id,
+            "modalidad_cobro": payload.modalidad_cobro.value,
         },
         ip=ip, user_agent=user_agent,
     )

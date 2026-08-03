@@ -350,6 +350,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Solicitud Como Serie Admin
+         * @description Convierte una solicitud pendiente en una serie de reservas recurrentes.
+         */
+        post: operations["confirmar_solicitud_como_serie_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_serie_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar": {
         parameters: {
             query?: never;
@@ -1905,6 +1925,8 @@ export interface components {
             resuelto_por_id?: number | null;
             /** Resuelto En */
             resuelto_en?: string | null;
+            /** Serie Id */
+            serie_id?: number | null;
         };
         /**
          * SolicitudConfirmarOut
@@ -1949,10 +1971,58 @@ export interface components {
             resuelto_por_id?: number | null;
             /** Resuelto En */
             resuelto_en?: string | null;
+            /** Serie Id */
+            serie_id?: number | null;
             /** Folio Reserva */
             folio_reserva?: string | null;
             /** Sesion Id */
             sesion_id?: number | null;
+        };
+        /**
+         * SolicitudConfirmarSerieIn
+         * @description Parámetros para convertir una solicitud en una serie recurrente.
+         *
+         *     La fecha de inicio, servicio y cliente se toman de la solicitud.
+         *     El staff define el patrón y las modalidades de cobro.
+         */
+        SolicitudConfirmarSerieIn: {
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /**
+             * Duracion Minutos
+             * @default 60
+             */
+            duracion_minutos: number;
+            /**
+             * Num Repeticiones
+             * @default 1
+             */
+            num_repeticiones: number;
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /**
+             * Cobro Por Sesion Habilitado
+             * @default true
+             */
+            cobro_por_sesion_habilitado: boolean;
+            /**
+             * Cobro Por Paquete Habilitado
+             * @default false
+             */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
+            /** @default sesion */
+            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
+            /** @default local */
+            metodo_pago: components["schemas"]["MetodoPagoEnum"];
         };
         /**
          * SolicitudCreate
@@ -2837,6 +2907,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SolicitudConfirmarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_solicitud_como_serie_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_serie_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudConfirmarSerieIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"];
                 };
             };
             /** @description Validation Error */

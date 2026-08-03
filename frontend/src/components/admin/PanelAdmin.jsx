@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
+import SeriesTab from './SeriesTab'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
@@ -1871,6 +1872,17 @@ export default function PanelAdmin() {
         </button>
         <button
           type="button"
+          onClick={() => setTab('series')}
+          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+            tab === 'series'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Series
+        </button>
+        <button
+          type="button"
           onClick={() => setTab('servicios')}
           className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
             tab === 'servicios'
@@ -1901,6 +1913,8 @@ export default function PanelAdmin() {
         <SolicitudesTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'reservas' ? (
         <ReservasTab tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'series' ? (
+        <SeriesTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'servicios' ? (
         <GestionServicios tenantSlug={tenantSlug} token={token} />
       ) : (

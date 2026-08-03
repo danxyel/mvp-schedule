@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import { getLocalOffset } from '../../utils/fechas'
@@ -41,15 +41,15 @@ function horaDesdeStringUTC(utcString) {
 }
 
 export default function CrearSerieModal({ servicio, solicitud = null, onClose, onCreado }) {
-  const [clientes, setClientes] = useState([])
+  const esDesdeSolicitud = solicitud != null
+
   const [asesores, setAsesores] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [exito, setExito] = useState(null)
 
-  const fechaBase = solicitud ? new Date(solicitud.fecha_hora_propuesta) : null
+  const fechaBase = esDesdeSolicitud ? new Date(solicitud.fecha_hora_propuesta) : null
   const [form, setForm] = useState({
-    cliente_usuario_id: solicitud ? String(solicitud.cliente_usuario_id) : '',
     asesor_id: solicitud?.asesor_id ? String(solicitud.asesor_id) : '',
     frecuencia: 'semanal',
     dia_semana: fechaBase ? (fechaBase.getDay() + 6) % 7 : 0,
@@ -64,10 +64,8 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     metodo_pago: 'local',
   })
 
-  // Validar que al menos una modalidad esté habilitada
   const modalidadesValidas = form.cobro_por_sesion_habilitado || form.cobro_por_paquete_habilitado
-  
-  // Si solo una modalidad está habilitada, forzar modalidad_cobro
+
   useEffect(() => {
     if (form.cobro_por_sesion_habilitado && !form.cobro_por_paquete_habilitado) {
       setForm(prev => ({ ...prev, modalidad_cobro: 'sesion' }))
@@ -76,30 +74,18 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     }
   }, [form.cobro_por_sesion_habilitado, form.cobro_por_paquete_habilitado])
 
-  // Cargar clientes y asesores
   useEffect(() => {
-    const cargarDatos = async () => {
+    const cargarAsesores = async () => {
       const tenantSlug = sessionStorage.getItem('tenantSlug')
-
-      // Cargar clientes
-      const { data: clientesData, error: clientesErr } = await client.GET(
+      const { data, error: fetchErr } = await client.GET(
         '/api/v2/{tenant_slug}/admin/usuarios',
         { params: { path: { tenant_slug: tenantSlug } } }
       )
-      if (!clientesErr && clientesData) {
-        setClientes(clientesData.filter(u => u.rol === 'cliente'))
-      }
-
-      // Cargar asesores
-      const { data: asesoresData, error: asesoresErr } = await client.GET(
-        '/api/v2/{tenant_slug}/admin/usuarios',
-        { params: { path: { tenant_slug: tenantSlug } } }
-      )
-      if (!asesoresErr && asesoresData) {
-        setAsesores(asesoresData.filter(u => u.rol === 'asesor' || u.rol === 'admin'))
+      if (!fetchErr && data) {
+        setAsesores(data.filter(u => u.rol === 'asesor' || u.rol === 'admin'))
       }
     }
-    cargarDatos()
+    cargarAsesores()
   }, [])
 
   const handleChange = (campo) => (e) => {
@@ -107,21 +93,19 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     setForm(prev => ({ ...prev, [campo]: valor }))
   }
 
-  const handleSubmit = async () => {
-    if (!form.cliente_usuario_id) {
-      setError('Selecciona un cliente')
-      return
-    }
-    if (!form.fecha_inicio) {
-      setError('Selecciona una fecha de inicio')
-      return
-    }
-    if (!modalidadesValidas) {
-      setError('Debes habilitar al menos una modalidad de cobro')
-      return
-    }
+  const validar = () => {
+    if (!form.fecha_inicio) return 'Selecciona una fecha de inicio'
+    if (!modalidadesValidas) return 'Debes habilitar al menos una modalidad de cobro'
     if (form.modalidad_cobro === 'paquete' && !form.precio_paquete) {
-      setError('Ingresa el precio del paquete')
+      return 'Ingresa el precio del paquete'
+    }
+    return null
+  }
+
+  const handleSubmit = async () => {
+    const validacion = validar()
+    if (validacion) {
+      setError(validacion)
       return
     }
 
@@ -141,34 +125,33 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
       asesor_id: form.asesor_id ? parseInt(form.asesor_id) : null,
       cobro_por_sesion_habilitado: form.cobro_por_sesion_habilitado,
       cobro_por_paquete_habilitado: form.cobro_por_paquete_habilitado,
-      precio_paquete: form.precio_paquete ? parseFloat(form.precio_paquete) : null,
-      modalidad_cobro: form.modalidad_cobro,
-      metodo_pago: form.metodo_pago,
     }
 
-    const esDesdeSolicitud = solicitud != null
-    const payload = esDesdeSolicitud
-      ? basePayload
-      : {
-          ...basePayload,
-          servicio_id: servicio.id,
-          cliente_usuario_id: parseInt(form.cliente_usuario_id),
-          fecha_inicio: `${form.fecha_inicio}T00:00:00${getLocalOffset()}`,
-        }
-
-    const endpoint = esDesdeSolicitud
-      ? '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie'
-      : '/api/v2/{tenant_slug}/admin/series'
-
-    const params = esDesdeSolicitud
-      ? { path: { tenant_slug: tenantSlug, solicitud_id: solicitud.id } }
-      : { path: { tenant_slug: tenantSlug } }
+    let endpoint, params, body
+    if (esDesdeSolicitud) {
+      endpoint = '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie'
+      params = { path: { tenant_slug: tenantSlug, solicitud_id: solicitud.id } }
+      body = {
+        ...basePayload,
+        precio_paquete: form.precio_paquete ? parseFloat(form.precio_paquete) : null,
+        modalidad_cobro: form.modalidad_cobro,
+        metodo_pago: form.metodo_pago,
+      }
+    } else {
+      endpoint = '/api/v2/{tenant_slug}/admin/series'
+      params = { path: { tenant_slug: tenantSlug } }
+      body = {
+        ...basePayload,
+        servicio_id: servicio.id,
+        fecha_inicio: `${form.fecha_inicio}T00:00:00${getLocalOffset()}`,
+      }
+    }
 
     const { data, error: fetchErr } = await client.POST(
       endpoint,
       {
         params,
-        body: payload,
+        body,
         headers: { Authorization: `Bearer ${token}` },
       }
     )
@@ -180,7 +163,10 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
       return
     }
 
-    setExito(`Serie creada exitosamente: ${data.num_reservas_creadas} reservas creadas, ${data.num_reservas_omitidas} omitidas`)
+    const mensajeExito = esDesdeSolicitud
+      ? `Serie creada exitosamente: ${data.num_reservas_creadas_total ?? data.num_reservas_creadas} reservas creadas`
+      : 'Patrón de serie creado exitosamente'
+    setExito(mensajeExito)
     setTimeout(() => {
       onCreado?.(data)
       onClose()
@@ -188,7 +174,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
   }
 
   return (
-    <Modal title="Crear Serie de Reservas Recurrentes" onClose={onClose} maxWidth="max-w-2xl">
+    <Modal title={esDesdeSolicitud ? 'Confirmar solicitud como serie' : 'Crear Serie de Reservas Recurrentes'} onClose={onClose} maxWidth="max-w-2xl">
       <div className="space-y-4">
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
           <p className="text-sm font-medium text-blue-900">Servicio: {servicio?.nombre}</p>
@@ -213,25 +199,6 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
             <p className="text-sm text-green-700">{exito}</p>
           </div>
         )}
-
-        {/* Cliente */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Cliente <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={form.cliente_usuario_id}
-            onChange={handleChange('cliente_usuario_id')}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="">Selecciona un cliente</option>
-            {clientes.map(c => (
-              <option key={c.usuario_id} value={c.usuario_id}>
-                {c.nombre} ({c.email})
-              </option>
-            ))}
-          </select>
-        </div>
 
         {/* Asesor */}
         <div>
@@ -369,59 +336,64 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
           )}
         </div>
 
-        {/* Selector de modalidad elegida (solo si ambas están habilitadas) */}
-        {form.cobro_por_sesion_habilitado && form.cobro_por_paquete_habilitado && (
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Modalidad elegida para esta serie <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={form.modalidad_cobro}
-              onChange={handleChange('modalidad_cobro')}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="sesion">Por sesión</option>
-              <option value="paquete">Por paquete</option>
-            </select>
-            <p className="mt-1 text-xs text-gray-500">
-              Informada por las notas del cliente si viene de una solicitud
-            </p>
-          </div>
-        )}
+        {/* Campos solo para confirmación desde solicitud */}
+        {esDesdeSolicitud && (
+          <>
+            {/* Selector de modalidad elegida */}
+            {form.cobro_por_sesion_habilitado && form.cobro_por_paquete_habilitado && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Modalidad elegida <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={form.modalidad_cobro}
+                  onChange={handleChange('modalidad_cobro')}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="sesion">Por sesión</option>
+                  <option value="paquete">Por paquete</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Informada por las notas del cliente o por otro canal
+                </p>
+              </div>
+            )}
 
-        {/* Precio paquete (solo si es paquete) */}
-        {form.modalidad_cobro === 'paquete' && (
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Precio del paquete <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              value={form.precio_paquete}
-              onChange={handleChange('precio_paquete')}
-              min="0"
-              step="0.01"
-              placeholder="Ej: 1500.00"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-        )}
+            {/* Precio paquete */}
+            {form.modalidad_cobro === 'paquete' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Precio del paquete <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={form.precio_paquete}
+                  onChange={handleChange('precio_paquete')}
+                  min="0"
+                  step="0.01"
+                  placeholder="Ej: 1500.00"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+            )}
 
-        {/* Método de pago */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Método de pago <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={form.metodo_pago}
-            onChange={handleChange('metodo_pago')}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            {METODOS_PAGO.map(m => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
-        </div>
+            {/* Método de pago */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Método de pago <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.metodo_pago}
+                onChange={handleChange('metodo_pago')}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                {METODOS_PAGO.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
 
         {/* Botones */}
         <div className="flex gap-2 pt-4">
@@ -439,7 +411,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
             disabled={loading}
             className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? 'Creando...' : 'Crear Serie'}
+            {loading ? (esDesdeSolicitud ? 'Confirmando...' : 'Creando...') : (esDesdeSolicitud ? 'Confirmar serie' : 'Crear Serie')}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
+import InscribirClientesSerieModal from './InscribirClientesSerieModal'
 
 const FRECUENCIA_LABEL = {
   semanal: 'Semanal',
@@ -29,6 +30,20 @@ const MODALIDAD_LABEL = {
   paquete: 'Por paquete',
 }
 
+const ESTADO_PAGO_LABEL = {
+  pendiente: 'Pago pendiente',
+  parcial: 'Pago parcial',
+  completo: 'Pagado',
+  exento: 'Sin costo',
+}
+
+const ESTADO_PAGO_BADGE = {
+  pendiente: 'border-yellow-200 bg-yellow-100 text-yellow-700',
+  parcial: 'border-orange-200 bg-orange-100 text-orange-700',
+  completo: 'border-green-200 bg-green-100 text-green-700',
+  exento: 'border-gray-200 bg-gray-100 text-gray-600',
+}
+
 function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
@@ -47,6 +62,7 @@ export default function SeriesTab({ tenantSlug, token }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [detalleSerie, setDetalleSerie] = useState(null)
+  const [inscribirSerie, setInscribirSerie] = useState(null)
   const [pagoModal, setPagoModal] = useState(null)
   const [montoPago, setMontoPago] = useState('')
   const [metodoPago, setMetodoPago] = useState('efectivo')
@@ -98,16 +114,18 @@ export default function SeriesTab({ tenantSlug, token }) {
     setDetalleSerie(data)
   }
 
-  const abrirPago = (serie) => {
-    setPagoModal(serie)
-    setMontoPago(serie.precio_paquete || '')
+  const abrirPago = (inscripcion) => {
+    setPagoModal(inscripcion)
+    setMontoPago(inscripcion.precio_paquete || '')
     setMetodoPago('efectivo')
     setPagoError(null)
     setPagoExito(null)
   }
 
   const registrarPago = async () => {
-    if (!montoPago || parseFloat(montoPago) <= 0) {
+    if (!pagoModal) return
+
+    if (pagoModal.modalidad_cobro === 'paquete' && (!montoPago || parseFloat(montoPago) <= 0)) {
       setPagoError('Ingresa un monto válido')
       return
     }
@@ -117,12 +135,18 @@ export default function SeriesTab({ tenantSlug, token }) {
     setPagoExito(null)
 
     const { data, error: fetchErr } = await client.POST(
-      '/api/v2/{tenant_slug}/admin/reservas/serie/{serie_id}/pago-local',
+      '/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/pago-local',
       {
-        params: { path: { tenant_slug: tenantSlug, serie_id: pagoModal.id } },
+        params: {
+          path: {
+            tenant_slug: tenantSlug,
+            serie_id: pagoModal.serie_id,
+            inscripcion_id: pagoModal.id,
+          },
+        },
         body: {
           metodo: metodoPago,
-          monto: parseFloat(montoPago),
+          monto: montoPago ? parseFloat(montoPago) : null,
         },
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -139,8 +163,8 @@ export default function SeriesTab({ tenantSlug, token }) {
     setTimeout(() => {
       setPagoModal(null)
       fetchSeries()
-      if (detalleSerie && detalleSerie.id === pagoModal.id) {
-        abrirDetalle(pagoModal)
+      if (detalleSerie && detalleSerie.id === pagoModal.serie_id) {
+        abrirDetalle(detalleSerie)
       }
     }, 2000)
   }
@@ -199,11 +223,10 @@ export default function SeriesTab({ tenantSlug, token }) {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-4 py-3 font-medium">Cliente</th>
               <th className="px-4 py-3 font-medium">Servicio</th>
               <th className="px-4 py-3 font-medium">Frecuencia</th>
               <th className="px-4 py-3 font-medium">Repeticiones</th>
-              <th className="px-4 py-3 font-medium">Modalidad</th>
+              <th className="px-4 py-3 font-medium">Inscritos</th>
               <th className="px-4 py-3 font-medium">Estado</th>
               <th className="px-4 py-3 text-right font-medium">Acciones</th>
             </tr>
@@ -211,25 +234,14 @@ export default function SeriesTab({ tenantSlug, token }) {
           <tbody className="divide-y divide-gray-100">
             {series.map((s) => (
               <tr key={s.id} className="transition hover:bg-gray-50">
-                <td className="px-4 py-3">
-                  <p className="font-medium text-gray-900">{s.nombre_cliente}</p>
-                  <p className="text-xs text-gray-500">ID: {s.cliente_usuario_id}</p>
-                </td>
                 <td className="px-4 py-3 text-gray-700">{s.servicio_nombre}</td>
                 <td className="px-4 py-3 text-gray-700">
                   {FRECUENCIA_LABEL[s.frecuencia]} - {DIA_LABEL[s.dia_semana]}
                 </td>
                 <td className="px-4 py-3 text-gray-700">
-                  {s.num_reservas_creadas}/{s.num_repeticiones}
-                  {s.num_reservas_omitidas > 0 && (
-                    <span className="ml-1 text-xs text-orange-600">
-                      ({s.num_reservas_omitidas} omitidas)
-                    </span>
-                  )}
+                  {s.num_reservas_creadas_total}/{s.num_repeticiones}
                 </td>
-                <td className="px-4 py-3 text-gray-700">
-                  {MODALIDAD_LABEL[s.modalidad_cobro] || s.modalidad_cobro}
-                </td>
+                <td className="px-4 py-3 text-gray-700">{s.num_inscripciones}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
@@ -243,20 +255,18 @@ export default function SeriesTab({ tenantSlug, token }) {
                   <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
+                      onClick={() => setInscribirSerie(s)}
+                      className="rounded-lg border border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
+                    >
+                      Inscribir
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => abrirDetalle(s)}
                       className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                     >
                       Ver detalle
                     </button>
-                    {s.cobro_por_paquete_habilitado && s.estado === 'activa' && (
-                      <button
-                        type="button"
-                        onClick={() => abrirPago(s)}
-                        className="rounded-lg border border-green-300 px-2.5 py-1 text-xs font-medium text-green-700 transition hover:bg-green-50"
-                      >
-                        Registrar pago
-                      </button>
-                    )}
                   </div>
                 </td>
               </tr>
@@ -264,6 +274,18 @@ export default function SeriesTab({ tenantSlug, token }) {
           </tbody>
         </table>
       </div>
+
+      {/* Modal de inscripción */}
+      {inscribirSerie && (
+        <InscribirClientesSerieModal
+          serie={inscribirSerie}
+          onClose={() => setInscribirSerie(null)}
+          onCreado={() => {
+            setInscribirSerie(null)
+            fetchSeries()
+          }}
+        />
+      )}
 
       {/* Modal de detalle */}
       {detalleSerie && (
@@ -275,8 +297,8 @@ export default function SeriesTab({ tenantSlug, token }) {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500">Cliente</p>
-                <p className="text-sm text-gray-900">{detalleSerie.nombre_cliente}</p>
+                <p className="text-xs font-medium text-gray-500">Servicio</p>
+                <p className="text-sm text-gray-900">{detalleSerie.servicio_nombre}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500">Asesor</p>
@@ -308,49 +330,75 @@ export default function SeriesTab({ tenantSlug, token }) {
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500">Modalidad elegida</p>
+                <p className="text-xs font-medium text-gray-500">Reservas creadas</p>
                 <p className="text-sm text-gray-900">
-                  {MODALIDAD_LABEL[detalleSerie.modalidad_cobro] || detalleSerie.modalidad_cobro}
+                  {detalleSerie.num_reservas_creadas_total} de {detalleSerie.num_repeticiones * (detalleSerie.num_inscripciones || 0)}
                 </p>
               </div>
             </div>
 
+            {/* Inscripciones */}
             <div className="border-t pt-4">
-              <p className="text-xs font-medium text-gray-500">Reservas creadas</p>
-              <p className="text-sm text-gray-900">
-                {detalleSerie.num_reservas_creadas} de {detalleSerie.num_repeticiones}
-              </p>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium text-gray-500">Inscripciones</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetalleSerie(null)
+                    setInscribirSerie(detalleSerie)
+                  }}
+                  className="rounded-lg border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
+                >
+                  Inscribir cliente
+                </button>
+              </div>
+
+              {detalleSerie.inscripciones?.length === 0 ? (
+                <p className="text-sm text-gray-500">No hay inscripciones todavía.</p>
+              ) : (
+                <div className="space-y-2">
+                  {detalleSerie.inscripciones?.map((ins) => (
+                    <div
+                      key={ins.id}
+                      className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{ins.nombre_cliente}</p>
+                        <p className="text-xs text-gray-500">{ins.email_cliente}</p>
+                        <p className="mt-1 text-xs text-gray-600">
+                          {MODALIDAD_LABEL[ins.modalidad_cobro]}{" "}
+                          {ins.modalidad_cobro === 'paquete' && ins.precio_paquete && (
+                            <span>- ${ins.precio_paquete}</span>
+                          )}
+                          {" "}· {ins.num_reservas_creadas} reservas
+                          {ins.num_reservas_omitidas > 0 && (
+                            <span className="text-orange-600"> ({ins.num_reservas_omitidas} omitidas)</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                            ESTADO_PAGO_BADGE[ins.estado_pago] || 'border-gray-200 bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {ESTADO_PAGO_LABEL[ins.estado_pago] || ins.estado_pago}
+                        </span>
+                        {ins.modalidad_cobro === 'paquete' && ins.estado_pago !== 'completo' && ins.estado_pago !== 'exento' && (
+                          <button
+                            type="button"
+                            onClick={() => abrirPago(ins)}
+                            className="rounded-lg border border-green-300 px-2.5 py-1 text-xs font-medium text-green-700 transition hover:bg-green-50"
+                          >
+                            Registrar pago
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-
-            {detalleSerie.num_reservas_omitidas > 0 && (
-              <div className="border-t pt-4">
-                <p className="text-xs font-medium text-orange-700">
-                  Fechas omitidas ({detalleSerie.num_reservas_omitidas})
-                </p>
-                {detalleSerie.fechas_omitidas && detalleSerie.fechas_omitidas.length > 0 ? (
-                  <ul className="mt-2 space-y-1">
-                    {detalleSerie.fechas_omitidas.map((f, i) => (
-                      <li key={i} className="text-xs text-gray-700">
-                        <span className="font-mono">{f.fecha}</span> - {f.razon}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-1 text-xs text-gray-500">
-                    No hay detalles de las fechas omitidas
-                  </p>
-                )}
-              </div>
-            )}
-
-            {detalleSerie.precio_paquete && (
-              <div className="border-t pt-4">
-                <p className="text-xs font-medium text-gray-500">Precio del paquete</p>
-                <p className="text-lg font-bold text-gray-900">
-                  ${detalleSerie.precio_paquete} {detalleSerie.moneda || 'MXN'}
-                </p>
-              </div>
-            )}
           </div>
         </Modal>
       )}
@@ -358,17 +406,17 @@ export default function SeriesTab({ tenantSlug, token }) {
       {/* Modal de pago */}
       {pagoModal && (
         <Modal
-          title={`Registrar pago de paquete - Serie #${pagoModal.id}`}
+          title={`Registrar pago - ${pagoModal.nombre_cliente}`}
           onClose={() => setPagoModal(null)}
           maxWidth="max-w-md"
         >
           <div className="space-y-4">
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
               <p className="text-sm font-medium text-blue-900">
-                Cliente: {pagoModal.nombre_cliente}
+                Serie #{pagoModal.serie_id}
               </p>
               <p className="text-xs text-blue-700">
-                {pagoModal.num_reservas_creadas} reservas - {pagoModal.servicio_nombre}
+                {pagoModal.num_reservas_creadas} reservas · {MODALIDAD_LABEL[pagoModal.modalidad_cobro]}
               </p>
             </div>
 
@@ -413,7 +461,7 @@ export default function SeriesTab({ tenantSlug, token }) {
               />
               {pagoModal.precio_paquete && (
                 <p className="mt-1 text-xs text-gray-500">
-                  Precio capturado al crear la serie: ${pagoModal.precio_paquete}
+                  Precio capturado al inscribir: ${pagoModal.precio_paquete}
                 </p>
               )}
             </div>

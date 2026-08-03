@@ -35,7 +35,7 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
-    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudRechazarIn, CanalEnum,
+    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn, SolicitudRechazarIn, CanalEnum,
     SerieReservaCreate, SerieReservaOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
@@ -224,6 +224,7 @@ def _solicitud_admin_out(db: Session, s: SolicitudReserva) -> SolicitudAdminOut:
         asesor_id=s.asesor_id,
         motivo_rechazo=s.motivo_rechazo,
         reserva_id=s.reserva_id,
+        serie_id=s.serie_id,
         creado_en=s.creado_en,
         cliente_usuario_id=s.cliente_usuario_id,
         nombre_cliente=cliente.nombre if cliente else None,
@@ -1146,6 +1147,46 @@ def confirmar_solicitud_admin(
     )
 
 
+@router.post("/admin/solicitudes/{solicitud_id}/confirmar-serie", response_model=SerieReservaOut, status_code=status.HTTP_201_CREATED)
+def confirmar_solicitud_como_serie_admin(
+    payload: SolicitudConfirmarSerieIn,
+    solicitud_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Convierte una solicitud pendiente en una serie de reservas recurrentes."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        serie = svc.confirmar_solicitud_como_serie(
+            db, tenant, solicitud_id, payload, staff, ip=ip, user_agent=ua
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La solicitud cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al confirmar solicitud %s como serie", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(serie)
+    return _serie_admin_out(db, serie)
+
+
 @router.post("/admin/solicitudes/{solicitud_id}/rechazar", response_model=SolicitudAdminOut)
 def rechazar_solicitud_admin(
     payload: SolicitudRechazarIn,
@@ -1214,9 +1255,14 @@ def crear_serie_admin(
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
 
+    cliente = db.get(Usuario, payload.cliente_usuario_id)
+
     try:
         serie = svc.crear_serie_reservas(
-            db, tenant, payload, staff.usuario, ip=ip, user_agent=ua
+            db, tenant, payload,
+            cliente=cliente,
+            registrado_por=staff.usuario,
+            ip=ip, user_agent=ua,
         )
         db.commit()
     except ReservaError as e:

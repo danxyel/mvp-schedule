@@ -457,6 +457,7 @@ class SolicitudAdminOut(SolicitudOut):
     email_cliente: Optional[str] = None
     resuelto_por_id: Optional[int] = None
     resuelto_en: Optional[datetime] = None
+    serie_id: Optional[int] = None
 
 
 class SolicitudConfirmarOut(SolicitudAdminOut):
@@ -464,6 +465,38 @@ class SolicitudConfirmarOut(SolicitudAdminOut):
     staff la termina de confirmar vía POST /admin/reservas/{id}/asignar-asesor."""
     folio_reserva: Optional[str] = None
     sesion_id: Optional[int] = None
+
+
+class SolicitudConfirmarSerieIn(BaseModel):
+    """Parámetros para convertir una solicitud en una serie recurrente.
+
+    La fecha de inicio, servicio y cliente se toman de la solicitud.
+    El staff define el patrón y las modalidades de cobro."""
+    frecuencia: str = Field(..., pattern=r"^(semanal|quincenal|mensual)$")
+    dia_semana: Optional[int] = Field(default=None, ge=0, le=6)
+    hora_inicio: time
+    duracion_minutos: int = Field(default=60, gt=0)
+    num_repeticiones: int = Field(default=1, ge=1, le=50)
+    asesor_id: Optional[int] = Field(default=None, gt=0)
+    cobro_por_sesion_habilitado: bool = Field(default=True)
+    cobro_por_paquete_habilitado: bool = Field(default=False)
+    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
+    modalidad_cobro: ModalidadCobroEnum = Field(default=ModalidadCobroEnum.SESION)
+    metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
+
+    @model_validator(mode="after")
+    def validar_modalidades(self):
+        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
+            raise ValueError("Debe habilitar al menos una modalidad de cobro")
+        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
+            raise ValueError("precio_paquete es obligatorio cuando cobro_por_paquete_habilitado=True")
+        if self.modalidad_cobro == ModalidadCobroEnum.PAQUETE and not self.cobro_por_paquete_habilitado:
+            raise ValueError("No puede seleccionar modalidad 'paquete' si no está habilitada")
+        if self.modalidad_cobro == ModalidadCobroEnum.SESION and not self.cobro_por_sesion_habilitado:
+            raise ValueError("No puede seleccionar modalidad 'sesion' si no está habilitada")
+        return self
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class SolicitudRechazarIn(BaseModel):

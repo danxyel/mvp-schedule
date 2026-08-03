@@ -13,7 +13,7 @@ import string
 import logging
 import os
 import smtplib
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone, date, time
 from decimal import Decimal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -34,7 +34,10 @@ from app.models_v2_2 import (
     TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad,
     ESTADOS_OCUPAN_CUPO, ESTADOS_SESION_ACTIVA, utcnow,
 )
-from app.schemas_v2_2 import ReservaCreate, SolicitudCreate, SerieReservaCreate, CheckoutUrlOut
+from app.schemas_v2_2 import (
+    ReservaCreate, SolicitudCreate, SerieReservaCreate,
+    SolicitudConfirmarSerieIn, CheckoutUrlOut,
+)
 
 log = logging.getLogger(__name__)
 
@@ -1069,14 +1072,18 @@ def crear_serie_reservas(
     db: Session,
     tenant: Tenant,
     payload: SerieReservaCreate,
-    usuario: Usuario,
+    cliente: Usuario,
+    registrado_por: Optional[Usuario] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> SerieReserva:
     """
-    Crea una serie de reservas recurrentes.
+    Crea una serie de reservas recurrentes a nombre de `cliente`.
     Genera N reservas independientes usando crear_reserva() para cada fecha.
     Si una fecha falla (asesor ocupado, cupo lleno), se salta y continúa.
+
+    `registrado_por` es el usuario que aparece en la bitácora (staff);
+    si no se proporciona, se asume que el cliente mismo creó la serie.
     """
     from datetime import datetime as dt, timedelta
     from app.schemas_v2_2 import ReservaCreate
@@ -1170,7 +1177,8 @@ def crear_serie_reservas(
                 canal=Canal.ADMIN,
             )
 
-            # Crear reserva reutilizando crear_reserva()
+            # Crear reserva reutilizando crear_reserva(). La reserva queda a
+            # nombre del cliente; la bitácora de la serie la registra el staff.
             resultado = crear_reserva(db, tenant, reserva_payload, cliente, ip=ip, user_agent=user_agent)
             reserva = resultado["reserva"]
 
@@ -1210,10 +1218,11 @@ def crear_serie_reservas(
             })
             continue
 
-    # Registrar bitácora
+    # Registrar bitácora (atribuida a quien hizo la acción)
+    bitacora_usuario_id = registrado_por.id if registrado_por is not None else cliente.id
     registrar_bitacora(
         db, tenant_id, "serie_reserva", serie.id, "serie_reserva_creada",
-        usuario_id=usuario.id,
+        usuario_id=bitacora_usuario_id,
         detalles={
             "servicio_id": servicio.id,
             "num_repeticiones": payload.num_repeticiones,
@@ -1221,6 +1230,104 @@ def crear_serie_reservas(
             "num_reservas_omitidas": len(fechas_omitidas),
             "modalidad_cobro": payload.modalidad_cobro.value,
             "fechas_omitidas": fechas_omitidas,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+
+    return serie
+
+
+def confirmar_solicitud_como_serie(
+    db: Session,
+    tenant: Tenant,
+    solicitud_id: int,
+    payload: SolicitudConfirmarSerieIn,
+    staff: UsuarioTenant,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> SerieReserva:
+    """Convierte una SolicitudReserva pendiente en una SerieReserva.
+
+    La fecha de inicio, servicio y cliente se toman de la solicitud.
+    El staff define el patrón y las modalidades de cobro.
+    """
+    from app.schemas_v2_2 import ReservaCreate
+
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+
+    if solicitud is None:
+        raise ReservaError("Solicitud no encontrada", codigo="solicitud_no_encontrada")
+    if solicitud.estado != EstadoSolicitud.PENDIENTE:
+        raise ReservaError("La solicitud ya fue resuelta", codigo="solicitud_no_pendiente")
+    if solicitud.fecha_hora_propuesta <= utcnow():
+        raise ReservaError(
+            "La fecha propuesta ya pasó; ya no se puede confirmar",
+            codigo="fecha_ambigua",
+        )
+
+    servicio = db.execute(
+        select(Servicio)
+        .options(joinedload(Servicio.sede))
+        .where(
+            Servicio.tenant_id == tenant.id,
+            Servicio.id == solicitud.servicio_id,
+            Servicio.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
+
+    cliente = db.get(Usuario, solicitud.cliente_usuario_id)
+    if cliente is None:
+        raise ReservaError("Cliente no encontrado", codigo="cliente_no_encontrado")
+
+    # Fecha de inicio = fecha local de la propuesta en el timezone del contexto
+    tzname = _tz_del_contexto(tenant, servicio, servicio.sede)
+    fecha_inicio_local = solicitud.fecha_hora_propuesta.astimezone(ZoneInfo(tzname)).date()
+
+    serie_payload = SerieReservaCreate(
+        servicio_id=solicitud.servicio_id,
+        cliente_usuario_id=solicitud.cliente_usuario_id,
+        asesor_id=payload.asesor_id,
+        frecuencia=payload.frecuencia,
+        dia_semana=payload.dia_semana,
+        hora_inicio=payload.hora_inicio,
+        duracion_minutos=payload.duracion_minutos,
+        num_repeticiones=payload.num_repeticiones,
+        fecha_inicio=datetime.combine(fecha_inicio_local, time.min, tzinfo=ZoneInfo(tzname)),
+        cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
+        cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
+        precio_paquete=payload.precio_paquete,
+        modalidad_cobro=payload.modalidad_cobro,
+        metodo_pago=payload.metodo_pago,
+    )
+
+    serie = crear_serie_reservas(
+        db, tenant, serie_payload,
+        cliente=cliente,
+        registrado_por=staff.usuario,
+        ip=ip, user_agent=user_agent,
+    )
+
+    solicitud.estado = EstadoSolicitud.ACEPTADA
+    solicitud.serie_id = serie.id
+    solicitud.resuelto_por_id = staff.id
+    solicitud.resuelto_en = utcnow()
+
+    registrar_bitacora(
+        db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_confirmada_serie",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "serie_id": serie.id,
+            "servicio_id": servicio.id,
+            "num_repeticiones": payload.num_repeticiones,
         },
         ip=ip, user_agent=user_agent,
     )

@@ -563,6 +563,7 @@ class SolicitudReserva(Base, TenantScopedMixin):
     asesor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
     motivo_rechazo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     reserva_id: Mapped[Optional[int]] = mapped_column(ForeignKey("reservas.id", ondelete="SET NULL"), nullable=True)
+    serie_id: Mapped[Optional[int]] = mapped_column(ForeignKey("series_reservas.id", ondelete="SET NULL"), nullable=True)
     resuelto_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
     resuelto_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -81,6 +81,136 @@ function CountdownTimer({ expiraEn }) {
   )
 }
 
+const MODALIDAD_COBRO_LABEL = {
+  sesion: 'Por sesión',
+  paquete: 'Por paquete',
+}
+
+function ReservaCard({ r, navigate }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <h3 className="text-base font-semibold text-gray-900">{r.servicio_nombre ?? 'Servicio'}</h3>
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+            BADGE[r.estado] ?? 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {ESTADO_LABEL[r.estado] ?? r.estado}
+        </span>
+      </div>
+
+      <p className="mb-1 text-sm text-gray-600">{toLocalTime(r.fecha_hora_inicio, r.timezone)}</p>
+
+      {r.asesor && <p className="mb-2 text-sm text-gray-500">Con {r.asesor.nombre}</p>}
+
+      <div className="flex flex-wrap items-center gap-3">
+        {r.estado_pago && r.estado_pago !== 'exento' && (
+          <span className="text-xs text-gray-500">{PAGO_LABEL[r.estado_pago] ?? r.estado_pago}</span>
+        )}
+        {r.estado === 'en_espera' && r.hold_expira_en && <CountdownTimer expiraEn={r.hold_expira_en} />}
+        {r.estado === 'confirmada' && r.meet_url && (
+          <a
+            href={r.meet_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-blue-700"
+          >
+            Unirse
+          </a>
+        )}
+      </div>
+
+      <div className="mt-3 border-t border-gray-100 pt-3">
+        <button
+          type="button"
+          onClick={() => navigate(`/mis-reservas/${r.folio}`)}
+          className="text-xs font-medium text-blue-600 transition hover:text-blue-800"
+        >
+          Ver detalle &rarr;
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ReservaItem({ r, navigate }) {
+  return (
+    <div className="flex flex-col gap-1 border-b border-gray-100 py-2 last:border-b-0 last:pb-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-gray-700">{toLocalTime(r.fecha_hora_inicio, r.timezone)}</p>
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+            BADGE[r.estado] ?? 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {ESTADO_LABEL[r.estado] ?? r.estado}
+        </span>
+      </div>
+
+      {r.asesor && (
+        <p className="text-xs text-gray-500">Con {r.asesor.nombre}</p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {r.estado_pago && r.estado_pago !== 'exento' && (
+          <span className="text-xs text-gray-500">{PAGO_LABEL[r.estado_pago] ?? r.estado_pago}</span>
+        )}
+        {r.estado === 'en_espera' && r.hold_expira_en && (
+          <CountdownTimer expiraEn={r.hold_expira_en} />
+        )}
+      </div>
+
+      <div className="pt-1">
+        <button
+          type="button"
+          onClick={() => navigate(`/mis-reservas/${r.folio}`)}
+          className="text-xs font-medium text-blue-600 transition hover:text-blue-800"
+        >
+          Ver detalle &rarr;
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SerieCard({ serie, navigate }) {
+  const primera = serie.reservas[0]
+  const esPaquete = primera.modalidad_cobro === 'paquete'
+  const pagadas = serie.reservas.every((r) => r.estado_pago === 'completado' || r.estado_pago === 'exento')
+
+  return (
+    <div className="rounded-xl border border-orange-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">{primera.servicio_nombre ?? 'Servicio'}</h3>
+          <p className="text-xs text-gray-500">Serie de {serie.reservas.length} sesiones</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+              esPaquete ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'
+            }`}
+          >
+            {MODALIDAD_COBRO_LABEL[primera.modalidad_cobro] ?? primera.modalidad_cobro ?? 'Serie'}
+          </span>
+          {esPaquete && pagadas && (
+            <span className="inline-flex items-center rounded-full border border-green-200 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+              Paquete pagado
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-2 space-y-1">
+        {serie.reservas.map((r) => (
+          <ReservaItem key={r.folio} r={r} navigate={navigate} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const LIMIT = 10
 
 export default function MisReservas() {
@@ -170,6 +300,33 @@ export default function MisReservas() {
   }
 
   const reservas = data ?? []
+
+  // Agrupar reservas con serie_id
+  const seriesMap = new Map()
+  const sueltas = []
+  for (const r of reservas) {
+    if (r.serie_id) {
+      if (!seriesMap.has(r.serie_id)) {
+        seriesMap.set(r.serie_id, [])
+      }
+      seriesMap.get(r.serie_id).push(r)
+    } else {
+      sueltas.push(r)
+    }
+  }
+  const series = Array.from(seriesMap.values())
+    .map((items) => ({
+      id: items[0].serie_id,
+      reservas: items.sort(
+        (a, b) => new Date(b.fecha_hora_inicio) - new Date(a.fecha_hora_inicio)
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.reservas[0].fecha_hora_inicio) -
+        new Date(a.reservas[0].fecha_hora_inicio)
+    )
+
   const hayMas = reservas.length === LIMIT
   const sinReservas = reservas.length === 0
 
@@ -206,67 +363,11 @@ export default function MisReservas() {
       )}
 
       <div className="grid gap-4">
-        {reservas.map((r) => (
-          <div
-            key={r.folio}
-            className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
-          >
-            <div className="mb-1 flex items-start justify-between gap-2">
-              <h3 className="text-base font-semibold text-gray-900">
-                {r.servicio_nombre ?? 'Servicio'}
-              </h3>
-              <span
-                className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                  BADGE[r.estado] ?? 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                {ESTADO_LABEL[r.estado] ?? r.estado}
-              </span>
-            </div>
-
-            <p className="mb-1 text-sm text-gray-600">
-              {toLocalTime(r.fecha_hora_inicio, r.timezone)}
-            </p>
-
-            {r.asesor && (
-              <p className="mb-2 text-sm text-gray-500">
-                Con {r.asesor.nombre}
-              </p>
-            )}
-
-            <div className="flex flex-wrap items-center gap-3">
-              {r.estado_pago && r.estado_pago !== 'exento' && (
-                <span className="text-xs text-gray-500">
-                  {PAGO_LABEL[r.estado_pago] ?? r.estado_pago}
-                </span>
-              )}
-
-              {r.estado === 'en_espera' && r.hold_expira_en && (
-                <CountdownTimer expiraEn={r.hold_expira_en} />
-              )}
-
-              {r.estado === 'confirmada' && r.meet_url && (
-                <a
-                  href={r.meet_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-blue-700"
-                >
-                  Unirse
-                </a>
-              )}
-            </div>
-
-            <div className="mt-3 border-t border-gray-100 pt-3">
-              <button
-                type="button"
-                onClick={() => navigate(`/mis-reservas/${r.folio}`)}
-                className="text-xs font-medium text-blue-600 transition hover:text-blue-800"
-              >
-                Ver detalle &rarr;
-              </button>
-            </div>
-          </div>
+        {series.map((serie) => (
+          <SerieCard key={serie.id} serie={serie} navigate={navigate} />
+        ))}
+        {sueltas.map((r) => (
+          <ReservaCard key={r.folio} r={r} navigate={navigate} />
         ))}
       </div>
 

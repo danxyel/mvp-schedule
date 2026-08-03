@@ -402,9 +402,29 @@ export interface paths {
         put?: never;
         /**
          * Crear Serie Admin
-         * @description Crea una serie de reservas recurrentes.
+         * @description Crea el patrón de horario de una serie recurrente.
          */
         post: operations["crear_serie_admin_api_v2__tenant_slug__admin_series_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inscribir Cliente En Serie Admin
+         * @description Inscribe un cliente a una serie recurrente existente.
+         */
+        post: operations["inscribir_cliente_en_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -420,7 +440,7 @@ export interface paths {
         };
         /**
          * Detalle Serie Admin
-         * @description Detalle de una serie de reservas.
+         * @description Detalle de una serie de reservas, incluyendo sus inscripciones.
          */
         get: operations["detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get"];
         put?: never;
@@ -431,7 +451,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/{tenant_slug}/admin/reservas/serie/{serie_id}/pago-local": {
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/pago-local": {
         parameters: {
             query?: never;
             header?: never;
@@ -441,11 +461,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Registrar Pago Serie Local
-         * @description Registra el pago de un paquete completo.
-         *     Marca estado_pago=COMPLETADO en TODAS las reservas de la serie a la vez.
+         * Registrar Pago Inscripcion Local
+         * @description Registra el pago de un paquete para un cliente específico de una serie.
          */
-        post: operations["registrar_pago_serie_local_api_v2__tenant_slug__admin_reservas_serie__serie_id__pago_local_post"];
+        post: operations["registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1132,6 +1151,58 @@ export interface components {
             creado_en: string;
         };
         /**
+         * InscripcionSerieCreate
+         * @description Inscribir un cliente a una serie recurrente existente.
+         */
+        InscripcionSerieCreate: {
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** @default sesion */
+            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
+            /** @default local */
+            metodo_pago: components["schemas"]["MetodoPagoEnum"];
+        };
+        /**
+         * InscripcionSerieOut
+         * @description Vista de una inscripción a serie.
+         */
+        InscripcionSerieOut: {
+            /** Id */
+            id: number;
+            /** Serie Id */
+            serie_id: number;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Email Cliente */
+            email_cliente?: string | null;
+            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
+            /** Precio Paquete */
+            precio_paquete?: string | null;
+            /**
+             * Num Reservas Creadas
+             * @default 0
+             */
+            num_reservas_creadas: number;
+            /**
+             * Num Reservas Omitidas
+             * @default 0
+             */
+            num_reservas_omitidas: number;
+            /** Fechas Omitidas */
+            fechas_omitidas?: Record<string, never>[] | null;
+            /** Estado Pago */
+            estado_pago: string;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /**
          * MetodoPagoEnum
          * @enum {string}
          */
@@ -1428,13 +1499,13 @@ export interface components {
         };
         /**
          * SerieReservaCreate
-         * @description Crear una serie de reservas recurrentes.
+         * @description Crear el patrón de horario de una serie recurrente.
+         *
+         *     La inscripción de clientes es un paso posterior.
          */
         SerieReservaCreate: {
             /** Servicio Id */
             servicio_id: number;
-            /** Cliente Usuario Id */
-            cliente_usuario_id: number;
             /** Asesor Id */
             asesor_id?: number | null;
             /** Frecuencia */
@@ -1471,12 +1542,6 @@ export interface components {
              * @default false
              */
             cobro_por_paquete_habilitado: boolean;
-            /** Precio Paquete */
-            precio_paquete?: number | string | null;
-            /** @default sesion */
-            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
-            /** @default local */
-            metodo_pago: components["schemas"]["MetodoPagoEnum"];
         };
         /**
          * SerieReservaOut
@@ -1489,10 +1554,6 @@ export interface components {
             servicio_id: number;
             /** Servicio Nombre */
             servicio_nombre?: string | null;
-            /** Cliente Usuario Id */
-            cliente_usuario_id: number;
-            /** Nombre Cliente */
-            nombre_cliente?: string | null;
             /** Asesor Id */
             asesor_id?: number | null;
             /** Nombre Asesor */
@@ -1519,21 +1580,19 @@ export interface components {
             cobro_por_sesion_habilitado: boolean;
             /** Cobro Por Paquete Habilitado */
             cobro_por_paquete_habilitado: boolean;
-            /** Precio Paquete */
-            precio_paquete?: string | null;
             estado: components["schemas"]["EstadoSerieEnum"];
             /**
-             * Num Reservas Creadas
+             * Num Inscripciones
              * @default 0
              */
-            num_reservas_creadas: number;
+            num_inscripciones: number;
             /**
-             * Num Reservas Omitidas
+             * Num Reservas Creadas Total
              * @default 0
              */
-            num_reservas_omitidas: number;
-            /** Fechas Omitidas */
-            fechas_omitidas?: Record<string, never>[] | null;
+            num_reservas_creadas_total: number;
+            /** Inscripciones */
+            inscripciones?: components["schemas"]["InscripcionSerieOut"][] | null;
             /**
              * Creado En
              * Format: date-time
@@ -3061,6 +3120,42 @@ export interface operations {
             };
         };
     };
+    inscribir_cliente_en_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InscripcionSerieCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get: {
         parameters: {
             query?: never;
@@ -3093,12 +3188,13 @@ export interface operations {
             };
         };
     };
-    registrar_pago_serie_local_api_v2__tenant_slug__admin_reservas_serie__serie_id__pago_local_post: {
+    registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 serie_id: number;
+                inscripcion_id: number;
                 tenant_slug: string;
             };
             cookie?: never;

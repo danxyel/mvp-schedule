@@ -1376,7 +1376,7 @@
           "Agenda v2.2"
         ],
         "summary": "Crear Serie Admin",
-        "description": "Crea una serie de reservas recurrentes.",
+        "description": "Crea el patrón de horario de una serie recurrente.",
         "operationId": "crear_serie_admin_api_v2__tenant_slug__admin_series_post",
         "security": [
           {
@@ -1496,13 +1496,81 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Inscribir Cliente En Serie Admin",
+        "description": "Inscribe un cliente a una serie recurrente existente.",
+        "operationId": "inscribir_cliente_en_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InscripcionSerieCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InscripcionSerieOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/series/{serie_id}": {
       "get": {
         "tags": [
           "Agenda v2.2"
         ],
         "summary": "Detalle Serie Admin",
-        "description": "Detalle de una serie de reservas.",
+        "description": "Detalle de una serie de reservas, incluyendo sus inscripciones.",
         "operationId": "detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get",
         "security": [
           {
@@ -1554,14 +1622,14 @@
         }
       }
     },
-    "/api/v2/{tenant_slug}/admin/reservas/serie/{serie_id}/pago-local": {
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/pago-local": {
       "post": {
         "tags": [
           "Agenda v2.2"
         ],
-        "summary": "Registrar Pago Serie Local",
-        "description": "Registra el pago de un paquete completo.\nMarca estado_pago=COMPLETADO en TODAS las reservas de la serie a la vez.",
-        "operationId": "registrar_pago_serie_local_api_v2__tenant_slug__admin_reservas_serie__serie_id__pago_local_post",
+        "summary": "Registrar Pago Inscripcion Local",
+        "description": "Registra el pago de un paquete para un cliente específico de una serie.",
+        "operationId": "registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post",
         "security": [
           {
             "HTTPBearer": []
@@ -1576,6 +1644,16 @@
               "type": "integer",
               "exclusiveMinimum": 0,
               "title": "Serie Id"
+            }
+          },
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
             }
           },
           {
@@ -4036,6 +4114,141 @@
         ],
         "title": "HorarioAsesorOut"
       },
+      "InscripcionSerieCreate": {
+        "properties": {
+          "cliente_usuario_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cliente Usuario Id"
+          },
+          "modalidad_cobro": {
+            "$ref": "#/components/schemas/ModalidadCobroEnum",
+            "default": "sesion"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
+          "metodo_pago": {
+            "$ref": "#/components/schemas/MetodoPagoEnum",
+            "default": "local"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cliente_usuario_id"
+        ],
+        "title": "InscripcionSerieCreate",
+        "description": "Inscribir un cliente a una serie recurrente existente."
+      },
+      "InscripcionSerieOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "serie_id": {
+            "type": "integer",
+            "title": "Serie Id"
+          },
+          "cliente_usuario_id": {
+            "type": "integer",
+            "title": "Cliente Usuario Id"
+          },
+          "nombre_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Cliente"
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente"
+          },
+          "modalidad_cobro": {
+            "$ref": "#/components/schemas/ModalidadCobroEnum"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
+          "num_reservas_creadas": {
+            "type": "integer",
+            "title": "Num Reservas Creadas",
+            "default": 0
+          },
+          "num_reservas_omitidas": {
+            "type": "integer",
+            "title": "Num Reservas Omitidas",
+            "default": 0
+          },
+          "fechas_omitidas": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechas Omitidas"
+          },
+          "estado_pago": {
+            "type": "string",
+            "title": "Estado Pago"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "serie_id",
+          "cliente_usuario_id",
+          "modalidad_cobro",
+          "estado_pago",
+          "creado_en"
+        ],
+        "title": "InscripcionSerieOut",
+        "description": "Vista de una inscripción a serie."
+      },
       "MetodoPagoEnum": {
         "type": "string",
         "enum": [
@@ -4906,11 +5119,6 @@
             "exclusiveMinimum": 0.0,
             "title": "Servicio Id"
           },
-          "cliente_usuario_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Cliente Usuario Id"
-          },
           "asesor_id": {
             "anyOf": [
               {
@@ -4973,42 +5181,18 @@
             "type": "boolean",
             "title": "Cobro Por Paquete Habilitado",
             "default": false
-          },
-          "precio_paquete": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0.0
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Precio Paquete"
-          },
-          "modalidad_cobro": {
-            "$ref": "#/components/schemas/ModalidadCobroEnum",
-            "default": "sesion"
-          },
-          "metodo_pago": {
-            "$ref": "#/components/schemas/MetodoPagoEnum",
-            "default": "local"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "servicio_id",
-          "cliente_usuario_id",
           "frecuencia",
           "hora_inicio",
           "fecha_inicio"
         ],
         "title": "SerieReservaCreate",
-        "description": "Crear una serie de reservas recurrentes."
+        "description": "Crear el patrón de horario de una serie recurrente.\n\nLa inscripción de clientes es un paso posterior."
       },
       "SerieReservaOut": {
         "properties": {
@@ -5030,21 +5214,6 @@
               }
             ],
             "title": "Servicio Nombre"
-          },
-          "cliente_usuario_id": {
-            "type": "integer",
-            "title": "Cliente Usuario Id"
-          },
-          "nombre_cliente": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nombre Cliente"
           },
           "asesor_id": {
             "anyOf": [
@@ -5109,35 +5278,24 @@
             "type": "boolean",
             "title": "Cobro Por Paquete Habilitado"
           },
-          "precio_paquete": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Precio Paquete"
-          },
           "estado": {
             "$ref": "#/components/schemas/EstadoSerieEnum"
           },
-          "num_reservas_creadas": {
+          "num_inscripciones": {
             "type": "integer",
-            "title": "Num Reservas Creadas",
+            "title": "Num Inscripciones",
             "default": 0
           },
-          "num_reservas_omitidas": {
+          "num_reservas_creadas_total": {
             "type": "integer",
-            "title": "Num Reservas Omitidas",
+            "title": "Num Reservas Creadas Total",
             "default": 0
           },
-          "fechas_omitidas": {
+          "inscripciones": {
             "anyOf": [
               {
                 "items": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/InscripcionSerieOut"
                 },
                 "type": "array"
               },
@@ -5145,7 +5303,7 @@
                 "type": "null"
               }
             ],
-            "title": "Fechas Omitidas"
+            "title": "Inscripciones"
           },
           "creado_en": {
             "type": "string",
@@ -5162,7 +5320,6 @@
         "required": [
           "id",
           "servicio_id",
-          "cliente_usuario_id",
           "frecuencia",
           "hora_inicio",
           "duracion_minutos",

@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './components/Login'
-import Registro from './components/Registro'
 import SeleccionServicio from './components/SeleccionServicio'
 import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
@@ -18,8 +17,7 @@ function App() {
       <Routes>
         {/* Rutas públicas */}
         <Route path="/login" element={<Login />} />
-        <Route path="/registro" element={<Registro />} />
-        
+
         {/* Ruta pública: detalle de reserva por folio + código */}
         <Route path="/t/:tenantSlug/r/:folio" element={<DetalleReservaPublica />} />
         

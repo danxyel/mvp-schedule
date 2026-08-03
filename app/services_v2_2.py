@@ -1113,6 +1113,7 @@ def crear_serie_reservas(
                 UsuarioTenant.tenant_id == tenant_id,
                 UsuarioTenant.id == payload.asesor_id,
                 UsuarioTenant.activo.is_(True),
+                UsuarioTenant.rol.in_([RolUsuario.ASESOR, RolUsuario.ADMIN]),
             )
         ).scalar_one_or_none()
         if asesor is None:
@@ -1120,6 +1121,9 @@ def crear_serie_reservas(
 
     # Convertir fecha_inicio a date
     fecha_inicio_date = payload.fecha_inicio.date() if isinstance(payload.fecha_inicio, dt) else payload.fecha_inicio
+
+    # Timezone del contexto para interpretar correctamente la hora local
+    tzname = _tz_del_contexto(tenant, servicio, servicio.sede)
 
     # Crear la serie
     serie = SerieReserva(
@@ -1154,8 +1158,8 @@ def crear_serie_reservas(
 
     for fecha in fechas:
         try:
-            # Construir datetime con hora
-            fecha_hora = dt.combine(fecha, payload.hora_inicio, tzinfo=timezone.utc)
+            # Construir datetime con hora en el timezone del contexto
+            fecha_hora = dt.combine(fecha, payload.hora_inicio, tzinfo=ZoneInfo(tzname))
 
             # Construir payload para crear_reserva()
             reserva_payload = ReservaCreate(
@@ -1216,6 +1220,7 @@ def crear_serie_reservas(
             "num_reservas_creadas": len(reservas_creadas),
             "num_reservas_omitidas": len(fechas_omitidas),
             "modalidad_cobro": payload.modalidad_cobro.value,
+            "fechas_omitidas": fechas_omitidas,
         },
         ip=ip, user_agent=user_agent,
     )

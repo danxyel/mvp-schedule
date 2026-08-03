@@ -1301,6 +1301,12 @@ def registrar_pago_serie_local(
             {"codigo": "serie_no_encontrada", "mensaje": "Serie no encontrada"},
         )
 
+    if serie.estado == EstadoSerie.CANCELADA:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "serie_cancelada", "mensaje": "La serie está cancelada"},
+        )
+
     # Obtener todas las reservas de la serie
     reservas = db.execute(
         select(Reserva).where(
@@ -1331,8 +1337,10 @@ def registrar_pago_serie_local(
         reserva.metodo_pago_usado = MetodoPagoUsado(payload.metodo)
 
         # Si es paquete, distribuir el monto entre las reservas
-        if payload.monto is not None and len(pendientes) > 0:
-            monto_por_reserva = payload.monto / len(pendientes)
+        # Si payload.monto es null, usar serie.precio_paquete si existe
+        monto_a_distribuir = payload.monto if payload.monto is not None else serie.precio_paquete
+        if monto_a_distribuir is not None and len(pendientes) > 0:
+            monto_por_reserva = monto_a_distribuir / len(pendientes)
             reserva.precio_final = monto_por_reserva
 
         # Confirmar reservas que estaban en_espera
@@ -1350,6 +1358,7 @@ def registrar_pago_serie_local(
             "num_reservas": len(pendientes),
             "metodo": payload.metodo,
             "monto_total": str(payload.monto) if payload.monto else None,
+            "referencia": payload.referencia,
         },
     )
 

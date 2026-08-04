@@ -550,6 +550,7 @@ class SerieReservaCreate(BaseModel):
     # Modalidades de cobro que se ofrecerán a quienes se inscriban
     cobro_por_sesion_habilitado: bool = Field(default=True)
     cobro_por_paquete_habilitado: bool = Field(default=False)
+    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
 
     @field_validator("fecha_inicio")
     @classmethod
@@ -561,23 +562,22 @@ class SerieReservaCreate(BaseModel):
     def validar_modalidades(self):
         if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
             raise ValueError("Debe habilitar al menos una modalidad de cobro")
+        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
+            raise ValueError("precio_paquete es obligatorio cuando el cobro por paquete está habilitado")
         return self
 
     model_config = ConfigDict(extra="forbid")
 
 
 class InscripcionSerieCreate(BaseModel):
-    """Inscribir un cliente a una serie recurrente existente."""
+    """Inscribir un cliente a una serie recurrente existente.
+
+    El precio del paquete ya no se captura aquí — vive en
+    `SerieReserva.precio_paquete`, fijo para toda la serie.
+    """
     cliente_usuario_id: int = Field(..., gt=0)
     modalidad_cobro: ModalidadCobroEnum = Field(default=ModalidadCobroEnum.SESION)
-    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
     metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
-
-    @model_validator(mode="after")
-    def validar_precio_paquete(self):
-        if self.modalidad_cobro == ModalidadCobroEnum.PAQUETE and self.precio_paquete is None:
-            raise ValueError("precio_paquete es obligatorio cuando la modalidad es 'paquete'")
-        return self
 
     model_config = ConfigDict(extra="forbid")
 
@@ -590,7 +590,6 @@ class InscripcionSerieOut(BaseModel):
     nombre_cliente: Optional[str] = None
     email_cliente: Optional[str] = None
     modalidad_cobro: ModalidadCobroEnum
-    precio_paquete: Optional[Decimal] = None
     num_reservas_creadas: int = 0
     num_reservas_omitidas: int = 0
     fechas_omitidas: Optional[List[Dict[str, Any]]] = None
@@ -619,6 +618,7 @@ class SerieReservaOut(BaseModel):
     # Modalidades de cobro habilitadas por admin
     cobro_por_sesion_habilitado: bool
     cobro_por_paquete_habilitado: bool
+    precio_paquete: Optional[Decimal] = None
 
     # Estado
     estado: EstadoSerieEnum

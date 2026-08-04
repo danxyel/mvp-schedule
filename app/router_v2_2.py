@@ -156,6 +156,7 @@ _CODIGO_HTTP = {
     "pago_pendiente": status.HTTP_409_CONFLICT,
     "cliente_ya_inscrito": status.HTTP_409_CONFLICT,
     "modalidad_no_permitida": status.HTTP_422_UNPROCESSABLE_ENTITY,
+    "serie_sin_precio_paquete": status.HTTP_409_CONFLICT,
 }
 
 
@@ -1487,7 +1488,7 @@ def registrar_pago_inscripcion_local(
             {"codigo": "ya_pagado", "mensaje": "Todas las reservas ya tienen el pago registrado"},
         )
 
-    monto_a_distribuir = payload.monto if payload.monto is not None else inscripcion.precio_paquete
+    monto_a_distribuir = payload.monto if payload.monto is not None else serie.precio_paquete
 
     for reserva in pendientes:
         reserva.estado_pago = EstadoPagoReserva.COMPLETADO
@@ -1564,8 +1565,8 @@ def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> Inscri
             Bitacora.accion == "inscripcion_serie_creada",
         )
     ).scalar_one_or_none()
-    if bitacora and bitacora.detalles:
-        fechas_omitidas = bitacora.detalles.get("fechas_omitidas")
+    if bitacora and bitacora.detalles_json:
+        fechas_omitidas = bitacora.detalles_json.get("fechas_omitidas")
 
     return InscripcionSerieOut(
         id=inscripcion.id,
@@ -1574,7 +1575,6 @@ def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> Inscri
         nombre_cliente=cliente.nombre if cliente else None,
         email_cliente=cliente.email if cliente else None,
         modalidad_cobro=inscripcion.modalidad_cobro.value,
-        precio_paquete=inscripcion.precio_paquete,
         num_reservas_creadas=num_creadas,
         num_reservas_omitidas=num_omitidas,
         fechas_omitidas=fechas_omitidas,
@@ -1628,6 +1628,7 @@ def _serie_admin_out(
         fecha_inicio=serie.fecha_inicio,
         cobro_por_sesion_habilitado=serie.cobro_por_sesion_habilitado,
         cobro_por_paquete_habilitado=serie.cobro_por_paquete_habilitado,
+        precio_paquete=serie.precio_paquete,
         estado=serie.estado.value,
         num_inscripciones=num_inscripciones,
         num_reservas_creadas_total=num_reservas_creadas_total,

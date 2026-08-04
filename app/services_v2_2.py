@@ -1186,6 +1186,7 @@ def crear_serie(
         fecha_inicio=fecha_inicio_date,
         cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
         cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
+        precio_paquete=payload.precio_paquete,
     )
     db.add(serie)
     db.flush()
@@ -1199,6 +1200,7 @@ def crear_serie(
             "asesor_id": payload.asesor_id,
             "cobro_por_sesion_habilitado": payload.cobro_por_sesion_habilitado,
             "cobro_por_paquete_habilitado": payload.cobro_por_paquete_habilitado,
+            "precio_paquete": str(payload.precio_paquete) if payload.precio_paquete is not None else None,
         },
         ip=ip, user_agent=user_agent,
     )
@@ -1257,11 +1259,20 @@ def inscribir_cliente_en_serie(
     if ut_cliente is None:
         raise ReservaError("El cliente no está vinculado a este tenant", codigo="cliente_no_vinculado")
 
+    # Estado inconsistente de la serie (no un error de quien se inscribe):
+    # cobro_por_paquete_habilitado=True pero la serie nunca tuvo precio
+    # (posible en series creadas antes de que precio_paquete existiera).
+    if payload.modalidad_cobro == ModalidadCobro.PAQUETE and serie.precio_paquete is None:
+        raise ReservaError(
+            "La serie no tiene un precio de paquete configurado",
+            codigo="serie_sin_precio_paquete",
+        )
+
     # Validar modalidad contra las habilitadas por la serie
     try:
         validar_modalidad_cobro(
             payload.modalidad_cobro,
-            payload.precio_paquete,
+            serie.precio_paquete,
             serie.cobro_por_sesion_habilitado,
             serie.cobro_por_paquete_habilitado,
         )
@@ -1282,7 +1293,6 @@ def inscribir_cliente_en_serie(
         serie_id=serie_id,
         cliente_usuario_id=payload.cliente_usuario_id,
         modalidad_cobro=payload.modalidad_cobro,
-        precio_paquete=payload.precio_paquete,
     )
     db.add(inscripcion)
     db.flush()
@@ -1301,8 +1311,8 @@ def inscribir_cliente_en_serie(
     fechas_omitidas = []
 
     precio_por_reserva = None
-    if payload.modalidad_cobro == ModalidadCobro.PAQUETE and payload.precio_paquete is not None and fechas:
-        precio_por_reserva = payload.precio_paquete / Decimal(len(fechas))
+    if payload.modalidad_cobro == ModalidadCobro.PAQUETE and serie.precio_paquete is not None and fechas:
+        precio_por_reserva = serie.precio_paquete / Decimal(len(fechas))
 
     for fecha in fechas:
         try:
@@ -1440,6 +1450,7 @@ def confirmar_solicitud_como_serie(
         fecha_inicio=datetime.combine(fecha_inicio_local, time.min, tzinfo=ZoneInfo(tzname)),
         cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
         cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
+        precio_paquete=payload.precio_paquete,
     )
 
     serie = crear_serie(
@@ -1451,7 +1462,6 @@ def confirmar_solicitud_como_serie(
     inscripcion_payload = InscripcionSerieCreate(
         cliente_usuario_id=solicitud.cliente_usuario_id,
         modalidad_cobro=payload.modalidad_cobro,
-        precio_paquete=payload.precio_paquete,
         metodo_pago=payload.metodo_pago,
     )
 

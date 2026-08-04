@@ -23,7 +23,7 @@ from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
     SolicitudReserva, SerieReserva, InscripcionSerie, Bitacora,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
-    EstadoSolicitud, EstadoSerie, ModalidadCobro, ESTADOS_SESION_ACTIVA, PlanTenant,
+    EstadoSolicitud, EstadoSerie, ModalidadCobro, EstadoInscripcion, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
     TipoBloqueo, utcnow,
 )
@@ -37,6 +37,7 @@ from app.schemas_v2_2 import (
     PagoLocalIn, AsignarAsesorIn,
     SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn, SolicitudRechazarIn, CanalEnum,
     SerieReservaCreate, SerieReservaOut, InscripcionSerieCreate, InscripcionSerieOut,
+    ConfirmarInscripcionIn, InscripcionSerieClienteOut,
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
@@ -157,6 +158,9 @@ _CODIGO_HTTP = {
     "cliente_ya_inscrito": status.HTTP_409_CONFLICT,
     "modalidad_no_permitida": status.HTTP_422_UNPROCESSABLE_ENTITY,
     "serie_sin_precio_paquete": status.HTTP_409_CONFLICT,
+    "inscripcion_no_encontrada": status.HTTP_404_NOT_FOUND,
+    "inscripcion_no_pendiente": status.HTTP_409_CONFLICT,
+    "pago_en_linea_no_disponible": status.HTTP_409_CONFLICT,
 }
 
 
@@ -777,6 +781,60 @@ def listar_mis_solicitudes(
     return [_solicitud_out(db, s) for s in filas]
 
 
+@router.get("/mis-series", response_model=List[InscripcionSerieClienteOut])
+def listar_mis_series(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    filas = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.cliente_usuario_id == usuario.id,
+        ).order_by(InscripcionSerie.creado_en.desc())
+    ).scalars().all()
+    return [_inscripcion_cliente_out(db, i) for i in filas]
+
+
+@router.post("/mis-series/{inscripcion_id}/confirmar", response_model=InscripcionSerieClienteOut)
+def confirmar_mi_inscripcion_serie(
+    payload: ConfirmarInscripcionIn,
+    inscripcion_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """El cliente elige modalidad_cobro/metodo_pago para una invitación
+    suya pendiente. Genera las N reservas y la pasa a CONFIRMADA."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        resultado = svc.confirmar_inscripcion_serie(
+            db, tenant, inscripcion_id, usuario, payload, ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La inscripción cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al confirmar inscripción %s", inscripcion_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    inscripcion = resultado["inscripcion"]
+    db.refresh(inscripcion)
+    return _inscripcion_cliente_out(db, inscripcion)
+
+
 # ============================================================
 # ADMIN — LISTADO DE RESERVAS
 # ============================================================
@@ -1242,11 +1300,14 @@ def confirmar_solicitud_como_serie_admin(
     serie = resultado["serie"]
     db.refresh(serie)
 
-    if resultado["acceso_token_plano"]:
-        try:
-            svc.enviar_email_activacion(tenant, resultado["cliente"], resultado["acceso_token_plano"])
-        except Exception:
-            log.exception("Fallo al enviar correo de activación para usuario %s", resultado["cliente"].id)
+    try:
+        servicio_nombre = serie.servicio.nombre if serie.servicio else "tu servicio"
+        svc.enviar_email_invitacion_serie(
+            tenant, resultado["cliente"], servicio_nombre,
+            acceso_token_plano=resultado["acceso_token_plano"],
+        )
+    except Exception:
+        log.exception("Fallo al enviar correo de invitación a serie para usuario %s", resultado["cliente"].id)
 
     return _serie_admin_out(db, serie)
 
@@ -1376,11 +1437,14 @@ def inscribir_cliente_en_serie_admin(
     inscripcion = resultado["inscripcion"]
     db.refresh(inscripcion)
 
-    if resultado["acceso_token_plano"]:
-        try:
-            svc.enviar_email_activacion(tenant, resultado["cliente"], resultado["acceso_token_plano"])
-        except Exception:
-            log.exception("Fallo al enviar correo de activación para usuario %s", resultado["cliente"].id)
+    try:
+        servicio_nombre = inscripcion.serie.servicio.nombre if inscripcion.serie and inscripcion.serie.servicio else "tu servicio"
+        svc.enviar_email_invitacion_serie(
+            tenant, resultado["cliente"], servicio_nombre,
+            acceso_token_plano=resultado["acceso_token_plano"],
+        )
+    except Exception:
+        log.exception("Fallo al enviar correo de invitación a serie para usuario %s", resultado["cliente"].id)
 
     return _inscripcion_admin_out(db, inscripcion)
 
@@ -1531,6 +1595,36 @@ def registrar_pago_inscripcion_local(
     )
 
 
+@router.post("/admin/series/{serie_id}/inscripciones/{inscripcion_id}/cancelar", response_model=InscripcionSerieOut)
+def cancelar_invitacion_serie_admin(
+    serie_id: int = Path(..., gt=0),
+    inscripcion_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Retira una invitación a serie que sigue pendiente (INVITADA)."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        inscripcion = svc.cancelar_invitacion_serie(
+            db, tenant, serie_id, inscripcion_id, staff, ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al cancelar invitación %s", inscripcion_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(inscripcion)
+    return _inscripcion_admin_out(db, inscripcion)
+
+
 def _estado_pago_inscripcion(reservas: List[Reserva]) -> str:
     if not reservas:
         return "pendiente"
@@ -1541,6 +1635,40 @@ def _estado_pago_inscripcion(reservas: List[Reserva]) -> str:
     if any(r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO) for r in reservas):
         return "parcial"
     return "pendiente"
+
+
+def _inscripcion_cliente_out(db: Session, inscripcion: InscripcionSerie) -> InscripcionSerieClienteOut:
+    """Vista de una inscripción para el cliente dueño — trae lo que necesita
+    para decidir cómo confirmar (servicio, patrón, precios por modalidad)."""
+    serie = inscripcion.serie
+    servicio = serie.servicio if serie else None
+
+    num_creadas = db.execute(
+        select(func.count(Reserva.id)).where(
+            Reserva.tenant_id == inscripcion.tenant_id,
+            Reserva.inscripcion_id == inscripcion.id,
+        )
+    ).scalar_one()
+
+    return InscripcionSerieClienteOut(
+        id=inscripcion.id,
+        serie_id=inscripcion.serie_id,
+        estado=inscripcion.estado.value,
+        modalidad_cobro=inscripcion.modalidad_cobro.value if inscripcion.modalidad_cobro else None,
+        servicio_id=serie.servicio_id if serie else 0,
+        servicio_nombre=servicio.nombre if servicio else None,
+        frecuencia=serie.frecuencia if serie else "",
+        dia_semana=serie.dia_semana if serie else None,
+        hora_inicio=serie.hora_inicio if serie else time(0, 0),
+        num_repeticiones=serie.num_repeticiones if serie else 0,
+        fecha_inicio=serie.fecha_inicio if serie else inscripcion.creado_en,
+        cobro_por_sesion_habilitado=serie.cobro_por_sesion_habilitado if serie else False,
+        cobro_por_paquete_habilitado=serie.cobro_por_paquete_habilitado if serie else False,
+        precio_sesion=servicio.precio if servicio else None,
+        precio_paquete=serie.precio_paquete if serie else None,
+        num_reservas_creadas=num_creadas,
+        creado_en=inscripcion.creado_en,
+    )
 
 
 def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> InscripcionSerieOut:
@@ -1554,7 +1682,11 @@ def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> Inscri
     ).scalars().all()
 
     num_creadas = len(reservas)
-    num_omitidas = inscripcion.serie.num_repeticiones - num_creadas if inscripcion.serie else 0
+    num_omitidas = (
+        inscripcion.serie.num_repeticiones - num_creadas
+        if inscripcion.serie and inscripcion.estado == EstadoInscripcion.CONFIRMADA
+        else 0
+    )
 
     fechas_omitidas = None
     bitacora = db.execute(
@@ -1562,7 +1694,7 @@ def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> Inscri
             Bitacora.tenant_id == inscripcion.tenant_id,
             Bitacora.entidad_tipo == "inscripcion_serie",
             Bitacora.entidad_id == inscripcion.id,
-            Bitacora.accion == "inscripcion_serie_creada",
+            Bitacora.accion == "inscripcion_serie_confirmada",
         )
     ).scalar_one_or_none()
     if bitacora and bitacora.detalles_json:
@@ -1574,7 +1706,8 @@ def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> Inscri
         cliente_usuario_id=inscripcion.cliente_usuario_id,
         nombre_cliente=cliente.nombre if cliente else None,
         email_cliente=cliente.email if cliente else None,
-        modalidad_cobro=inscripcion.modalidad_cobro.value,
+        estado=inscripcion.estado.value,
+        modalidad_cobro=inscripcion.modalidad_cobro.value if inscripcion.modalidad_cobro else None,
         num_reservas_creadas=num_creadas,
         num_reservas_omitidas=num_omitidas,
         fechas_omitidas=fechas_omitidas,

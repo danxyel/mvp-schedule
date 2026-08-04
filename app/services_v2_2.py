@@ -29,7 +29,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sede, Servicio, Sesion, Reserva,
     SolicitudReserva, EstadoSolicitud,
-    SerieReserva, InscripcionSerie, ModalidadCobro, EstadoSerie,
+    SerieReserva, InscripcionSerie, ModalidadCobro, EstadoSerie, EstadoInscripcion,
     HorarioDisponibilidad, HorarioBloqueo, Bitacora, AsesorServicio,
     CampoFormulario, RespuestaFormulario,
     EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
@@ -38,6 +38,7 @@ from app.models_v2_2 import (
 )
 from app.schemas_v2_2 import (
     ReservaCreate, SolicitudCreate, SerieReservaCreate, InscripcionSerieCreate,
+    ConfirmarInscripcionIn, ModalidadCobroEnum, MetodoPagoEnum,
     SolicitudConfirmarSerieIn, validar_modalidad_cobro, CheckoutUrlOut,
 )
 
@@ -1217,20 +1218,19 @@ def inscribir_cliente_en_serie(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Inscribe un cliente a una serie existente y genera sus N reservas.
+    """Invita a un cliente a una serie existente — NO genera reservas.
 
-    Reutiliza crear_reserva() para cada fecha (con generar_token_activacion=
-    False: si el cliente no tiene contraseña, el token de activación se
-    genera UNA vez aquí, después del loop, no una vez por sesión creada).
-    Si una fecha falla, se salta y continúa (éxito parcial reportado).
+    El cliente elige modalidad_cobro/metodo_pago desde su portal
+    (confirmar_inscripcion_serie()), que es lo que de verdad genera las N
+    reservas. Si el cliente ya tenía una invitación CANCELADA para esta
+    misma serie, se reactiva en vez de bloquear (mismo criterio que ya se
+    aplicó para re-vincular un UsuarioTenant desvinculado — ver HANDOFF
+    2026-08-03 — evita el mismo tipo de bug: una fila vieja bloqueando un
+    reintento legítimo para siempre).
 
     Devuelve {"inscripcion", "cliente", "acceso_token_plano"} — el caller
-    (router) manda el correo de activación post-commit si el token no es
-    None.
+    (router) manda el correo de invitación/activación post-commit.
     """
-    from datetime import datetime as dt
-    from app.schemas_v2_2 import ReservaCreate
-
     tenant_id = tenant.id
 
     serie = db.execute(
@@ -1259,43 +1259,64 @@ def inscribir_cliente_en_serie(
     if ut_cliente is None:
         raise ReservaError("El cliente no está vinculado a este tenant", codigo="cliente_no_vinculado")
 
-    # Estado inconsistente de la serie (no un error de quien se inscribe):
-    # cobro_por_paquete_habilitado=True pero la serie nunca tuvo precio
-    # (posible en series creadas antes de que precio_paquete existiera).
-    if payload.modalidad_cobro == ModalidadCobro.PAQUETE and serie.precio_paquete is None:
-        raise ReservaError(
-            "La serie no tiene un precio de paquete configurado",
-            codigo="serie_sin_precio_paquete",
-        )
-
-    # Validar modalidad contra las habilitadas por la serie
-    try:
-        validar_modalidad_cobro(
-            payload.modalidad_cobro,
-            serie.precio_paquete,
-            serie.cobro_por_sesion_habilitado,
-            serie.cobro_por_paquete_habilitado,
-        )
-    except ValueError as e:
-        raise ReservaError(str(e), codigo="modalidad_no_permitida")
-
     inscripcion_existente = db.execute(
         select(InscripcionSerie).where(
             InscripcionSerie.serie_id == serie_id,
             InscripcionSerie.cliente_usuario_id == payload.cliente_usuario_id,
         )
     ).scalar_one_or_none()
-    if inscripcion_existente is not None:
-        raise ReservaError("El cliente ya está inscrito en esta serie", codigo="cliente_ya_inscrito")
 
-    inscripcion = InscripcionSerie(
-        tenant_id=tenant_id,
-        serie_id=serie_id,
-        cliente_usuario_id=payload.cliente_usuario_id,
-        modalidad_cobro=payload.modalidad_cobro,
-    )
-    db.add(inscripcion)
+    if inscripcion_existente is not None:
+        if inscripcion_existente.estado != EstadoInscripcion.CANCELADA:
+            raise ReservaError("El cliente ya está inscrito en esta serie", codigo="cliente_ya_inscrito")
+        inscripcion = inscripcion_existente
+        inscripcion.estado = EstadoInscripcion.INVITADA
+        inscripcion.modalidad_cobro = None
+        accion_bitacora = "inscripcion_serie_reinvitada"
+    else:
+        inscripcion = InscripcionSerie(
+            tenant_id=tenant_id,
+            serie_id=serie_id,
+            cliente_usuario_id=payload.cliente_usuario_id,
+            estado=EstadoInscripcion.INVITADA,
+        )
+        db.add(inscripcion)
+        accion_bitacora = "inscripcion_serie_invitada"
     db.flush()
+
+    registrar_bitacora(
+        db, tenant_id, "inscripcion_serie", inscripcion.id, accion_bitacora,
+        usuario_id=registrado_por.id if registrado_por is not None else None,
+        detalles={"serie_id": serie.id, "cliente_usuario_id": payload.cliente_usuario_id},
+        ip=ip, user_agent=user_agent,
+    )
+
+    acceso_token_plano = None
+    if cliente.password_hash is None:
+        acceso_token_plano = generar_token_acceso(cliente)
+
+    return {"inscripcion": inscripcion, "cliente": cliente, "acceso_token_plano": acceso_token_plano}
+
+
+def _generar_reservas_de_inscripcion(
+    db: Session,
+    tenant: Tenant,
+    serie: SerieReserva,
+    inscripcion: InscripcionSerie,
+    cliente: Usuario,
+    metodo_pago: MetodoPagoEnum,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Tuple[List[Reserva], List[Dict[str, Any]]]:
+    """Genera las N reservas de una inscripción ya confirmada (una por
+    fecha del patrón de la serie). Asume `inscripcion.modalidad_cobro` ya
+    fue asignado por el caller. Reutiliza crear_reserva() con
+    generar_token_activacion=False — el token de activación, si aplica, ya
+    se resolvió al invitar, no aquí. Si una fecha falla, se salta y
+    continúa (éxito parcial reportado). No hace commit.
+    """
+    from datetime import datetime as dt
+    from app.schemas_v2_2 import ReservaCreate
 
     servicio = db.get(Servicio, serie.servicio_id)
     tzname = _tz_del_contexto(tenant, servicio, servicio.sede if servicio else None)
@@ -1307,11 +1328,11 @@ def inscribir_cliente_en_serie(
         num_repeticiones=serie.num_repeticiones,
     )
 
-    reservas_creadas = []
-    fechas_omitidas = []
+    reservas_creadas: List[Reserva] = []
+    fechas_omitidas: List[Dict[str, Any]] = []
 
     precio_por_reserva = None
-    if payload.modalidad_cobro == ModalidadCobro.PAQUETE and serie.precio_paquete is not None and fechas:
+    if inscripcion.modalidad_cobro == ModalidadCobro.PAQUETE and serie.precio_paquete is not None and fechas:
         precio_por_reserva = serie.precio_paquete / Decimal(len(fechas))
 
     for fecha in fechas:
@@ -1322,7 +1343,7 @@ def inscribir_cliente_en_serie(
                 servicio_id=serie.servicio_id,
                 fecha_hora_inicio=fecha_hora,
                 asesor_id=serie.asesor_id,
-                metodo_pago=MetodoPago(payload.metodo_pago.value),
+                metodo_pago=MetodoPago(metodo_pago.value),
                 canal=Canal.ADMIN,
             )
 
@@ -1334,7 +1355,7 @@ def inscribir_cliente_en_serie(
 
             reserva.serie_id = serie.id
             reserva.inscripcion_id = inscripcion.id
-            reserva.modalidad_cobro = payload.modalidad_cobro.value
+            reserva.modalidad_cobro = inscripcion.modalidad_cobro.value
             if precio_por_reserva is not None:
                 reserva.precio_final = precio_por_reserva
 
@@ -1362,13 +1383,81 @@ def inscribir_cliente_en_serie(
             })
             continue
 
+    return reservas_creadas, fechas_omitidas
+
+
+def confirmar_inscripcion_serie(
+    db: Session,
+    tenant: Tenant,
+    inscripcion_id: int,
+    cliente: Usuario,
+    payload: ConfirmarInscripcionIn,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Dict[str, Any]:
+    """El cliente confirma su invitación: elige modalidad + método de pago,
+    lo que genera las N reservas y pasa la inscripción a CONFIRMADA.
+    """
+    tenant_id = tenant.id
+
+    inscripcion = db.execute(
+        select(InscripcionSerie)
+        .where(InscripcionSerie.tenant_id == tenant_id, InscripcionSerie.id == inscripcion_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if inscripcion is None:
+        raise ReservaError("Invitación no encontrada", codigo="inscripcion_no_encontrada")
+    if inscripcion.cliente_usuario_id != cliente.id:
+        raise ReservaError("Esta invitación no te pertenece", codigo="permiso_denegado")
+    if inscripcion.estado != EstadoInscripcion.INVITADA:
+        raise ReservaError("Esta invitación ya fue resuelta", codigo="inscripcion_no_pendiente")
+
+    serie = db.execute(
+        select(SerieReserva).where(SerieReserva.tenant_id == tenant_id, SerieReserva.id == inscripcion.serie_id)
+    ).scalar_one_or_none()
+    if serie is None or serie.estado == EstadoSerie.CANCELADA:
+        raise ReservaError("La serie está cancelada", codigo="serie_cancelada")
+
+    if payload.metodo_pago == MetodoPagoEnum.ONLINE:
+        raise ReservaError(
+            "El pago en línea todavía no está disponible para este tenant",
+            codigo="pago_en_linea_no_disponible",
+        )
+
+    # Estado inconsistente de la serie (no un error del cliente):
+    # cobro_por_paquete_habilitado=True pero la serie nunca tuvo precio
+    # (posible en series creadas antes de que precio_paquete existiera).
+    if payload.modalidad_cobro == ModalidadCobroEnum.PAQUETE and serie.precio_paquete is None:
+        raise ReservaError(
+            "La serie no tiene un precio de paquete configurado",
+            codigo="serie_sin_precio_paquete",
+        )
+
+    try:
+        validar_modalidad_cobro(
+            payload.modalidad_cobro,
+            serie.precio_paquete,
+            serie.cobro_por_sesion_habilitado,
+            serie.cobro_por_paquete_habilitado,
+        )
+    except ValueError as e:
+        raise ReservaError(str(e), codigo="modalidad_no_permitida")
+
+    inscripcion.modalidad_cobro = payload.modalidad_cobro
+
+    reservas_creadas, fechas_omitidas = _generar_reservas_de_inscripcion(
+        db, tenant, serie, inscripcion, cliente, payload.metodo_pago, ip=ip, user_agent=user_agent,
+    )
+
+    inscripcion.estado = EstadoInscripcion.CONFIRMADA
+
     registrar_bitacora(
-        db, tenant_id, "inscripcion_serie", inscripcion.id, "inscripcion_serie_creada",
-        usuario_id=registrado_por.id if registrado_por is not None else None,
+        db, tenant_id, "inscripcion_serie", inscripcion.id, "inscripcion_serie_confirmada",
+        usuario_id=cliente.id,
         detalles={
             "serie_id": serie.id,
-            "cliente_usuario_id": payload.cliente_usuario_id,
             "modalidad_cobro": payload.modalidad_cobro.value,
+            "metodo_pago": payload.metodo_pago.value,
             "num_reservas_creadas": len(reservas_creadas),
             "num_reservas_omitidas": len(fechas_omitidas),
             "fechas_omitidas": fechas_omitidas,
@@ -1376,11 +1465,53 @@ def inscribir_cliente_en_serie(
         ip=ip, user_agent=user_agent,
     )
 
-    acceso_token_plano = None
-    if cliente.password_hash is None:
-        acceso_token_plano = generar_token_acceso(cliente)
+    return {
+        "inscripcion": inscripcion,
+        "num_reservas_creadas": len(reservas_creadas),
+        "num_reservas_omitidas": len(fechas_omitidas),
+        "fechas_omitidas": fechas_omitidas,
+    }
 
-    return {"inscripcion": inscripcion, "cliente": cliente, "acceso_token_plano": acceso_token_plano}
+
+def cancelar_invitacion_serie(
+    db: Session,
+    tenant: Tenant,
+    serie_id: int,
+    inscripcion_id: int,
+    staff: UsuarioTenant,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> InscripcionSerie:
+    """El staff retira una invitación que sigue pendiente (INVITADA).
+
+    No aplica a invitaciones ya CONFIRMADA — esas ya generaron reservas
+    reales; para deshacerlas se cancelan las reservas, no la inscripción.
+    """
+    inscripcion = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.serie_id == serie_id,
+            InscripcionSerie.id == inscripcion_id,
+        )
+    ).scalar_one_or_none()
+    if inscripcion is None:
+        raise ReservaError("Invitación no encontrada", codigo="inscripcion_no_encontrada")
+    if inscripcion.estado != EstadoInscripcion.INVITADA:
+        raise ReservaError(
+            "Solo se puede cancelar una invitación pendiente",
+            codigo="inscripcion_no_pendiente",
+        )
+
+    inscripcion.estado = EstadoInscripcion.CANCELADA
+
+    registrar_bitacora(
+        db, tenant.id, "inscripcion_serie", inscripcion.id, "inscripcion_serie_invitacion_cancelada",
+        usuario_id=staff.usuario_id,
+        detalles={"serie_id": serie_id},
+        ip=ip, user_agent=user_agent,
+    )
+
+    return inscripcion
 
 
 def confirmar_solicitud_como_serie(
@@ -1392,10 +1523,13 @@ def confirmar_solicitud_como_serie(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Convierte una SolicitudReserva pendiente en una SerieReserva.
-
-    La fecha de inicio, servicio y cliente se toman de la solicitud.
-    El staff define el patrón y la modalidad de cobro del único cliente.
+    """Convierte una SolicitudReserva pendiente en una SerieReserva + una
+    invitación (INVITADA) para el cliente de la solicitud — no genera
+    reservas todavía. La fecha de inicio, servicio y cliente se toman de
+    la solicitud; el staff define el patrón y las modalidades de cobro,
+    pero NO elige la modalidad ni el método de pago del cliente — eso lo
+    hace el cliente desde su portal (confirmar_inscripcion_serie()), igual
+    que en el camino de inscribir_cliente_en_serie().
 
     Devuelve {"serie", "cliente", "acceso_token_plano"} — reexporta el
     token de activación de inscribir_cliente_en_serie() para que el caller
@@ -1459,11 +1593,7 @@ def confirmar_solicitud_como_serie(
         ip=ip, user_agent=user_agent,
     )
 
-    inscripcion_payload = InscripcionSerieCreate(
-        cliente_usuario_id=solicitud.cliente_usuario_id,
-        modalidad_cobro=payload.modalidad_cobro,
-        metodo_pago=payload.metodo_pago,
-    )
+    inscripcion_payload = InscripcionSerieCreate(cliente_usuario_id=solicitud.cliente_usuario_id)
 
     resultado_inscripcion = inscribir_cliente_en_serie(
         db, tenant, serie.id, inscripcion_payload,
@@ -1484,7 +1614,6 @@ def confirmar_solicitud_como_serie(
             "servicio_id": servicio.id,
             "num_repeticiones": payload.num_repeticiones,
             "cliente_usuario_id": solicitud.cliente_usuario_id,
-            "modalidad_cobro": payload.modalidad_cobro.value,
         },
         ip=ip, user_agent=user_agent,
     )
@@ -1919,9 +2048,12 @@ def enviar_email_confirmacion(
 
 
 def enviar_email_activacion(tenant: Tenant, usuario: Usuario, acceso_token_plano: str) -> None:
-    """Correo standalone de activación de cuenta — vincular a tenant e
-    inscripción a serie disparan este. La reserva de un invitado nuevo NO
-    usa esta función: ese caso va integrado en enviar_email_confirmacion().
+    """Correo standalone de activación de cuenta — lo dispara
+    _vincular_usuario_a_tenant(). La reserva de un invitado nuevo y la
+    invitación a serie NO usan esta función directamente: esos casos
+    integran el CTA de activación dentro de su propio correo
+    (enviar_email_confirmacion(), enviar_email_invitacion_serie()) en vez
+    de mandar un segundo correo aparte.
     """
     if not usuario.email:
         log.info("Sin destinatario para el correo de activación (usuario %s)", usuario.id)
@@ -1953,6 +2085,64 @@ def enviar_email_activacion(tenant: Tenant, usuario: Usuario, acceso_token_plano
         f"{link}\n\nEste enlace expira en 48 horas. Si no esperabas este correo, ignóralo."
     )
     _enviar_smtp(tenant, usuario.email, f"{tenant.nombre} — Activa tu cuenta", texto_plano, cuerpo_html)
+
+
+def _link_mis_series(tenant: Tenant) -> str:
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return f"{base}/mis-series"
+
+
+def enviar_email_invitacion_serie(
+    tenant: Tenant,
+    cliente: Usuario,
+    servicio_nombre: str,
+    acceso_token_plano: Optional[str] = None,
+) -> None:
+    """Avisa al cliente que tiene una invitación pendiente a una serie
+    recurrente (inscribir_cliente_en_serie() / confirmar_solicitud_como_serie()).
+
+    Si el cliente no tiene contraseña, el CTA es el link de activación en
+    vez del link a "Mis series" — mismo criterio que
+    enviar_email_confirmacion() para invitados nuevos: un solo correo, no
+    dos.
+    """
+    if not cliente.email:
+        log.info("Sin destinatario para el correo de invitación a serie (usuario %s)", cliente.id)
+        return
+
+    cliente_nombre_html = html.escape(cliente.nombre or "")
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+    servicio_nombre_html = html.escape(servicio_nombre or "")
+
+    if acceso_token_plano:
+        link = _link_activacion(tenant, acceso_token_plano)
+        cta_texto = "Crear contraseña y ver invitación"
+        nota = 'Primero crea tu contraseña; después la verás en "Mis series".'
+    else:
+        link = _link_mis_series(tenant)
+        cta_texto = "Ver mi invitación"
+        nota = 'Inicia sesión y ve a "Mis series" para elegir cómo pagar.'
+    link_html = html.escape(link)
+    nota_html = html.escape(nota)
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {cliente_nombre_html}, {tenant_nombre_html} te invitó a una serie de sesiones recurrentes de
+              <strong>{servicio_nombre_html}</strong>.
+            </p>
+            <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">
+              {nota_html}
+            </p>
+            <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              {html.escape(cta_texto)}
+            </a>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} te invitó a una serie de sesiones recurrentes de {servicio_nombre}.\n\n"
+        f"{nota}\n{link}"
+    )
+    _enviar_smtp(tenant, cliente.email, f"{tenant.nombre} — Invitación a serie de sesiones", texto_plano, cuerpo_html)
 
 
 def generar_mapa_url(sede: Optional[Sede]) -> Optional[str]:

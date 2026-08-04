@@ -85,6 +85,12 @@ class ModalidadCobroEnum(str, Enum):
     PAQUETE = "paquete"
 
 
+class EstadoInscripcionEnum(str, Enum):
+    INVITADA = "invitada"
+    CONFIRMADA = "confirmada"
+    CANCELADA = "cancelada"
+
+
 def validar_modalidad_cobro(
     modalidad: ModalidadCobroEnum,
     precio_paquete: Optional[Decimal],
@@ -495,8 +501,13 @@ class SolicitudConfirmarOut(SolicitudAdminOut):
 class SolicitudConfirmarSerieIn(BaseModel):
     """Parámetros para convertir una solicitud en una serie recurrente.
 
-    La fecha de inicio, servicio y cliente se toman de la solicitud.
-    El staff define el patrón y las modalidades de cobro."""
+    La fecha de inicio, servicio y cliente se toman de la solicitud. El
+    staff define el patrón y las modalidades de cobro — pero NO elige la
+    modalidad ni el método de pago del cliente: eso lo hace el cliente
+    desde su portal (POST /mis-series/{id}/confirmar), igual que en el
+    camino de inscribir directamente. Confirmar una solicitud como serie
+    solo crea la serie + una invitación (estado=invitada) para el cliente.
+    """
     frecuencia: str = Field(..., pattern=r"^(semanal|quincenal|mensual)$")
     dia_semana: Optional[int] = Field(default=None, ge=0, le=6)
     hora_inicio: time
@@ -506,17 +517,13 @@ class SolicitudConfirmarSerieIn(BaseModel):
     cobro_por_sesion_habilitado: bool = Field(default=True)
     cobro_por_paquete_habilitado: bool = Field(default=False)
     precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
-    modalidad_cobro: ModalidadCobroEnum = Field(default=ModalidadCobroEnum.SESION)
-    metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
 
     @model_validator(mode="after")
     def validar_modalidades(self):
-        validar_modalidad_cobro(
-            self.modalidad_cobro,
-            self.precio_paquete,
-            self.cobro_por_sesion_habilitado,
-            self.cobro_por_paquete_habilitado,
-        )
+        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
+            raise ValueError("Debe habilitar al menos una modalidad de cobro")
+        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
+            raise ValueError("precio_paquete es obligatorio cuando el cobro por paquete está habilitado")
         return self
 
     model_config = ConfigDict(extra="forbid")
@@ -570,30 +577,64 @@ class SerieReservaCreate(BaseModel):
 
 
 class InscripcionSerieCreate(BaseModel):
-    """Inscribir un cliente a una serie recurrente existente.
+    """Invita a un cliente a una serie recurrente existente.
 
-    El precio del paquete ya no se captura aquí — vive en
-    `SerieReserva.precio_paquete`, fijo para toda la serie.
+    Ya no se captura modalidad de cobro ni método de pago aquí — eso lo
+    elige el cliente desde su portal (POST /mis-series/{id}/confirmar).
+    Esto solo crea la invitación (estado=invitada); no genera reservas.
     """
     cliente_usuario_id: int = Field(..., gt=0)
-    modalidad_cobro: ModalidadCobroEnum = Field(default=ModalidadCobroEnum.SESION)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConfirmarInscripcionIn(BaseModel):
+    """El cliente confirma su invitación: elige modalidad y método de pago."""
+    modalidad_cobro: ModalidadCobroEnum
     metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
 
     model_config = ConfigDict(extra="forbid")
 
 
 class InscripcionSerieOut(BaseModel):
-    """Vista de una inscripción a serie."""
+    """Vista de una inscripción a serie (admin)."""
     id: int
     serie_id: int
     cliente_usuario_id: int
     nombre_cliente: Optional[str] = None
     email_cliente: Optional[str] = None
-    modalidad_cobro: ModalidadCobroEnum
+    estado: EstadoInscripcionEnum
+    modalidad_cobro: Optional[ModalidadCobroEnum] = None
     num_reservas_creadas: int = 0
     num_reservas_omitidas: int = 0
     fechas_omitidas: Optional[List[Dict[str, Any]]] = None
     estado_pago: str  # pendiente | completo | parcial | exento
+    creado_en: datetime
+
+
+class InscripcionSerieClienteOut(BaseModel):
+    """Vista de una inscripción a serie para el cliente dueño (GET /mis-series).
+
+    Trae lo que el cliente necesita para decidir cómo confirmar: el
+    servicio, el patrón de horario, las modalidades habilitadas y sus
+    precios (sesión = servicio.precio, paquete = serie.precio_paquete).
+    """
+    id: int
+    serie_id: int
+    estado: EstadoInscripcionEnum
+    modalidad_cobro: Optional[ModalidadCobroEnum] = None
+    servicio_id: int
+    servicio_nombre: Optional[str] = None
+    frecuencia: str
+    dia_semana: Optional[int] = None
+    hora_inicio: time
+    num_repeticiones: int
+    fecha_inicio: datetime
+    cobro_por_sesion_habilitado: bool
+    cobro_por_paquete_habilitado: bool
+    precio_sesion: Optional[Decimal] = None
+    precio_paquete: Optional[Decimal] = None
+    num_reservas_creadas: int = 0
     creado_en: datetime
 
     model_config = ConfigDict(from_attributes=True)

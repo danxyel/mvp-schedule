@@ -156,6 +156,10 @@ class EstadoSerie(str, PyEnum):
     ACTIVA = "activa"; COMPLETADA = "completada"; CANCELADA = "cancelada"
 
 
+class EstadoInscripcion(str, PyEnum):
+    INVITADA = "invitada"; CONFIRMADA = "confirmada"; CANCELADA = "cancelada"
+
+
 class EstadoSolicitud(str, PyEnum):
     PENDIENTE = "pendiente"
     ACEPTADA = "aceptada"
@@ -583,8 +587,11 @@ class SolicitudReserva(Base, TenantScopedMixin):
 
 
 # ============================================================
-# 7c. INSCRIPCIÓN A SERIE — cliente inscrito a un patrón recurrente
-# Cada inscripción genera N reservas independientes para ese cliente.
+# 7c. INSCRIPCIÓN A SERIE — invitación de un cliente a un patrón recurrente
+# El admin (o confirmar_solicitud_como_serie) solo crea la invitación
+# (estado=invitada, modalidad_cobro=NULL); el cliente elige modalidad +
+# método de pago desde su portal (POST /mis-series/{id}/confirmar), lo que
+# genera las N reservas y pasa la inscripción a confirmada.
 # ============================================================
 class InscripcionSerie(Base):
     __tablename__ = "inscripciones_serie"
@@ -592,12 +599,14 @@ class InscripcionSerie(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
     serie_id: Mapped[int] = mapped_column(ForeignKey("series_reservas.id", ondelete="CASCADE"))
     cliente_usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
-    modalidad_cobro: Mapped[ModalidadCobro] = mapped_column(SQLEnum(ModalidadCobro), nullable=False)
+    modalidad_cobro: Mapped[Optional[ModalidadCobro]] = mapped_column(SQLEnum(ModalidadCobro), nullable=True)
+    estado: Mapped[EstadoInscripcion] = mapped_column(SQLEnum(EstadoInscripcion), default=EstadoInscripcion.INVITADA)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("serie_id", "cliente_usuario_id", name="uq_inscripcion_serie_cliente"),
         CheckConstraint("modalidad_cobro IN ('SESION', 'PAQUETE')", name="ck_inscripcion_modalidad"),
+        CheckConstraint("estado IN ('INVITADA', 'CONFIRMADA', 'CANCELADA')", name="ck_inscripcion_estado"),
         Index("idx_inscripciones_serie_serie", "serie_id"),
         Index("idx_inscripciones_serie_cliente", "tenant_id", "cliente_usuario_id"),
     )

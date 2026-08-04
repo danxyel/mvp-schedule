@@ -77,9 +77,13 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
   useEffect(() => {
     const cargarAsesores = async () => {
       const tenantSlug = sessionStorage.getItem('tenantSlug')
+      const token = sessionStorage.getItem('token')
       const { data, error: fetchErr } = await client.GET(
         '/api/v2/{tenant_slug}/admin/usuarios',
-        { params: { path: { tenant_slug: tenantSlug } } }
+        {
+          params: { path: { tenant_slug: tenantSlug } },
+          headers: { Authorization: `Bearer ${token}` },
+        }
       )
       if (!fetchErr && data) {
         setAsesores(data.filter(u => u.rol === 'asesor' || u.rol === 'admin'))

@@ -24,11 +24,17 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
   useEffect(() => {
     const cargarClientes = async () => {
       const tenantSlug = sessionStorage.getItem('tenantSlug')
+      const token = sessionStorage.getItem('token')
       const { data, error: fetchErr } = await client.GET(
         '/api/v2/{tenant_slug}/admin/usuarios',
-        { params: { path: { tenant_slug: tenantSlug } } }
+        {
+          params: { path: { tenant_slug: tenantSlug } },
+          headers: { Authorization: `Bearer ${token}` },
+        }
       )
-      if (!fetchErr && data) {
+      if (fetchErr) {
+        setErrorGlobal('No se pudo cargar la lista de clientes')
+      } else if (data) {
         setClientes(data.filter(u => u.rol === 'cliente'))
       }
       setCargandoClientes(false)

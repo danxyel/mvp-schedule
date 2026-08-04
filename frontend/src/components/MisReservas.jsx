@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
+import { errorMensaje } from '../utils/errores'
 const BADGE = {
   confirmada: 'bg-green-100 text-green-700 border-green-200',
   en_espera: 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -87,6 +88,29 @@ const MODALIDAD_COBRO_LABEL = {
 }
 
 function ReservaCard({ r, navigate }) {
+  const [pagarLoading, setPagarLoading] = useState(false)
+  const [pagarError, setPagarError] = useState(null)
+  const tenantSlug = sessionStorage.getItem('tenantSlug')
+  const token = sessionStorage.getItem('token')
+
+  const pagar = async () => {
+    setPagarLoading(true)
+    setPagarError(null)
+    const { data, error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/reservas/{folio}/checkout',
+      {
+        params: { path: { tenant_slug: tenantSlug, folio: r.folio } },
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    )
+    setPagarLoading(false)
+    if (fetchErr || !data?.url) {
+      setPagarError(errorMensaje(fetchErr) || 'No se pudo iniciar el pago')
+      return
+    }
+    window.open(data.url, '_blank', 'noopener,noreferrer')
+  }
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md">
       <div className="mb-1 flex items-start justify-between gap-2">
@@ -119,7 +143,21 @@ function ReservaCard({ r, navigate }) {
             Unirse
           </a>
         )}
+        {r.estado === 'confirmada' && r.estado_pago === 'pendiente' && !r.inscripcion_id && (
+          <button
+            type="button"
+            onClick={pagar}
+            disabled={pagarLoading}
+            className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pagarLoading ? 'Cargando...' : 'Pagar ahora'}
+          </button>
+        )}
       </div>
+
+      {pagarError && (
+        <p className="mt-2 text-xs text-red-600">{pagarError}</p>
+      )}
 
       <div className="mt-3 border-t border-gray-100 pt-3">
         <button

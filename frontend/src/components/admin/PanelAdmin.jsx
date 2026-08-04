@@ -5,6 +5,7 @@ import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
 import SeriesTab from './SeriesTab'
 import CrearSerieModal from './CrearSerieModal'
+import MercadoPagoTab from './MercadoPagoTab'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
@@ -2014,6 +2015,9 @@ export default function PanelAdmin() {
           <TabButton active={tab === 'usuarios'} onClick={() => cambiarTab('usuarios')}>
             Usuarios
           </TabButton>
+          <TabButton active={tab === 'pagos'} onClick={() => cambiarTab('pagos')}>
+            Pagos
+          </TabButton>
         </TabGroup>
       </div>
 
@@ -2034,6 +2038,8 @@ export default function PanelAdmin() {
         />
       ) : tab === 'servicios' ? (
         <GestionServicios tenantSlug={tenantSlug} token={token} onIrACrearSerie={irACrearSerie} />
+      ) : tab === 'pagos' ? (
+        <MercadoPagoTab tenantSlug={tenantSlug} token={token} />
       ) : (
         <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}

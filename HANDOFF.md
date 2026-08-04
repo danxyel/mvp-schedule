@@ -1,5 +1,5 @@
 # MVP Schedule — Documento Maestro de Contexto
-> Versión: 2.2 · Última actualización: 2026-07-31
+> Versión: 2.2 · Última actualización: 2026-08-03
 > Este archivo es la fuente de verdad para cualquier agente, sesión de Claude, o desarrollador que tome el proyecto.
 > **Leer antes de tocar cualquier archivo.**
 
@@ -201,6 +201,7 @@ El router traduce `ReservaError` a 4xx con este formato:
 - Bloqueos/vacaciones del asesor (admin)
 - Email de confirmación SMTP real (`services_v2_2.enviar_email_confirmacion`)
 - Selección de tenant para clientes sin membresía (`GET /tenants/publicos` + `SeleccionTenant`)
+- Gestión global de usuarios (superadmin, cross-tenant): buscar/listar (`GET /superadmin/usuarios`), detalle con membresías (`GET .../{id}`), vincular a cualquier tenant (`POST .../vincular`, reusa `_vincular_usuario_a_tenant()`), desvincular (`POST .../{id}/desvincular/{tenant_id}`), desactivar cuenta completa (`POST .../{id}/desactivar` — cancela reservas activas y solicitudes pendientes en cascada) y purgar (`POST .../{id}/purgar` — anonimiza, no borra la fila). `get_current_user()` y `POST /auth/login` rechazan cuentas con `activo=False`.
 
 ### Frontend ✅
 - Login con persistencia en sessionStorage
@@ -218,6 +219,7 @@ El router traduce `ReservaError` a 4xx con este formato:
 - Header responsive (flex-wrap + iniciales del usuario en mobile)
 - Modal compartido `common/Modal.jsx` (bottom sheet en mobile, diálogo centrado en desktop)
 - Navegación por rol
+- Gestión global de usuarios (`superadmin/GestionUsuariosGlobal.jsx`, ruta `/superadmin/usuarios`, botón "Usuarios" en `GestionTenants.jsx`): tabla con buscador + paginación, botón fijo "+ Vincular usuario", modal de detalle con membresías por tenant, confirmación por texto para desactivar (email completo) y purgar (`PURGAR`)
 
 ---
 

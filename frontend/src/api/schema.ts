@@ -1438,7 +1438,7 @@ export interface components {
          *
          *     Trae lo que el cliente necesita para decidir cómo confirmar: el
          *     servicio, el patrón de horario, las modalidades habilitadas y sus
-         *     precios (sesión = servicio.precio, paquete = serie.precio_paquete).
+         *     precios (sesión = servicio.precio, paquete = servicio.precio_paquete).
          */
         InscripcionSerieClienteOut: {
             /** Id */
@@ -1854,6 +1854,7 @@ export interface components {
          * SerieReservaCreate
          * @description Crear el patrón de horario de una serie recurrente.
          *
+         *     Las modalidades de cobro y el precio de paquete se heredan del servicio.
          *     La inscripción de clientes es un paso posterior.
          */
         SerieReservaCreate: {
@@ -1885,18 +1886,6 @@ export interface components {
              * Format: date-time
              */
             fecha_inicio: string;
-            /**
-             * Cobro Por Sesion Habilitado
-             * @default true
-             */
-            cobro_por_sesion_habilitado: boolean;
-            /**
-             * Cobro Por Paquete Habilitado
-             * @default false
-             */
-            cobro_por_paquete_habilitado: boolean;
-            /** Precio Paquete */
-            precio_paquete?: number | string | null;
         };
         /**
          * SerieReservaOut
@@ -2018,6 +2007,18 @@ export interface components {
              */
             pago_requerido: boolean;
             /**
+             * Cobro Por Sesion Habilitado
+             * @default true
+             */
+            cobro_por_sesion_habilitado: boolean;
+            /**
+             * Cobro Por Paquete Habilitado
+             * @default false
+             */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
+            /**
              * Visible Web
              * @default true
              */
@@ -2062,6 +2063,18 @@ export interface components {
             moneda: string;
             /** Pago Requerido */
             pago_requerido: boolean;
+            /**
+             * Cobro Por Sesion Habilitado
+             * @default true
+             */
+            cobro_por_sesion_habilitado: boolean;
+            /**
+             * Cobro Por Paquete Habilitado
+             * @default false
+             */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: string | null;
             /**
              * Requiere Confirmacion
              * @default false
@@ -2115,6 +2128,12 @@ export interface components {
             moneda?: string | null;
             /** Pago Requerido */
             pago_requerido?: boolean | null;
+            /** Cobro Por Sesion Habilitado */
+            cobro_por_sesion_habilitado?: boolean | null;
+            /** Cobro Por Paquete Habilitado */
+            cobro_por_paquete_habilitado?: boolean | null;
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
             /** Visible Web */
             visible_web?: boolean | null;
             /** Requiere Confirmacion */
@@ -2399,11 +2418,12 @@ export interface components {
          * @description Parámetros para convertir una solicitud en una serie recurrente.
          *
          *     La fecha de inicio, servicio y cliente se toman de la solicitud. El
-         *     staff define el patrón y las modalidades de cobro — pero NO elige la
-         *     modalidad ni el método de pago del cliente: eso lo hace el cliente
-         *     desde su portal (POST /mis-series/{id}/confirmar), igual que en el
-         *     camino de inscribir directamente. Confirmar una solicitud como serie
-         *     solo crea la serie + una invitación (estado=invitada) para el cliente.
+         *     staff define el patrón de recurrencia — las modalidades de cobro y el
+         *     precio de paquete se heredan del servicio. NO elige la modalidad ni el
+         *     método de pago del cliente: eso lo hace el cliente desde su portal
+         *     (POST /mis-series/{id}/confirmar), igual que en el camino de inscribir
+         *     directamente. Confirmar una solicitud como serie solo crea la serie +
+         *     una invitación (estado=invitada) para el cliente.
          */
         SolicitudConfirmarSerieIn: {
             /** Frecuencia */
@@ -2427,18 +2447,6 @@ export interface components {
             num_repeticiones: number;
             /** Asesor Id */
             asesor_id?: number | null;
-            /**
-             * Cobro Por Sesion Habilitado
-             * @default true
-             */
-            cobro_por_sesion_habilitado: boolean;
-            /**
-             * Cobro Por Paquete Habilitado
-             * @default false
-             */
-            cobro_por_paquete_habilitado: boolean;
-            /** Precio Paquete */
-            precio_paquete?: number | string | null;
         };
         /**
          * SolicitudCreate

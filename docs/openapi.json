@@ -4974,7 +4974,7 @@
           "creado_en"
         ],
         "title": "InscripcionSerieClienteOut",
-        "description": "Vista de una inscripción a serie para el cliente dueño (GET /mis-series).\n\nTrae lo que el cliente necesita para decidir cómo confirmar: el\nservicio, el patrón de horario, las modalidades habilitadas y sus\nprecios (sesión = servicio.precio, paquete = serie.precio_paquete)."
+        "description": "Vista de una inscripción a serie para el cliente dueño (GET /mis-series).\n\nTrae lo que el cliente necesita para decidir cómo confirmar: el\nservicio, el patrón de horario, las modalidades habilitadas y sus\nprecios (sesión = servicio.precio, paquete = servicio.precio_paquete)."
       },
       "InscripcionSerieCreate": {
         "properties": {
@@ -6053,31 +6053,6 @@
             "type": "string",
             "format": "date-time",
             "title": "Fecha Inicio"
-          },
-          "cobro_por_sesion_habilitado": {
-            "type": "boolean",
-            "title": "Cobro Por Sesion Habilitado",
-            "default": true
-          },
-          "cobro_por_paquete_habilitado": {
-            "type": "boolean",
-            "title": "Cobro Por Paquete Habilitado",
-            "default": false
-          },
-          "precio_paquete": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0.0
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Precio Paquete"
           }
         },
         "additionalProperties": false,
@@ -6089,7 +6064,7 @@
           "fecha_inicio"
         ],
         "title": "SerieReservaCreate",
-        "description": "Crear el patrón de horario de una serie recurrente.\n\nLa inscripción de clientes es un paso posterior."
+        "description": "Crear el patrón de horario de una serie recurrente.\n\nLas modalidades de cobro y el precio de paquete se heredan del servicio.\nLa inscripción de clientes es un paso posterior."
       },
       "SerieReservaOut": {
         "properties": {
@@ -6357,6 +6332,31 @@
             "title": "Pago Requerido",
             "default": true
           },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado",
+            "default": true
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado",
+            "default": false
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
           "visible_web": {
             "type": "boolean",
             "title": "Visible Web",
@@ -6477,6 +6477,27 @@
           "pago_requerido": {
             "type": "boolean",
             "title": "Pago Requerido"
+          },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado",
+            "default": true
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado",
+            "default": false
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
           },
           "requiere_confirmacion": {
             "type": "boolean",
@@ -6704,6 +6725,43 @@
               }
             ],
             "title": "Pago Requerido"
+          },
+          "cobro_por_sesion_habilitado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cobro Por Sesion Habilitado"
+          },
+          "cobro_por_paquete_habilitado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cobro Por Paquete Habilitado"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
           },
           "visible_web": {
             "anyOf": [
@@ -7695,31 +7753,6 @@
               }
             ],
             "title": "Asesor Id"
-          },
-          "cobro_por_sesion_habilitado": {
-            "type": "boolean",
-            "title": "Cobro Por Sesion Habilitado",
-            "default": true
-          },
-          "cobro_por_paquete_habilitado": {
-            "type": "boolean",
-            "title": "Cobro Por Paquete Habilitado",
-            "default": false
-          },
-          "precio_paquete": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0.0
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Precio Paquete"
           }
         },
         "additionalProperties": false,
@@ -7729,7 +7762,7 @@
           "hora_inicio"
         ],
         "title": "SolicitudConfirmarSerieIn",
-        "description": "Parámetros para convertir una solicitud en una serie recurrente.\n\nLa fecha de inicio, servicio y cliente se toman de la solicitud. El\nstaff define el patrón y las modalidades de cobro — pero NO elige la\nmodalidad ni el método de pago del cliente: eso lo hace el cliente\ndesde su portal (POST /mis-series/{id}/confirmar), igual que en el\ncamino de inscribir directamente. Confirmar una solicitud como serie\nsolo crea la serie + una invitación (estado=invitada) para el cliente."
+        "description": "Parámetros para convertir una solicitud en una serie recurrente.\n\nLa fecha de inicio, servicio y cliente se toman de la solicitud. El\nstaff define el patrón de recurrencia — las modalidades de cobro y el\nprecio de paquete se heredan del servicio. NO elige la modalidad ni el\nmétodo de pago del cliente: eso lo hace el cliente desde su portal\n(POST /mis-series/{id}/confirmar), igual que en el camino de inscribir\ndirectamente. Confirmar una solicitud como serie solo crea la serie +\nuna invitación (estado=invitada) para el cliente."
       },
       "SolicitudCreate": {
         "properties": {

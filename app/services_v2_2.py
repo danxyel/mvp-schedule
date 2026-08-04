@@ -24,6 +24,8 @@ from email.mime.text import MIMEText
 from typing import Optional, List, Dict, Any, Tuple
 from zoneinfo import ZoneInfo
 
+import httpx
+
 from sqlalchemy import and_, or_, func, select, update, text
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -1919,25 +1921,82 @@ def _forzar_resolucion_ipv4():
         socket.getaddrinfo = original
 
 
+def _enviar_resend(tenant: Tenant, destinatario_email: str, asunto: str, texto_plano: str, cuerpo_html: str) -> None:
+    """Manda un correo transaccional por la API de Resend.
+
+    Usa credenciales globales por variable de entorno:
+      RESEND_API_KEY, RESEND_FROM_EMAIL (default onboarding@resend.dev)
+    El `Reply-To` se toma del `from_email` configurado por el tenant, así el
+    cliente final puede responderle directo aunque el remitente técnico sea
+    el dominio de Daniel.
+    """
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        log.error("RESEND_API_KEY no configurado, correo omitido (%s)", asunto)
+        return
+
+    cfg = _smtp_cfg(tenant)
+    from_email = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+    from_name = cfg.get("from_name") or tenant.nombre
+    reply_to = cfg.get("from_email")
+
+    payload = {
+        "from": f"{from_name} <{from_email}>",
+        "to": [destinatario_email],
+        "subject": asunto,
+        "html": cuerpo_html,
+        "text": texto_plano,
+    }
+    if reply_to:
+        payload["reply_to"] = reply_to
+
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=payload,
+            timeout=15,
+        )
+        if resp.status_code >= 400:
+            log.error(
+                "Resend error %s: %s — correo a %s omitido (%s)",
+                resp.status_code,
+                resp.text,
+                destinatario_email,
+                asunto,
+            )
+            return
+        log.info("Correo enviado via Resend a %s (%s)", destinatario_email, asunto)
+    except Exception as exc:  # noqa: BLE001
+        log.error("Error enviando correo por Resend a %s (%s): %s", destinatario_email, asunto, exc)
+
+
 def _enviar_smtp(tenant: Tenant, destinatario_email: str, asunto: str, texto_plano: str, cuerpo_html: str) -> None:
-    """Manda un correo transaccional por el SMTP del tenant.
+    """Manda un correo transaccional según el método configurado por el tenant.
 
     La config vive en `tenant.smtp_config` (EncryptedJSON):
       { "host", "port", "user", "password", "from_email", "from_name",
         "tls" (bool, default True), "ssl" (bool, default False),
-        "console" (bool, imprime en vez de enviar) }
-    Si no hay host, se omite (log) y nunca se lanza excepción: el email es
-    un efecto externo que no debe romper la operación que lo disparó.
+        "console" (bool, imprime en vez de enviar),
+        "metodo": "smtp" | "api" (default "smtp") }
+    Si `metodo == "api"`, se envía por Resend. Si no hay host para SMTP, se
+    omite (log). Nunca se lanza excepción: el email es un efecto externo que
+    no debe romper la operación que lo disparó.
     """
     cfg = _smtp_cfg(tenant)
-    host = cfg.get("host")
-    if not host:
-        log.info("SMTP no configurado para tenant '%s' — correo omitido (%s)", tenant.slug, asunto)
-        return
 
     if cfg.get("console") or os.environ.get("SMTP_CONSOLE", "").lower() == "1":
         log.info("EMAIL (console) → %s | asunto: %s", destinatario_email, asunto)
         log.info("Contenido: %s", texto_plano.replace("\n", " | "))
+        return
+
+    if cfg.get("metodo") == "api":
+        _enviar_resend(tenant, destinatario_email, asunto, texto_plano, cuerpo_html)
+        return
+
+    host = cfg.get("host")
+    if not host:
+        log.info("SMTP no configurado para tenant '%s' — correo omitido (%s)", tenant.slug, asunto)
         return
 
     msg = MIMEMultipart("alternative")

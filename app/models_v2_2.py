@@ -276,6 +276,9 @@ class Usuario(Base):
     email_verificado: Mapped[bool] = mapped_column(default=False)
     verificado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     ultimo_login_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    activo: Mapped[bool] = mapped_column(default=True)
+    desactivado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    purgado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

@@ -16,7 +16,13 @@ Referencia completa de todo lo que el código realmente lee del entorno (verific
 | `FRONTEND_URL` | Recomendado en producción | `http://localhost:5173` | Origen público único del frontend — se usa para armar los links de "reclamar cuenta"/"activar cuenta" dentro de los correos. En producción: la misma URL real de Vercel. *(nueva — reclamar cuenta)* |
 | `SQL_ECHO` | No | `false` | `true` loguea cada query SQL en consola — solo para debug local, no lo actives en producción (ensucia los logs). |
 | `SMTP_CONSOLE` | No | (vacío = respeta el `smtp_config` de cada tenant) | `1` fuerza modo consola (no envía correos reales) para **todos** los tenants a la vez, sin importar su config individual. Útil en un ambiente de staging compartido. |
-| `STRIPE_WEBHOOK_SECRET` | No todavía | — | Solo aplica si algún día se activa el checkout de Stripe (`iniciar_checkout` sigue sin implementar). No hace falta configurarlo ahora. |
+| `STRIPE_WEBHOOK_SECRET` | No todavía | — | Solo aplica si algún día se activa el checkout de Stripe (deuda técnica documentada, no verifica firma sin el paquete `stripe` instalado). No hace falta configurarlo ahora. |
+| `RESEND_API_KEY` | Solo si algún tenant usa `metodo="api"` en su config de email | — (correo omitido con log si falta) | API key de la cuenta Resend de DANIEL Consultoría. *(nueva — PROMPT_J)* |
+| `RESEND_FROM_EMAIL` | Solo si algún tenant usa `metodo="api"` | `onboarding@resend.dev` | Remitente del correo cuando se manda por Resend. Sin dominio propio verificado en Resend, **debe ser** `onboarding@resend.dev` (única dirección permitida en modo sandbox) — y solo entrega al correo de la cuenta Resend, no a destinatarios reales. Cambia a una dirección propia el día que se verifique un dominio. *(nueva — PROMPT_J)* |
+| `MP_CLIENT_ID` | Sí, para pago en línea | — (checkout MercadoPago no funciona sin ella) | Client ID de la aplicación MercadoPago de DANIEL Consultoría (panel de desarrolladores → Tus integraciones). *(nueva — PROMPT_G)* |
+| `MP_CLIENT_SECRET` | Sí, para pago en línea | — | Client Secret de la misma aplicación. *(nueva — PROMPT_G)* |
+| `MP_REDIRECT_URI` | Sí, para pago en línea | — | URL del callback OAuth (`https://<backend>/api/v2/mercadopago/callback`) — debe coincidir exactamente con la registrada en el panel de MercadoPago. *(nueva — PROMPT_G)* |
+| `API_BASE_URL` | Recomendado para pago en línea | Se deduce de la request si falta | URL pública del backend, sin slash final — arma el `notification_url` del webhook y las `back_urls` de MercadoPago. *(nueva — PROMPT_G)* |
 
 ## Frontend (Vercel / `frontend/.env`)
 

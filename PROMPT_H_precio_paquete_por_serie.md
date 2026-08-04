@@ -1,95 +1,94 @@
+**ESTE PROMPT REEMPLAZA por completo la versión anterior de
+`PROMPT_H_precio_paquete_por_serie.md`.** Si ya recibiste la versión vieja
+(precio de paquete en `SerieReserva`) y respondiste preguntas sobre ella
+(incluyendo la de qué hacer con la serie #1), **descarta esas respuestas**
+— la decisión cambió: la configuración de pago ya no vive en la serie,
+vive en el **servicio**. Lo que sí sigue vigente de tu verificación en
+Neon: `inscripciones_serie` tiene 1 fila, 0 con `precio_paquete NOT NULL`
+(sigue sin haber nada que backfillear ahí), y el 4º call site que
+encontraste en `registrar_pago_inscripcion_local()` (línea ~1490) sigue
+aplicando — sigue haciendo falta ese fix, solo cambia a qué apunta.
+
 Antes de nada, lee HANDOFF.md completo.
 
-CONTEXTO: hoy el precio por sesión ya está bien — vive en `servicio.precio`,
-fijo, lo define el admin una sola vez. Pero el precio de **paquete** no
-vive en ningún lado fijo: `InscripcionSerie.precio_paquete` se escribe **a
-mano, por cada cliente**, cada vez que se le inscribe
-(`InscribirClientesSerieModal.jsx`). Nada impide que dos clientes de la
-misma serie terminen con precios de paquete distintos, y el admin tiene que
-volver a teclear el mismo número cada vez que inscribe a alguien nuevo.
-Daniel confirmó: el precio del paquete debe estar **relacionado a la
-serie/asignatura** (definirse una sola vez, como ya pasa con el precio por
-sesión), no re-capturarse por cliente. Al inscribir a alguien, el admin ya
-no debe pedir ni escribir un precio — solo elige la modalidad.
-
-Dato a favor: la tabla `inscripciones_serie` está vacía en producción hasta
-este momento (todo `INSERT` fallaba por el bug de
-`ck_inscripcion_modalidad` recién corregido — ver HANDOFF 2026-08-04). Aun
-así, **no asumas esto ciegamente**: antes de dropear la columna, corre un
-`SELECT COUNT(*) FROM inscripciones_serie WHERE precio_paquete IS NOT
-NULL` contra Neon y confírmalo tú mismo. Si hay filas con datos reales,
-detente y avisa — hay que backfillear a `series_reservas.precio_paquete`
-antes de dropear, no perder el dato.
+CONTEXTO: Daniel confirmó explícitamente: la configuración de modalidades
+de cobro (por sesión / por paquete) y sus precios debe vivir en el
+**servicio**, no en cada serie. Razón: un servicio recurrente
+(`tipo_agenda=recurrente`) puede generar muchas series a lo largo del
+tiempo (nuevos cohortes, reinicios), y todas deberían heredar
+automáticamente la misma configuración de pago sin que el admin la vuelva
+a capturar cada vez que crea una serie nueva. Hoy `CrearSerieModal.jsx` no
+tiene ningún campo de precio en el camino normal de creación — por eso
+Daniel no podía "poner el costo por sesión individual" al crear una serie:
+no hace falta pedirlo ahí, ya está definido en el servicio.
 
 DECISIONES YA TOMADAS (no las reabras):
-- `SerieReserva` recupera la columna `precio_paquete: Optional[Decimal]`
-  (existía en el diseño v1 de un solo cliente, se quitó en la migración
-  multicliente porque en ese momento el precio se pensó por-inscripción —
-  ahora vuelve, pero como precio único de la serie, no por cliente).
-- `InscripcionSerie` **pierde** la columna `precio_paquete` — se elimina
-  por completo, ya no es responsabilidad de la inscripción.
-- `SerieReservaCreate` (schema de crear serie) gana el campo
-  `precio_paquete: Optional[Decimal]`, obligatorio cuando
-  `cobro_por_paquete_habilitado=True` (mismo criterio de validación que ya
-  existe en `validar_modalidad_cobro()`, pero aplicado en el momento de
-  crear la serie, no de inscribir).
-- `InscripcionSerieCreate` (schema de inscribir cliente) **pierde** el
-  campo `precio_paquete`. **NO toques nada más de este schema ni de
-  `InscribirClientesSerieModal.jsx` más allá de quitar `precio_paquete`** —
-  quién elige `modalidad_cobro`/`metodo_pago` (admin vs. cliente) está
-  siendo rediseñado en `PROMPT_I_invitacion_cliente_elige.md`, que se corre
-  DESPUÉS de este. Si ese prompt ya está en tus manos, salta directo a él
-  para esta parte en vez de implementar aquí un intermedio que se va a
-  descartar.
-- `validar_modalidad_cobro()` se usa en dos momentos distintos ahora y el
-  origen de `precio_paquete` cambia según cuál: al crear/editar la serie,
-  viene del payload de creación de la serie; al inscribir a un cliente, ya
-  no se valida contra un precio del payload (no existe) sino contra
-  `serie.precio_paquete` (que la serie ya debe tener si
-  `cobro_por_paquete_habilitado=True` — si no lo tiene, es un estado
-  inconsistente de la serie, no un error del cliente inscribiéndose).
-  Revisa los tres call sites (creación de serie, `inscribir_cliente_en_serie()`,
-  `confirmar_solicitud_como_serie()`) y ajusta la función o sus llamadas
-  según haga falta — no le cambies el comportamiento a la validación de
-  modalidad por-sesión, que ya funciona bien.
-- El cálculo `precio_por_reserva = precio_paquete / num_fechas` en
-  `inscribir_cliente_en_serie()` y `confirmar_solicitud_como_serie()` ahora
-  lee `serie.precio_paquete`, no `payload.precio_paquete` (que ya no
-  existe en el payload de inscripción).
+- `Servicio` gana tres columnas: `cobro_por_sesion_habilitado: bool`
+  (default `True`), `cobro_por_paquete_habilitado: bool` (default
+  `False`), `precio_paquete: Optional[Decimal]`. Se configuran en la
+  pantalla "Nuevo servicio" / "Editar servicio"
+  (`GestionServicios.jsx`), junto a `precio` y `pago_requerido` que ya
+  existen ahí.
+- `SerieReserva` **pierde por completo** `cobro_por_sesion_habilitado` y
+  `cobro_por_paquete_habilitado` (si ya los tenía de una migración
+  anterior — revisa el estado real en Neon, no asumas). Una serie ya NO
+  tiene ninguna configuración de pago propia: hereda siempre la del
+  servicio al que pertenece (`serie.servicio_id` → `servicio`).
+- `InscripcionSerie` sigue **sin** `precio_paquete` (esto no cambió) —
+  sigue sin ser responsabilidad de la inscripción ni de la serie.
+- `SerieReservaCreate` (schema de crear serie) **pierde** los campos
+  `cobro_por_sesion_habilitado`/`cobro_por_paquete_habilitado` — ya no se
+  capturan al crear la serie, no hay nada que validar ahí tampoco.
+- `validar_modalidad_cobro()` ahora valida contra
+  `servicio.cobro_por_sesion_habilitado` /
+  `servicio.cobro_por_paquete_habilitado` / `servicio.precio_paquete` —
+  revisa TODOS los call sites (inscribir cliente, confirmar solicitud como
+  serie, y el 4º que ya encontraste en `registrar_pago_inscripcion_local`)
+  y ajusta cada uno para resolver `servicio` (vía `serie.servicio_id`) en
+  vez de leer directo de `serie`.
 - Frontend:
-  - `CrearSerieModal.jsx`: el campo "Precio del paquete" hoy solo se
-    muestra dentro del bloque `esDesdeSolicitud` (revisa el JSX actual,
-    líneas ~344-380) — muévelo fuera de ese bloque, debe aparecer siempre
-    que `cobro_por_paquete_habilitado` esté marcado, tanto en el camino
-    normal de "Crear Serie" como en el de "Confirmar solicitud como
-    serie". El payload del camino normal (`POST /admin/series`) hoy NO
-    manda `precio_paquete` en absoluto — agrégalo.
-  - `InscribirClientesSerieModal.jsx`: por ahora, SOLO quita el input de
-    precio por cliente y su validación (`if (!cfg.precio_paquete...)`). No
-    rediseñes el resto de este modal (qué elige el admin vs. el cliente)
-    — eso es `PROMPT_I_invitacion_cliente_elige.md`.
-  - `SeriesTab.jsx`: hoy muestra `ins.precio_paquete` por cada inscripción
-    — cámbialo para mostrar el precio de la serie (uniforme), no por
-    inscripción individual.
+  - `GestionServicios.jsx`: agrega los checkboxes "Ofrecer pago por
+    sesión" / "Ofrecer pago por paquete" + campo condicional "Precio del
+    paquete" (mismo patrón de validación que ya tenía `CrearSerieModal` en
+    su versión vieja: obligatorio si `cobro_por_paquete_habilitado=True`).
+    Sugerencia: mostrar estos campos solo cuando `tipo_agenda=recurrente`,
+    ya que un paquete no tiene sentido para un servicio de sesión única —
+    propón si hay una razón para no restringirlo así.
+  - `CrearSerieModal.jsx`: **quita toda la sección de "modalidades de
+    cobro"** (checkboxes + precio de paquete) — ya no hay nada que
+    configurar al crear una serie. El modal se simplifica a: frecuencia,
+    día, hora, duración, repeticiones, asesor.
+  - `InscribirClientesSerieModal.jsx` / `SeriesTab.jsx`: donde antes
+    leían `serie.precio_paquete`/`serie.cobro_por_*_habilitado`, ahora
+    leen del servicio de esa serie.
+- Migración de datos existentes: en Neon hoy existe una `SerieReserva`
+  (id=1, la que ya encontraste) con `cobro_por_paquete_habilitado=true` a
+  nivel serie. Al migrar, ese flag debe **backfillearse a su servicio**
+  (`UPDATE servicios SET cobro_por_paquete_habilitado = true WHERE id = (SELECT servicio_id FROM series_reservas WHERE id = 1)` — ajusta si hay
+  más de una serie en ese estado, no asumas que es solo la #1). El
+  `precio_paquete` de ese servicio queda en `NULL` tras la migración —
+  igual que antes, no hay dato que backfillear porque la columna nunca
+  existió. Documenta en HANDOFF que ese servicio necesita que Daniel le
+  ponga un precio manualmente desde "Editar servicio" antes de que alguien
+  pueda inscribirse ahí como 'paquete'.
 
 ALCANCE — antes de codear, propón (y espera aprobación):
-- Migración exacta: `ALTER TABLE series_reservas ADD COLUMN
-  precio_paquete NUMERIC(12,2)` + el `DROP COLUMN` de
-  `inscripciones_serie` (después de confirmar que está vacía como se pidió
-  arriba) + cómo se re-arma el `CHECK` de precio no-negativo si aplica
-  (revisa si `series_reservas` ya tenía ese constraint del diseño v1 antes
-  de que se quitara, o si hay que crearlo de nuevo).
-- Cómo queda exactamente `validar_modalidad_cobro()` — si cambia su firma,
-  revisa TODOS los call sites antes de tocarla, no solo los de esta tarea.
-- Si al enriquecer `_serie_admin_out()` o el detalle de serie hay que
-  exponer `precio_paquete` en la respuesta de `GET /admin/series` (hoy
-  puede que no lo tenga, revisa el schema `SerieReservaOut` actual).
+- Migración exacta: columnas nuevas en `servicios`, el `UPDATE` de
+  backfill descrito arriba (verifica tú mismo en Neon cuántas series están
+  en ese estado antes de escribir el backfill, no confíes en que es solo
+  la #1), y el `DROP COLUMN` de `cobro_por_sesion_habilitado`/
+  `cobro_por_paquete_habilitado` en `series_reservas` si existen ahí.
+- Si `tipo_agenda=recurrente` debe ser requisito para mostrar/aceptar
+  `cobro_por_paquete_habilitado=True` en un servicio, o si se permite en
+  cualquier tipo — propón y justifica.
+- Todos los call sites de `validar_modalidad_cobro()` — no dejes ninguno
+  leyendo de `serie` en vez de `servicio`.
 
-ORDEN: propuesta primero (esperar aprobación) → confirmar en Neon que
-`inscripciones_serie` está vacía → migración → backend (modelo, schemas,
-`validar_modalidad_cobro`, `inscribir_cliente_en_serie`,
-`confirmar_solicitud_como_serie`) → regenerar openapi.json/schema.ts →
-frontend (`CrearSerieModal.jsx`, `InscribirClientesSerieModal.jsx`,
+ORDEN: propuesta primero (esperar aprobación) → confirmar en Neon cuántas
+series tienen `cobro_por_paquete_habilitado=true` hoy → migración
+(incluye backfill) → backend (modelo, schemas, `validar_modalidad_cobro`,
+los 4 call sites) → regenerar openapi.json/schema.ts → frontend
+(`GestionServicios.jsx`, `CrearSerieModal.jsx`, `InscribirClientesSerieModal.jsx`,
 `SeriesTab.jsx`) → un commit por pieza, mensajes descriptivos.
 
 Antes de cada pieza, si algo no cuadra con esto o con HANDOFF.md, señálalo

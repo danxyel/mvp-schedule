@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
+import CrearSerieModal from './CrearSerieModal'
 import InscribirClientesSerieModal from './InscribirClientesSerieModal'
 import { errorMensaje } from '../../utils/errores'
 
@@ -66,7 +67,7 @@ function formatFecha(fecha) {
   })
 }
 
-export default function SeriesTab({ tenantSlug, token }) {
+export default function SeriesTab({ tenantSlug, token, servicioInicial, onLimpiarServicioInicial }) {
   const [series, setSeries] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -79,6 +80,16 @@ export default function SeriesTab({ tenantSlug, token }) {
   const [pagoError, setPagoError] = useState(null)
   const [pagoExito, setPagoExito] = useState(null)
   const [cancelandoId, setCancelandoId] = useState(null)
+  const [crearSerieAbierto, setCrearSerieAbierto] = useState(false)
+  const [crearSerieServicio, setCrearSerieServicio] = useState(null)
+
+  useEffect(() => {
+    if (servicioInicial) {
+      setCrearSerieServicio(servicioInicial)
+      setCrearSerieAbierto(true)
+      onLimpiarServicioInicial?.()
+    }
+  }, [servicioInicial, onLimpiarServicioInicial])
 
   const fetchSeries = useCallback(async () => {
     setLoading(true)
@@ -242,15 +253,27 @@ export default function SeriesTab({ tenantSlug, token }) {
 
   return (
     <div className="mx-auto min-w-0 max-w-4xl">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Series de Reservas</h2>
-        <button
-          type="button"
-          onClick={fetchSeries}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setCrearSerieServicio(null)
+              setCrearSerieAbierto(true)
+            }}
+            className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-orange-700"
+          >
+            Crear serie
+          </button>
+          <button
+            type="button"
+            onClick={fetchSeries}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Actualizar
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -308,6 +331,17 @@ export default function SeriesTab({ tenantSlug, token }) {
           </tbody>
         </table>
       </div>
+
+      {/* Modal de crear serie */}
+      {crearSerieAbierto && (
+        <CrearSerieModal
+          servicio={crearSerieServicio}
+          onClose={() => setCrearSerieAbierto(false)}
+          onCreado={() => {
+            fetchSeries()
+          }}
+        />
+      )}
 
       {/* Modal de inscripción */}
       {inscribirSerie && (

@@ -157,6 +157,16 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
 
         {/* Resultados */}
         {resultados.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <p className="text-sm font-medium text-gray-700">Nota</p>
+            <p className="text-xs text-gray-600">
+              Las invitaciones aparecen en <strong>Mis series &gt; Invitaciones</strong>. El cliente
+              acepta desde su portal y elige su modalidad y método de pago.
+            </p>
+          </div>
+        )}
+
+        {resultados.length > 0 && (
           <div className="space-y-2">
             {resultados.map((r, i) => (
               <div

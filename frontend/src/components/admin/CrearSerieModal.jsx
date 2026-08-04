@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
+import InscribirClientesSerieModal from './InscribirClientesSerieModal'
 import { getLocalOffset } from '../../utils/fechas'
 import { errorMensaje } from '../../utils/errores'
 
@@ -35,9 +36,13 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
   const esDesdeSolicitud = solicitud != null
 
   const [asesores, setAsesores] = useState([])
+  const [servicios, setServicios] = useState([])
+  const [servicioSeleccionado, setServicioSeleccionado] = useState(servicio)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [exito, setExito] = useState(null)
+  const [serieCreada, setSerieCreada] = useState(null)
+  const [invitarSerie, setInvitarSerie] = useState(null)
 
   const fechaBase = esDesdeSolicitud ? new Date(solicitud.fecha_hora_propuesta) : null
   const [form, setForm] = useState({
@@ -51,9 +56,23 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
   })
 
   useEffect(() => {
+    setServicioSeleccionado(servicio)
+  }, [servicio])
+
+  useEffect(() => {
+    if (servicioSeleccionado) {
+      setForm((prev) => ({
+        ...prev,
+        duracion_minutos: servicioSeleccionado.duracion_minutos || 60,
+      }))
+    }
+  }, [servicioSeleccionado])
+
+  useEffect(() => {
+    const tenantSlug = sessionStorage.getItem('tenantSlug')
+    const token = sessionStorage.getItem('token')
+
     const cargarAsesores = async () => {
-      const tenantSlug = sessionStorage.getItem('tenantSlug')
-      const token = sessionStorage.getItem('token')
       const { data, error: fetchErr } = await client.GET(
         '/api/v2/{tenant_slug}/admin/usuarios',
         {
@@ -65,8 +84,24 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
         setAsesores(data.filter(u => u.rol === 'asesor' || u.rol === 'admin'))
       }
     }
+
+    const cargarServicios = async () => {
+      if (servicioSeleccionado) return
+      const { data, error: fetchErr } = await client.GET(
+        '/api/v2/{tenant_slug}/admin/servicios',
+        {
+          params: { path: { tenant_slug: tenantSlug } },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      if (!fetchErr && data) {
+        setServicios(data.filter(s => s.tipo_agenda === 'recurrente'))
+      }
+    }
+
     cargarAsesores()
-  }, [])
+    cargarServicios()
+  }, [servicioSeleccionado])
 
   const handleChange = (campo) => (e) => {
     const valor = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -74,6 +109,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
   }
 
   const validar = () => {
+    if (!servicioSeleccionado) return 'Selecciona un servicio'
     if (!form.fecha_inicio) return 'Selecciona una fecha de inicio'
     return null
   }
@@ -88,6 +124,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     setLoading(true)
     setError(null)
     setExito(null)
+    setSerieCreada(null)
 
     const tenantSlug = sessionStorage.getItem('tenantSlug')
     const token = sessionStorage.getItem('token')
@@ -111,7 +148,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
       params = { path: { tenant_slug: tenantSlug } }
       body = {
         ...basePayload,
-        servicio_id: servicio.id,
+        servicio_id: servicioSeleccionado.id,
         fecha_inicio: `${form.fecha_inicio}T00:00:00${getLocalOffset()}`,
       }
     }
@@ -136,19 +173,42 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
       ? 'Serie creada — se invitó al cliente a elegir su modalidad de pago'
       : 'Patrón de serie creado exitosamente'
     setExito(mensajeExito)
-    setTimeout(() => {
-      onCreado?.(data)
-      onClose()
-    }, 2000)
+    setSerieCreada(data)
+    onCreado?.(data)
   }
 
   return (
+    <>
     <Modal title={esDesdeSolicitud ? 'Confirmar solicitud como serie' : 'Crear Serie de Reservas Recurrentes'} onClose={onClose} maxWidth="max-w-2xl">
       <div className="space-y-4">
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-          <p className="text-sm font-medium text-blue-900">Servicio: {servicio?.nombre}</p>
-          <p className="text-xs text-blue-700">Duración: {servicio?.duracion_minutos} min</p>
-        </div>
+        {servicioSeleccionado ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <p className="text-sm font-medium text-blue-900">Servicio: {servicioSeleccionado.nombre}</p>
+            <p className="text-xs text-blue-700">Duración: {servicioSeleccionado.duracion_minutos} min</p>
+          </div>
+        ) : (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Servicio <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={servicioSeleccionado?.id || ''}
+              onChange={(e) => {
+                const id = parseInt(e.target.value)
+                const sel = servicios.find(s => s.id === id)
+                setServicioSeleccionado(sel || null)
+              }}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Selecciona un servicio recurrente</option>
+              {servicios.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre} ({s.duracion_minutos} min)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {solicitud?.notas_cliente && (
           <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
@@ -166,6 +226,15 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
         {exito && (
           <div className="rounded-lg border border-green-200 bg-green-50 p-3">
             <p className="text-sm text-green-700">{exito}</p>
+            {!esDesdeSolicitud && serieCreada && (
+              <button
+                type="button"
+                onClick={() => setInvitarSerie(serieCreada)}
+                className="mt-2 text-sm font-medium text-green-800 underline hover:text-green-900"
+              >
+                Invitar clientes ahora →
+              </button>
+            )}
           </div>
         )}
 
@@ -303,5 +372,21 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
         </div>
       </div>
     </Modal>
+
+    {invitarSerie && (
+      <InscribirClientesSerieModal
+        serie={invitarSerie}
+        onClose={() => {
+          setInvitarSerie(null)
+          onClose()
+        }}
+        onCreado={() => {
+          setInvitarSerie(null)
+          onCreado?.()
+          onClose()
+        }}
+      />
+    )}
+    </>
   )
 }

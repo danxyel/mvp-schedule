@@ -1170,7 +1170,7 @@ function formatFechaHoraLocal(utcString) {
   }).format(new Date(utcString))
 }
 
-function SolicitudesTab({ tenantSlug, token }) {
+function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
   const [estado, setEstado] = useState('pendiente')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1344,9 +1344,18 @@ function SolicitudesTab({ tenantSlug, token }) {
       </div>
 
       {exito && (
-        <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-          {exito.mensaje}
-        </p>
+        <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          <p className="inline">{exito.mensaje}</p>
+          {exito.folio && onIrAPendientes && (
+            <button
+              type="button"
+              onClick={onIrAPendientes}
+              className="ml-2 font-medium text-green-800 underline hover:text-green-900"
+            >
+              Ver en Pendientes →
+            </button>
+          )}
+        </div>
       )}
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -1871,11 +1880,87 @@ function PendientesTab({ tenantSlug, token }) {
   )
 }
 
+function TabButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+        active
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function TabGroup({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="px-1 text-[10px] font-medium uppercase tracking-wider text-gray-400">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1">{children}</div>
+    </div>
+  )
+}
+
 export default function PanelAdmin() {
   const navigate = useNavigate()
   const tenantSlug = sessionStorage.getItem('tenantSlug')
   const token = sessionStorage.getItem('token')
   const [tab, setTab] = useState('sesiones')
+  const [nuevoServicio, setNuevoServicio] = useState(null)
+  const [pendientesCount, setPendientesCount] = useState(null)
+  const [solicitudesCount, setSolicitudesCount] = useState(null)
+
+  const fetchConteos = useCallback(async () => {
+    const [pendientesRes, solicitudesRes] = await Promise.all([
+      client.GET('/api/v2/{tenant_slug}/admin/reservas', {
+        params: {
+          path: { tenant_slug: tenantSlug },
+          query: { estado: 'pendiente', limit: 1, offset: 0 },
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      client.GET('/api/v2/{tenant_slug}/admin/solicitudes', {
+        params: { path: { tenant_slug: tenantSlug }, query: { estado: 'pendiente' } },
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+    setPendientesCount(
+      pendientesRes.error
+        ? null
+        : (pendientesRes.data?.paginacion?.total ?? pendientesRes.data?.items?.length ?? 0),
+    )
+    setSolicitudesCount(
+      solicitudesRes.error
+        ? null
+        : (solicitudesRes.data?.length ?? 0),
+    )
+  }, [tenantSlug, token])
+
+  useEffect(() => {
+    fetchConteos()
+  }, [fetchConteos])
+
+  useEffect(() => {
+    if (tab === 'pendientes' || tab === 'solicitudes') {
+      fetchConteos()
+    }
+  }, [tab, fetchConteos])
+
+  const cambiarTab = (nuevaTab) => {
+    setNuevoServicio(null)
+    setTab(nuevaTab)
+  }
+
+  const irACrearSerie = (servicio) => {
+    setNuevoServicio(servicio)
+    setTab('series')
+  }
 
   return (
     <div className="mx-auto min-w-0 max-w-4xl">
@@ -1890,84 +1975,46 @@ export default function PanelAdmin() {
         </button>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1">
-        <button
-          type="button"
-          onClick={() => setTab('sesiones')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'sesiones'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Sesiones
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('pendientes')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'pendientes'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Pendientes
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('solicitudes')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'solicitudes'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Solicitudes
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('reservas')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'reservas'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Reservas del día
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('series')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'series'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Series
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('servicios')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'servicios'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Servicios
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('usuarios')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'usuarios'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Usuarios
-        </button>
+      <div className="mb-4 flex flex-wrap items-start gap-x-6 gap-y-3">
+        <TabGroup label="Operación diaria">
+          <TabButton active={tab === 'sesiones'} onClick={() => cambiarTab('sesiones')}>
+            Sesiones
+          </TabButton>
+          <TabButton active={tab === 'pendientes'} onClick={() => cambiarTab('pendientes')}>
+            Pendientes
+            {pendientesCount ? (
+              <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {pendientesCount}
+              </span>
+            ) : null}
+          </TabButton>
+          <TabButton active={tab === 'solicitudes'} onClick={() => cambiarTab('solicitudes')}>
+            Solicitudes
+            {solicitudesCount ? (
+              <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
+                {solicitudesCount}
+              </span>
+            ) : null}
+          </TabButton>
+          <TabButton active={tab === 'reservas'} onClick={() => cambiarTab('reservas')}>
+            Reservas del día
+          </TabButton>
+        </TabGroup>
+
+        <TabGroup label="Series recurrentes">
+          <TabButton active={tab === 'servicios'} onClick={() => cambiarTab('servicios')}>
+            Servicios
+          </TabButton>
+          <TabButton active={tab === 'series'} onClick={() => cambiarTab('series')}>
+            Series
+          </TabButton>
+        </TabGroup>
+
+        <TabGroup label="Cuenta">
+          <TabButton active={tab === 'usuarios'} onClick={() => cambiarTab('usuarios')}>
+            Usuarios
+          </TabButton>
+        </TabGroup>
       </div>
 
       {tab === 'sesiones' ? (
@@ -1975,13 +2022,18 @@ export default function PanelAdmin() {
       ) : tab === 'pendientes' ? (
         <PendientesTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'solicitudes' ? (
-        <SolicitudesTab tenantSlug={tenantSlug} token={token} />
+        <SolicitudesTab tenantSlug={tenantSlug} token={token} onIrAPendientes={() => setTab('pendientes')} />
       ) : tab === 'reservas' ? (
         <ReservasTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'series' ? (
-        <SeriesTab tenantSlug={tenantSlug} token={token} />
+        <SeriesTab
+          tenantSlug={tenantSlug}
+          token={token}
+          servicioInicial={nuevoServicio}
+          onLimpiarServicioInicial={() => setNuevoServicio(null)}
+        />
       ) : tab === 'servicios' ? (
-        <GestionServicios tenantSlug={tenantSlug} token={token} />
+        <GestionServicios tenantSlug={tenantSlug} token={token} onIrACrearSerie={irACrearSerie} />
       ) : (
         <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}

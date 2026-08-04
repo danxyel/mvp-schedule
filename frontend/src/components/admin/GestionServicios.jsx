@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import HorarioServicio from './HorarioServicio'
-import CrearSerieModal from './CrearSerieModal'
-import { errorMensaje } from '../../utils/errores'
 const TIPO_BADGE = {
   individual: 'border-blue-200 bg-blue-100 text-blue-700',
   grupal: 'border-purple-200 bg-purple-100 text-purple-700',
@@ -104,7 +102,7 @@ function Badge({ value, map, labelMap, color }) {
   )
 }
 
-export default function GestionServicios({ tenantSlug, token }) {
+export default function GestionServicios({ tenantSlug, token, onIrACrearSerie }) {
   const [servicios, setServicios] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -120,7 +118,7 @@ export default function GestionServicios({ tenantSlug, token }) {
   const [horarioDe, setHorarioDe] = useState(null)
   const [franjasNuevas, setFranjasNuevas] = useState([])
   const [form, setForm] = useState(FORM_VACIO)
-  const [serieDe, setSerieDe] = useState(null)
+  const [exitoServicio, setExitoServicio] = useState(null)
 
   const fetchServicios = useCallback(async () => {
     setLoading(true)
@@ -284,6 +282,10 @@ export default function GestionServicios({ tenantSlug, token }) {
     setServicios((prev) => [data, ...prev])
     setModalAbierto(false)
     setFranjasNuevas([])
+    if (data?.tipo_agenda === 'recurrente') {
+      setExitoServicio(data)
+      window.setTimeout(() => setExitoServicio(null), 8000)
+    }
     if (franjasNuevas.length > 0) {
       let fallo = null
       for (const f of franjasNuevas) {
@@ -398,6 +400,10 @@ export default function GestionServicios({ tenantSlug, token }) {
     }
     setServicios((prev) => prev.map((x) => (x.id === data.id ? data : x)))
     setEditando(null)
+    if (data?.tipo_agenda === 'recurrente') {
+      setExitoServicio(data)
+      window.setTimeout(() => setExitoServicio(null), 8000)
+    }
   }
 
   const activar = async (s) => {
@@ -488,7 +494,7 @@ export default function GestionServicios({ tenantSlug, token }) {
               {s.tipo_agenda === 'recurrente' && (
                 <button
                   type="button"
-                  onClick={() => setSerieDe(s)}
+                  onClick={() => onIrACrearSerie?.(s)}
                   className="rounded-lg border border-orange-200 px-2.5 py-1 text-xs font-medium text-orange-700 transition hover:bg-orange-50"
                 >
                   Crear Serie
@@ -1252,23 +1258,30 @@ export default function GestionServicios({ tenantSlug, token }) {
         </Modal>
       )}
 
+      {exitoServicio && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3">
+          <p className="text-sm font-medium text-green-800">
+            Servicio guardado: {exitoServicio.nombre}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              onIrACrearSerie?.(exitoServicio)
+              setExitoServicio(null)
+            }}
+            className="mt-2 inline-flex items-center rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-orange-700"
+          >
+            Crear una serie para este servicio →
+          </button>
+        </div>
+      )}
+
       {horarioDe && (
         <HorarioServicio
           servicio={horarioDe}
           tenantSlug={tenantSlug}
           token={token}
           onClose={() => setHorarioDe(null)}
-        />
-      )}
-
-      {serieDe && (
-        <CrearSerieModal
-          servicio={serieDe}
-          onClose={() => setSerieDe(null)}
-          onCreado={(serie) => {
-            console.log('Serie creada:', serie)
-            // Opcional: refrescar la lista de servicios o mostrar notificación
-          }}
         />
       )}
     </div>

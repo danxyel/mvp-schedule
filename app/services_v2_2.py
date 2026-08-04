@@ -514,7 +514,10 @@ def listar_slots_disponibles(
 
     sesiones = list(db.execute(
         select(Sesion)
-        .options(joinedload(Sesion.servicio))
+        .options(
+            joinedload(Sesion.servicio),
+            joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+        )
         .where(
             Sesion.tenant_id == tenant.id,
             Sesion.fecha_hora_inicio < fin_dia,
@@ -522,6 +525,17 @@ def listar_slots_disponibles(
             Sesion.estado.in_(ESTADOS_SESION_ACTIVA),
         )
     ).scalars().unique().all())
+
+    def _asesor_de_sesion(s: Optional[Sesion]) -> Optional[Dict[str, Any]]:
+        if s is None or s.asesor is None:
+            return None
+        a = s.asesor
+        return {
+            "id": a.id,
+            "nombre": a.usuario.nombre if a.usuario else "Asesor",
+            "avatar_url": a.usuario.avatar_url if a.usuario else None,
+            "bio": a.bio,
+        }
 
     dur = timedelta(minutes=servicio.duracion_minutos)
     paso = timedelta(minutes=servicio.config_json.get("intervalo_slots_min", servicio.duracion_minutos))
@@ -605,7 +619,12 @@ def listar_slots_disponibles(
                     "sesion_existente_id": sesion_existente.id if sesion_existente else None,
                     "cupo_disponible": cupo,
                     "motivo_no_disponible": motivo,
-                    "asesor": None,
+                    # Antes siempre None: una sesión ya existente (ej. de una
+                    # serie recurrente ya confirmada por el admin, con
+                    # asesor asignado desde su creación) se mostraba igual
+                    # que un slot nuevo sin asignar, disparando el aviso de
+                    # "se te asignará un asesor" aunque ya hubiera uno real.
+                    "asesor": _asesor_de_sesion(sesion_existente),
                 })
 
         slots.sort(key=lambda s: s["fecha_hora_inicio"])

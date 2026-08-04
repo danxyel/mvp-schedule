@@ -139,6 +139,8 @@ function SesionesTab({ tenantSlug, token }) {
   const [verInscritos, setVerInscritos] = useState(null)
   const [checkinFolio, setCheckinFolio] = useState(null)
   const [checkinErrores, setCheckinErrores] = useState({})
+  const [cancelandoFolio, setCancelandoFolio] = useState(null)
+  const [cancelarErrores, setCancelarErrores] = useState({})
   const [reagendar, setReagendar] = useState(null)
   const [reagendarError, setReagendarError] = useState(null)
   const [reagendarLoading, setReagendarLoading] = useState(false)
@@ -225,6 +227,32 @@ function SesionesTab({ tenantSlug, token }) {
         x.folio === folio ? { ...x, estado: 'completada' } : x,
       ),
     }))
+  }
+
+  const cancelarInscrito = async (folio) => {
+    if (!confirm('¿Cancelar la reserva de este inscrito?')) return
+    setCancelandoFolio(folio)
+    setCancelarErrores((prev) => ({ ...prev, [folio]: null }))
+    const { error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/reservas/{folio}/cancelar',
+      {
+        params: { path: { tenant_slug: tenantSlug, folio } },
+        body: { motivo: 'Cancelado por administrador' },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setCancelandoFolio(null)
+    if (fetchErr) {
+      setCancelarErrores((prev) => ({ ...prev, [folio]: errorMensaje(fetchErr) }))
+      return
+    }
+    setVerInscritos((prev) => ({
+      ...prev,
+      reservas: prev.reservas.map((x) =>
+        x.folio === folio ? { ...x, estado: 'cancelada' } : x,
+      ),
+    }))
+    fetchSesiones()
   }
 
   const completarSesion = async (sesion) => {
@@ -429,7 +457,7 @@ function SesionesTab({ tenantSlug, token }) {
                     <th className="hidden px-2 py-2 font-medium sm:table-cell">Email</th>
                     <th className="px-2 py-2 font-medium">Estado</th>
                     <th className="px-2 py-2 font-medium">Folio</th>
-                    <th className="px-2 py-2 text-right font-medium">Check-in</th>
+                    <th className="px-2 py-2 text-right font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -453,24 +481,41 @@ function SesionesTab({ tenantSlug, token }) {
                         {r.folio}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 text-right">
-                        {r.estado === 'confirmada' && (
-                          <button
-                            type="button"
-                            onClick={() => hacerCheckinInscrito(r.folio)}
-                            disabled={checkinFolio !== null}
-                            className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {checkinFolio === r.folio ? 'Registrando...' : 'Check-in'}
-                          </button>
-                        )}
-                        {r.estado === 'completada' && (
-                          <span className="inline-flex shrink-0 items-center rounded-full border border-green-200 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                            Asistió ✓
-                          </span>
-                        )}
-                        {r.estado === 'cancelada' && (
-                          <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                            Cancelada
+                        <div className="flex items-center justify-end gap-2">
+                          {r.estado === 'confirmada' && (
+                            <button
+                              type="button"
+                              onClick={() => hacerCheckinInscrito(r.folio)}
+                              disabled={checkinFolio !== null || cancelandoFolio === r.folio}
+                              className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {checkinFolio === r.folio ? 'Registrando...' : 'Check-in'}
+                            </button>
+                          )}
+                          {r.estado === 'completada' && (
+                            <span className="inline-flex shrink-0 items-center rounded-full border border-green-200 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                              Asistió ✓
+                            </span>
+                          )}
+                          {(r.estado === 'confirmada' || r.estado === 'pendiente' || r.estado === 'en_espera') && (
+                            <button
+                              type="button"
+                              onClick={() => cancelarInscrito(r.folio)}
+                              disabled={cancelandoFolio === r.folio || checkinFolio === r.folio}
+                              className="rounded-lg border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {cancelandoFolio === r.folio ? 'Cancelando...' : 'Cancelar'}
+                            </button>
+                          )}
+                          {r.estado === 'cancelada' && (
+                            <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                              Cancelada
+                            </span>
+                          )}
+                        </div>
+                        {cancelarErrores[r.folio] && (
+                          <span className="mt-1 block text-xs font-medium text-red-600">
+                            {cancelarErrores[r.folio]}
                           </span>
                         )}
                       </td>

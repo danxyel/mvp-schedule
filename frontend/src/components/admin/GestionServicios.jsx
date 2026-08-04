@@ -47,6 +47,9 @@ function normalizarServicio(s) {
   if (out.cupo_maximo == null) out.cupo_maximo = 1
   if (out.precio == null) out.precio = null
   if (out.moneda == null) out.moneda = 'MXN'
+  if (out.cobro_por_sesion_habilitado == null) out.cobro_por_sesion_habilitado = true
+  if (out.cobro_por_paquete_habilitado == null) out.cobro_por_paquete_habilitado = false
+  if (out.precio_paquete == null) out.precio_paquete = null
   if (out.activo === undefined) out.activo = true
   return out
 }
@@ -71,6 +74,9 @@ const FORM_VACIO = {
   precio: '',
   moneda: 'MXN',
   pago_requerido: true,
+  cobro_por_sesion_habilitado: true,
+  cobro_por_paquete_habilitado: false,
+  precio_paquete: '',
   visible_web: true,
   requiere_confirmacion: false,
   buffer_antes_min: 0,
@@ -168,6 +174,9 @@ export default function GestionServicios({ tenantSlug, token }) {
       precio: s.precio === null || s.precio === undefined ? '' : String(s.precio),
       moneda: s.moneda,
       pago_requerido: s.pago_requerido,
+      cobro_por_sesion_habilitado: s.cobro_por_sesion_habilitado ?? true,
+      cobro_por_paquete_habilitado: s.cobro_por_paquete_habilitado ?? false,
+      precio_paquete: s.precio_paquete === null || s.precio_paquete === undefined ? '' : String(s.precio_paquete),
       visible_web: s.visible_web,
       requiere_confirmacion: s.requiere_confirmacion ?? false,
       buffer_antes_min: s.buffer_antes_min,
@@ -202,6 +211,18 @@ export default function GestionServicios({ tenantSlug, token }) {
     if (form.precio !== '' && Number(form.precio) < 0) {
       return 'El precio no puede ser negativo'
     }
+    if (form.tipo_agenda !== 'recurrente' && form.cobro_por_paquete_habilitado) {
+      return 'El cobro por paquete solo está disponible para servicios recurrentes'
+    }
+    if (!form.cobro_por_sesion_habilitado && !form.cobro_por_paquete_habilitado) {
+      return 'Debe habilitar al menos una modalidad de cobro'
+    }
+    if (form.cobro_por_paquete_habilitado && form.precio_paquete === '') {
+      return 'El precio del paquete es obligatorio cuando el cobro por paquete está habilitado'
+    }
+    if (form.precio_paquete !== '' && Number(form.precio_paquete) < 0) {
+      return 'El precio del paquete no puede ser negativo'
+    }
     return null
   }
 
@@ -227,6 +248,13 @@ export default function GestionServicios({ tenantSlug, token }) {
       precio: form.precio === '' ? null : Number(form.precio),
       moneda: form.moneda,
       pago_requerido: form.pago_requerido,
+      cobro_por_sesion_habilitado: form.cobro_por_sesion_habilitado,
+      cobro_por_paquete_habilitado:
+        form.tipo_agenda === 'recurrente' ? form.cobro_por_paquete_habilitado : false,
+      precio_paquete:
+        form.tipo_agenda === 'recurrente' && form.cobro_por_paquete_habilitado && form.precio_paquete !== ''
+          ? Number(form.precio_paquete)
+          : null,
       visible_web: form.visible_web,
       requiere_confirmacion: form.requiere_confirmacion,
       buffer_antes_min: Number(form.buffer_antes_min),
@@ -319,6 +347,19 @@ export default function GestionServicios({ tenantSlug, token }) {
     if (nuevoPrecio !== precioActual) cambios.precio = nuevoPrecio
     if (form.moneda !== editando.moneda) cambios.moneda = form.moneda
     if (form.pago_requerido !== editando.pago_requerido) cambios.pago_requerido = form.pago_requerido
+    if (form.cobro_por_sesion_habilitado !== (editando.cobro_por_sesion_habilitado ?? true)) {
+      cambios.cobro_por_sesion_habilitado = form.cobro_por_sesion_habilitado
+    }
+    const cobroPaqueteEnviar = form.tipo_agenda === 'recurrente' ? form.cobro_por_paquete_habilitado : false
+    if (cobroPaqueteEnviar !== (editando.cobro_por_paquete_habilitado ?? false)) {
+      cambios.cobro_por_paquete_habilitado = cobroPaqueteEnviar
+    }
+    const precioPaqueteEnviar =
+      form.tipo_agenda === 'recurrente' && cobroPaqueteEnviar && form.precio_paquete !== ''
+        ? Number(form.precio_paquete)
+        : null
+    const precioPaqueteActual = editando.precio_paquete === null ? null : Number(editando.precio_paquete)
+    if (precioPaqueteEnviar !== precioPaqueteActual) cambios.precio_paquete = precioPaqueteEnviar
     if (form.visible_web !== editando.visible_web) cambios.visible_web = form.visible_web
     if (form.requiere_confirmacion !== (editando.requiere_confirmacion ?? false)) {
       cambios.requiere_confirmacion = form.requiere_confirmacion
@@ -784,6 +825,53 @@ export default function GestionServicios({ tenantSlug, token }) {
               </label>
             </div>
 
+            {form.tipo_agenda === 'recurrente' && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-2 text-xs font-medium text-gray-500">Modalidades de cobro para series</p>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_sesion_habilitado}
+                      onChange={(e) => setCampo('cobro_por_sesion_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por sesión
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_paquete_habilitado}
+                      onChange={(e) => setCampo('cobro_por_paquete_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por paquete
+                  </label>
+                </div>
+                {form.cobro_por_paquete_habilitado && (
+                  <div className="mt-3">
+                    <label
+                      htmlFor="servicio-precio-paquete"
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Precio del paquete *
+                    </label>
+                    <input
+                      id="servicio-precio-paquete"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.precio_paquete}
+                      onChange={(e) => setCampo('precio_paquete', e.target.value)}
+                      placeholder="Ej. 15000"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Precio total por todas las sesiones de la serie</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {form.requiere_confirmacion && (
               <HorarioServicio
                 pendiente
@@ -1034,6 +1122,53 @@ export default function GestionServicios({ tenantSlug, token }) {
                 Requiere confirmación manual
               </label>
             </div>
+
+            {form.tipo_agenda === 'recurrente' && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-2 text-xs font-medium text-gray-500">Modalidades de cobro para series</p>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_sesion_habilitado}
+                      onChange={(e) => setCampo('cobro_por_sesion_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por sesión
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_paquete_habilitado}
+                      onChange={(e) => setCampo('cobro_por_paquete_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por paquete
+                  </label>
+                </div>
+                {form.cobro_por_paquete_habilitado && (
+                  <div className="mt-3">
+                    <label
+                      htmlFor="edit-servicio-precio-paquete"
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Precio del paquete *
+                    </label>
+                    <input
+                      id="edit-servicio-precio-paquete"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.precio_paquete}
+                      onChange={(e) => setCampo('precio_paquete', e.target.value)}
+                      placeholder="Ej. 15000"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Precio total por todas las sesiones de la serie</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {form.requiere_confirmacion && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">

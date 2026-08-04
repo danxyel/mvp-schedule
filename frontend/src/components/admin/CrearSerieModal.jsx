@@ -51,12 +51,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     duracion_minutos: servicio?.duracion_minutos || 60,
     num_repeticiones: 8,
     fecha_inicio: fechaBase ? toDateInputValue(fechaBase) : '',
-    cobro_por_sesion_habilitado: true,
-    cobro_por_paquete_habilitado: false,
-    precio_paquete: '',
   })
-
-  const modalidadesValidas = form.cobro_por_sesion_habilitado || form.cobro_por_paquete_habilitado
 
   useEffect(() => {
     const cargarAsesores = async () => {
@@ -83,10 +78,6 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
 
   const validar = () => {
     if (!form.fecha_inicio) return 'Selecciona una fecha de inicio'
-    if (!modalidadesValidas) return 'Debes habilitar al menos una modalidad de cobro'
-    if (form.cobro_por_paquete_habilitado && !form.precio_paquete) {
-      return 'Ingresa el precio del paquete'
-    }
     return null
   }
 
@@ -111,9 +102,6 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
       duracion_minutos: parseInt(form.duracion_minutos),
       num_repeticiones: parseInt(form.num_repeticiones),
       asesor_id: form.asesor_id ? parseInt(form.asesor_id) : null,
-      cobro_por_sesion_habilitado: form.cobro_por_sesion_habilitado,
-      cobro_por_paquete_habilitado: form.cobro_por_paquete_habilitado,
-      precio_paquete: form.precio_paquete ? parseFloat(form.precio_paquete) : null,
     }
 
     let endpoint, params, body
@@ -289,57 +277,6 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
             />
           </div>
         </div>
-
-        {/* Modalidades de cobro (checkboxes independientes) */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Modalidades de cobro disponibles
-          </label>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.cobro_por_sesion_habilitado}
-                onChange={handleChange('cobro_por_sesion_habilitado')}
-                className="rounded border-gray-300"
-              />
-              <span className="text-sm text-gray-700">Ofrecer pago por sesión</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.cobro_por_paquete_habilitado}
-                onChange={handleChange('cobro_por_paquete_habilitado')}
-                className="rounded border-gray-300"
-              />
-              <span className="text-sm text-gray-700">Ofrecer pago por paquete</span>
-            </label>
-          </div>
-          {!modalidadesValidas && (
-            <p className="mt-1 text-xs text-red-600">Debes habilitar al menos una modalidad</p>
-          )}
-        </div>
-
-        {/* Precio del paquete: aplica al patrón de la serie, no por cliente */}
-        {form.cobro_por_paquete_habilitado && (
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Precio del paquete <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              value={form.precio_paquete}
-              onChange={handleChange('precio_paquete')}
-              min="0"
-              step="0.01"
-              placeholder="Ej: 1500.00"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Precio único para toda la serie — cada cliente que se inscriba como "paquete" paga este monto.
-            </p>
-          </div>
-        )}
 
         {esDesdeSolicitud && (
           <p className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">

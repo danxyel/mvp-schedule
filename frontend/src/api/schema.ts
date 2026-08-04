@@ -102,6 +102,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/mercadopago/redirect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mercadopago Redirect
+         * @description Redirige al frontend después de que el cliente vuelve de MercadoPago.
+         */
+        get: operations["mercadopago_redirect_api_v2_mercadopago_redirect_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/mercadopago/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mercadopago Callback
+         * @description Callback OAuth de MercadoPago. Valida el state firmado, intercambia
+         *     el code por tokens y guarda la configuración en el tenant.
+         */
+        get: operations["mercadopago_callback_api_v2_mercadopago_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/webhooks/mercadopago": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Webhook Mercadopago
+         * @description Recibe notificaciones de MercadoPago. No confía en el payload:
+         *     re-consulta el pago directo a la API de MP antes de marcar nada pagado.
+         */
+        post: operations["webhook_mercadopago_api_v2_webhooks_mercadopago_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/servicios": {
         parameters: {
             query?: never;
@@ -940,6 +1002,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/mercadopago/conectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Conectar Mercadopago
+         * @description Genera la URL de autorización OAuth para que el dueño del tenant
+         *     conecte su cuenta de MercadoPago.
+         */
+        get: operations["conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/mercadopago/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado Mercadopago
+         * @description Devuelve si el tenant tiene conectada una cuenta de MercadoPago.
+         */
+        get: operations["estado_mercadopago_api_v2__tenant_slug__admin_mercadopago_estado_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/reservas/{folio}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Checkout Reserva
+         * @description Cliente logueado: genera una preferencia de MercadoPago para una
+         *     reserva confirmada con pago pendiente (auto-compra post-asignación).
+         */
+        post: operations["checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/inscripciones/{inscripcion_id}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Checkout Inscripcion
+         * @description Cliente logueado: genera una preferencia de MercadoPago para pagar
+         *     un paquete de serie completo.
+         */
+        post: operations["checkout_inscripcion_api_v2__tenant_slug__inscripciones__inscripcion_id__checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/superadmin/tenants": {
         parameters: {
             query?: never;
@@ -1481,6 +1626,11 @@ export interface components {
              */
             num_reservas_creadas: number;
             /**
+             * Estado Pago
+             * @default pendiente
+             */
+            estado_pago: string;
+            /**
              * Creado En
              * Format: date-time
              */
@@ -1760,6 +1910,8 @@ export interface components {
             notas_cliente?: string | null;
             /** Serie Id */
             serie_id?: number | null;
+            /** Inscripcion Id */
+            inscripcion_id?: number | null;
             modalidad_cobro?: components["schemas"]["ModalidadCobroEnum"] | null;
             /**
              * Creado En
@@ -2551,6 +2703,11 @@ export interface components {
             smtp_configurado: boolean;
             /** Smtp Config */
             smtp_config?: Record<string, never> | null;
+            /**
+             * Pago Configurado
+             * @default false
+             */
+            pago_configurado: boolean;
         };
         /** TenantCreate */
         TenantCreate: {
@@ -2906,6 +3063,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantPublicOut"][];
+                };
+            };
+        };
+    };
+    mercadopago_redirect_api_v2_mercadopago_redirect_get: {
+        parameters: {
+            query: {
+                reference: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mercadopago_callback_api_v2_mercadopago_callback_get: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhook_mercadopago_api_v2_webhooks_mercadopago_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -4687,6 +4928,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estado_mercadopago_api_v2__tenant_slug__admin_mercadopago_estado_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folio: string;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutUrlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    checkout_inscripcion_api_v2__tenant_slug__inscripciones__inscripcion_id__checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inscripcion_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutUrlOut"];
                 };
             };
             /** @description Validation Error */

@@ -466,7 +466,7 @@ def crear_nueva_reserva(
     checkout = None
     if tareas["checkout"]:
         try:
-            checkout = svc.iniciar_checkout(tenant, reserva, resultado["usuario"])
+            checkout = svc.iniciar_checkout(tenant, reserva, resultado["usuario"], request=request)
         except Exception:
             log.exception("Fallo al iniciar checkout para folio %s", reserva.folio)
 
@@ -2800,6 +2800,97 @@ def completar_sesion_endpoint(
         mensaje="Sesión completada",
         detalle={"completadas": completadas, "no_shows": no_shows},
     )
+
+
+# ============================================================
+# MERCADOPAGO — ADMIN
+# ============================================================
+@router.get("/admin/mercadopago/conectar")
+def conectar_mercadopago(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Genera la URL de autorización OAuth para que el dueño del tenant
+    conecte su cuenta de MercadoPago."""
+    url = svc._mp_url_autorizacion(tenant.id)
+    return {"url": url}
+
+
+@router.get("/admin/mercadopago/estado")
+def estado_mercadopago(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Devuelve si el tenant tiene conectada una cuenta de MercadoPago."""
+    cfg = tenant.pago_config if isinstance(tenant.pago_config, dict) else {}
+    return {
+        "conectado": bool(cfg.get("access_token")),
+        "mp_user_id": cfg.get("mp_user_id"),
+    }
+
+
+@router.post("/reservas/{folio}/checkout", response_model=CheckoutUrlOut)
+def checkout_reserva(
+    request: Request,
+    folio: str = Path(..., min_length=8, max_length=32),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """Cliente logueado: genera una preferencia de MercadoPago para una
+    reserva confirmada con pago pendiente (auto-compra post-asignación)."""
+    reserva = db.execute(
+        select(Reserva).where(
+            Reserva.tenant_id == tenant.id,
+            Reserva.folio == folio,
+        )
+    ).scalar_one_or_none()
+    if not reserva:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+    if reserva.creado_por_usuario_id != usuario.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta reserva no te pertenece")
+    if reserva.estado != EstadoReserva.CONFIRMADA:
+        raise _http_de(ReservaError("La reserva no está confirmada", codigo="estado_invalido"))
+    if reserva.estado_pago != EstadoPagoReserva.PENDIENTE:
+        raise _http_de(ReservaError("La reserva no tiene pago pendiente", codigo="estado_invalido"))
+    if reserva.inscripcion_id is not None:
+        raise _http_de(ReservaError("Usa el checkout de inscripción para paquetes", codigo="tipo_pago_invalido"))
+
+    checkout = svc.iniciar_checkout(tenant, reserva, usuario, request=request)
+    if checkout is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No se pudo iniciar el pago con MercadoPago")
+    return checkout
+
+
+@router.post("/inscripciones/{inscripcion_id}/checkout", response_model=CheckoutUrlOut)
+def checkout_inscripcion(
+    request: Request,
+    inscripcion_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """Cliente logueado: genera una preferencia de MercadoPago para pagar
+    un paquete de serie completo."""
+    inscripcion = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.id == inscripcion_id,
+        )
+    ).scalar_one_or_none()
+    if not inscripcion:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Inscripción no encontrada")
+    if inscripcion.cliente_usuario_id != usuario.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta inscripción no te pertenece")
+    if inscripcion.estado != EstadoInscripcion.CONFIRMADA:
+        raise _http_de(ReservaError("La inscripción no está confirmada", codigo="estado_invalido"))
+    if inscripcion.modalidad_cobro != ModalidadCobro.PAQUETE:
+        raise _http_de(ReservaError("La inscripción no es de paquete", codigo="modalidad_no_permitida"))
+
+    checkout = svc.crear_preferencia_paquete(tenant, inscripcion, db, request=request)
+    if checkout is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No se pudo iniciar el pago con MercadoPago")
+    return checkout
 
 
 # ============================================================

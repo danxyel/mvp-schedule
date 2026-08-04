@@ -11,15 +11,20 @@ OpenAPI disponible en:
 
 import logging
 import os
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Optional, List
 from dotenv import load_dotenv
 load_dotenv()
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends, Body, Request
+import httpx
+
+from fastapi import FastAPI, Depends, Body, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import select
 
 from app.database import verificar_conexion
 from app.rate_limiter import limiter
@@ -279,6 +284,174 @@ def activar_cuenta(
 def listar_tenants_publicos(db: Session = Depends(get_db)):
     tenants = db.query(Tenant).filter(Tenant.activo == True).order_by(Tenant.nombre).all()
     return tenants
+
+
+# ============================================================
+# MERCADOPAGO — CALLBACK + WEBHOOK (sin {tenant_slug})
+# ============================================================
+@app.get("/api/v2/mercadopago/redirect", tags=["Pagos"])
+def mercadopago_redirect(
+    reference: str,
+    status: str = "pending",
+):
+    """Redirige al frontend después de que el cliente vuelve de MercadoPago."""
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    if reference.startswith("reserva:"):
+        folio = reference[len("reserva:"):]
+        redirect_url = f"{base}/mis-reservas/{folio}?pago={status}"
+    elif reference.startswith("inscripcion:"):
+        redirect_url = f"{base}/mis-series?pago={status}"
+    else:
+        redirect_url = f"{base}/mis-reservas?pago={status}"
+    return RedirectResponse(redirect_url)
+
+
+@app.get("/api/v2/mercadopago/callback", tags=["Pagos"])
+def mercadopago_callback(
+    code: str,
+    state: str,
+    db: Session = Depends(get_db),
+):
+    """Callback OAuth de MercadoPago. Valida el state firmado, intercambia
+    el code por tokens y guarda la configuración en el tenant."""
+    tenant_id = svc.validar_mp_state(state)
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant no encontrado")
+
+    data = svc._mp_intercambiar_code(code)
+    access_token = data.get("access_token")
+    refresh_token = data.get("refresh_token")
+    if not access_token or not refresh_token:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "MercadoPago no entregó los tokens esperados")
+
+    tenant.pago_config = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "mp_user_id": data.get("user_id"),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=180)).isoformat(),
+    }
+    db.commit()
+
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return RedirectResponse(f"{base}/t/{tenant.slug}/admin?mp=conectado")
+
+
+@app.post("/api/v2/webhooks/mercadopago", status_code=status.HTTP_200_OK, tags=["Pagos"])
+async def webhook_mercadopago(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Recibe notificaciones de MercadoPago. No confía en el payload:
+    re-consulta el pago directo a la API de MP antes de marcar nada pagado."""
+    body = await request.json()
+    query = request.query_params
+
+    # Soportar formato v1 (topic + id en query/body) y v2 (type + data.id)
+    payment_id = (
+        body.get("data", {}).get("id")
+        or query.get("id")
+        or body.get("id")
+    )
+    mp_user_id = body.get("user_id") or body.get("collector_id") or query.get("user_id")
+
+    if not payment_id:
+        return {"ok": True}
+
+    # Buscar tenant por mp_user_id si la notificación lo trae; si no, iterar.
+    tenant = None
+    if mp_user_id:
+        tenant = db.execute(
+            select(Tenant).where(
+                Tenant.pago_config.isnot(None),
+                Tenant.pago_config.op("->>")("mp_user_id") == str(mp_user_id),
+            )
+        ).scalars().first()
+
+    if tenant is None:
+        # Fallback MVP: probar con cada tenant conectado hasta encontrar el pago.
+        candidatos = db.execute(
+            select(Tenant).where(Tenant.pago_config.isnot(None))
+        ).scalars().all()
+    else:
+        candidatos = [tenant]
+
+    payment_data = None
+    tenant_encontrado = None
+    for t in candidatos:
+        cfg = t.pago_config if isinstance(t.pago_config, dict) else {}
+        access_token = cfg.get("access_token")
+        if not access_token:
+            continue
+        try:
+            r = httpx.get(
+                f"https://api.mercadopago.com/v1/payments/{payment_id}",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30,
+            )
+        except Exception:
+            log.exception("Error consultando pago %s en tenant %s", payment_id, t.id)
+            continue
+        if r.status_code == 200:
+            payment_data = r.json()
+            tenant_encontrado = t
+            break
+        if r.status_code == 401:
+            # Token vencido; intentar refrescar y reintentar una vez.
+            if svc._mp_refrescar_tokens(t, db):
+                cfg = t.pago_config if isinstance(t.pago_config, dict) else {}
+                access_token = cfg.get("access_token")
+                try:
+                    r = httpx.get(
+                        f"https://api.mercadopago.com/v1/payments/{payment_id}",
+                        headers={"Authorization": f"Bearer {access_token}"},
+                        timeout=30,
+                    )
+                except Exception:
+                    continue
+                if r.status_code == 200:
+                    payment_data = r.json()
+                    tenant_encontrado = t
+                    break
+
+    if payment_data is None or tenant_encontrado is None:
+        log.warning("Webhook MercadoPago: no se pudo obtener el pago %s", payment_id)
+        return {"ok": True}
+
+    status_detail = payment_data.get("status")
+    external_reference = payment_data.get("external_reference")
+    transaction_amount = payment_data.get("transaction_amount")
+
+    if status_detail != "approved":
+        log.info("Webhook MercadoPago: pago %s no aprobado (%s)", payment_id, status_detail)
+        return {"ok": True}
+
+    if not external_reference:
+        log.warning("Webhook MercadoPago: pago aprobado sin external_reference")
+        return {"ok": True}
+
+    try:
+        svc.confirmar_pago_por_referencia(
+            db,
+            external_reference,
+            Decimal(str(transaction_amount or 0)),
+            metodo="mercadopago",
+        )
+        db.commit()
+    except svc.ReservaError as e:
+        db.rollback()
+        log.warning("Webhook MercadoPago: %s (ref=%s)", e.mensaje, external_reference)
+        # Devolvemos 200 para que MP no reintente; ya registramos el warning.
+        return {"ok": True, "advertencia": e.mensaje}
+    except Exception:
+        db.rollback()
+        log.exception("Error DB en webhook MercadoPago ref=%s", external_reference)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno")
+
+    log.info("Webhook MercadoPago: pago confirmado ref=%s", external_reference)
+    return {"ok": True}
+
+
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 app.include_router(router)
 app.include_router(superadmin_router)

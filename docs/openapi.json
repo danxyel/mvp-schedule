@@ -190,6 +190,127 @@
         }
       }
     },
+    "/api/v2/mercadopago/redirect": {
+      "get": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Mercadopago Redirect",
+        "description": "Redirige al frontend después de que el cliente vuelve de MercadoPago.",
+        "operationId": "mercadopago_redirect_api_v2_mercadopago_redirect_get",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reference"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "pending",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/mercadopago/callback": {
+      "get": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Mercadopago Callback",
+        "description": "Callback OAuth de MercadoPago. Valida el state firmado, intercambia\nel code por tokens y guarda la configuración en el tenant.",
+        "operationId": "mercadopago_callback_api_v2_mercadopago_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/webhooks/mercadopago": {
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Webhook Mercadopago",
+        "description": "Recibe notificaciones de MercadoPago. No confía en el payload:\nre-consulta el pago directo a la API de MP antes de marcar nada pagado.",
+        "operationId": "webhook_mercadopago_api_v2_webhooks_mercadopago_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/servicios": {
       "get": {
         "tags": [
@@ -3566,6 +3687,215 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/mercadopago/conectar": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Conectar Mercadopago",
+        "description": "Genera la URL de autorización OAuth para que el dueño del tenant\nconecte su cuenta de MercadoPago.",
+        "operationId": "conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/mercadopago/estado": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Estado Mercadopago",
+        "description": "Devuelve si el tenant tiene conectada una cuenta de MercadoPago.",
+        "operationId": "estado_mercadopago_api_v2__tenant_slug__admin_mercadopago_estado_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/reservas/{folio}/checkout": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Checkout Reserva",
+        "description": "Cliente logueado: genera una preferencia de MercadoPago para una\nreserva confirmada con pago pendiente (auto-compra post-asignación).",
+        "operationId": "checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "folio",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 32,
+              "title": "Folio"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutUrlOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/inscripciones/{inscripcion_id}/checkout": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Checkout Inscripcion",
+        "description": "Cliente logueado: genera una preferencia de MercadoPago para pagar\nun paquete de serie completo.",
+        "operationId": "checkout_inscripcion_api_v2__tenant_slug__inscripciones__inscripcion_id__checkout_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutUrlOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/superadmin/tenants": {
       "get": {
         "tags": [
@@ -4953,6 +5283,11 @@
             "title": "Num Reservas Creadas",
             "default": 0
           },
+          "estado_pago": {
+            "type": "string",
+            "title": "Estado Pago",
+            "default": "pendiente"
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -5733,6 +6068,17 @@
               }
             ],
             "title": "Serie Id"
+          },
+          "inscripcion_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inscripcion Id"
           },
           "modalidad_cobro": {
             "anyOf": [
@@ -7989,6 +8335,11 @@
               }
             ],
             "title": "Smtp Config"
+          },
+          "pago_configurado": {
+            "type": "boolean",
+            "title": "Pago Configurado",
+            "default": false
           }
         },
         "type": "object",

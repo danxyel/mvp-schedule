@@ -31,6 +31,9 @@ apscheduler==3.10.4
 # Variables de entorno
 python-dotenv==1.0.1
 
+# MercadoPago (Checkout Pro + OAuth)
+mercadopago>=2.2.3
+
 # Generación de PDFs (recibos)
 weasyprint==62.3
 

@@ -376,6 +376,7 @@ class ReservaOut(BaseModel):
     hold_expira_en: Optional[datetime] = None
     notas_cliente: Optional[str] = None
     serie_id: Optional[int] = None
+    inscripcion_id: Optional[int] = None
     modalidad_cobro: Optional[ModalidadCobroEnum] = None
     creado_en: datetime
     model_config = ConfigDict(from_attributes=True)

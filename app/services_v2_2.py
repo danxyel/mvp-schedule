@@ -25,6 +25,9 @@ from typing import Optional, List, Dict, Any, Tuple
 from zoneinfo import ZoneInfo
 
 import httpx
+import jwt
+import mercadopago
+from urllib.parse import quote
 
 from sqlalchemy import and_, or_, func, select, update, text
 from sqlalchemy.orm import Session, selectinload, joinedload
@@ -1437,12 +1440,6 @@ def confirmar_inscripcion_serie(
 
     servicio = db.get(Servicio, serie.servicio_id)
 
-    if payload.metodo_pago == MetodoPagoEnum.ONLINE:
-        raise ReservaError(
-            "El pago en línea todavía no está disponible para este tenant",
-            codigo="pago_en_linea_no_disponible",
-        )
-
     # Estado inconsistente del servicio (no un error del cliente):
     # cobro_por_paquete_habilitado=True pero el servicio no tiene precio de paquete.
     if payload.modalidad_cobro == ModalidadCobroEnum.PAQUETE and (
@@ -1651,28 +1648,11 @@ def confirmar_pago_por_folio(
     monto: Decimal,
     metodo: str = "stripe",
 ) -> Reserva:
-    reserva = db.execute(
+    """Confirma pago de una reserva por folio. Mantiene compatibilidad con Stripe."""
+    confirmar_pago_por_referencia(db, f"reserva:{folio}", monto, metodo=metodo)
+    return db.execute(
         select(Reserva).where(Reserva.folio == folio)
-    ).scalar_one_or_none()
-    if not reserva:
-        raise ReservaError("Reserva no encontrada", codigo="not_found")
-    if reserva.estado != EstadoReserva.EN_ESPERA:
-        raise ReservaError("La reserva no está en espera de pago", codigo="estado_invalido")
-
-    reserva.estado = EstadoReserva.CONFIRMADA
-    reserva.estado_pago = EstadoPagoReserva.COMPLETADO
-    reserva.pagado_en = utcnow()
-    reserva.metodo_pago_usado = MetodoPagoUsado(metodo)
-    reserva.hold_expira_en = None
-    reserva.precio_final = Decimal(str(monto))
-
-    actualizar_estado_sesion(db, reserva.sesion_id, reserva.tenant_id)
-
-    registrar_bitacora(
-        db, reserva.tenant_id, "reserva", reserva.id, "pago_confirmado",
-        detalles={"folio": folio, "monto": str(monto), "metodo": metodo},
-    )
-    return reserva
+    ).scalar_one()
 
 
 # ============================================================
@@ -1824,14 +1804,391 @@ def limpiar_holds_expirados(db: Session, lote: int = 200) -> int:
 
 
 # ============================================================
-# INTEGRACIONES EXTERNAS — post-commit (stubs)
+# INTEGRACIONES EXTERNAS — post-commit
 # ============================================================
-def iniciar_checkout(tenant: Tenant, reserva: Reserva, usuario: Usuario) -> Optional[CheckoutUrlOut]:
-    raise NotImplementedError("Integrar Stripe/MercadoPago con clave de idempotencia = folio")
-
 
 def sincronizar_calendario(tenant: Tenant, sesion: Sesion) -> Optional[str]:
     raise NotImplementedError("Integrar Google Calendar")
+
+
+# ── MercadoPago ─────────────────────────────────────────────────────────────
+_MP_AUTH_URL = "https://auth.mercadopago.com/authorization"
+_MP_OAUTH_TOKEN_URL = "https://api.mercadopago.com/oauth/token"
+_MP_PAYMENTS_URL = "https://api.mercadopago.com/v1/payments"
+_MP_180_DAYS = 180  # duración por default del access_token de MercadoPago
+
+
+def _mp_cfg(tenant: Tenant) -> dict:
+    cfg = tenant.pago_config
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _mp_app_credentials() -> Tuple[str, str, str]:
+    """Devuelve (client_id, client_secret, redirect_uri) de las variables globales."""
+    client_id = os.environ.get("MP_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("MP_CLIENT_SECRET", "").strip()
+    redirect_uri = os.environ.get("MP_REDIRECT_URI", "").strip()
+    if not client_id or not client_secret or not redirect_uri:
+        raise ReservaError(
+            "La aplicación de MercadoPago no está configurada",
+            codigo="pago_no_configurado",
+        )
+    return client_id, client_secret, redirect_uri
+
+
+def generar_mp_state(tenant_id: int) -> str:
+    """Genera un JWT firmado con tenant_id para proteger el flujo OAuth."""
+    secret = os.environ.get("JWT_SECRET_KEY")
+    if not secret:
+        raise RuntimeError("JWT_SECRET_KEY requerido para firmar state OAuth")
+    payload = {
+        "tenant_id": tenant_id,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+        "iat": datetime.now(timezone.utc),
+        "rnd": secrets.token_urlsafe(8),
+    }
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
+def validar_mp_state(state: str) -> int:
+    """Valida la firma del state JWT y devuelve el tenant_id."""
+    secret = os.environ.get("JWT_SECRET_KEY")
+    if not secret:
+        raise ReservaError("JWT_SECRET_KEY no configurado", codigo="pago_no_configurado")
+    try:
+        payload = jwt.decode(state, secret, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise ReservaError("El enlace de autorización expiró", codigo="mp_state_invalido")
+    except jwt.InvalidTokenError:
+        raise ReservaError("El enlace de autorización no es válido", codigo="mp_state_invalido")
+    tenant_id = payload.get("tenant_id")
+    if not isinstance(tenant_id, int):
+        raise ReservaError("El enlace de autorización no es válido", codigo="mp_state_invalido")
+    return tenant_id
+
+
+def _mp_url_autorizacion(tenant_id: int) -> str:
+    client_id, _, redirect_uri = _mp_app_credentials()
+    state = generar_mp_state(tenant_id)
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "state": state,
+    }
+    return f"{_MP_AUTH_URL}?" + "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
+
+
+def _mp_intercambiar_code(code: str) -> dict:
+    """Intercambia un code de autorización por tokens de MercadoPago."""
+    client_id, client_secret, redirect_uri = _mp_app_credentials()
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": code,
+        "redirect_uri": redirect_uri,
+    }
+    try:
+        r = httpx.post(_MP_OAUTH_TOKEN_URL, data=payload, timeout=30)
+    except Exception as exc:
+        log.exception("Error al conectar con MercadoPago OAuth")
+        raise ReservaError("No se pudo contactar a MercadoPago", codigo="mp_error_red") from exc
+    if r.status_code != 200:
+        log.warning("MercadoPago OAuth respondió %s: %s", r.status_code, r.text)
+        raise ReservaError("MercadoPago rechazó la autorización", codigo="mp_autorizacion_rechazada")
+    return r.json()
+
+
+def _mp_refrescar_tokens(tenant: Tenant, db: Session) -> bool:
+    """Intenta refrescar el access_token usando el refresh_token. Devuelve True si logró guardar uno nuevo."""
+    cfg = _mp_cfg(tenant)
+    refresh = cfg.get("refresh_token")
+    if not refresh:
+        return False
+    client_id, client_secret, _ = _mp_app_credentials()
+    payload = {
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh,
+    }
+    try:
+        r = httpx.post(_MP_OAUTH_TOKEN_URL, data=payload, timeout=30)
+    except Exception:
+        log.exception("Error al refrescar token de MercadoPago")
+        return False
+    if r.status_code != 200:
+        log.warning("Refresh de MercadoPago falló: %s %s", r.status_code, r.text)
+        return False
+    data = r.json()
+    access_token = data.get("access_token")
+    if not access_token:
+        return False
+    tenant.pago_config = {
+        **cfg,
+        "access_token": access_token,
+        "refresh_token": data.get("refresh_token", cfg.get("refresh_token")),
+        "mp_user_id": data.get("user_id", cfg.get("mp_user_id")),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=_MP_180_DAYS)).isoformat(),
+    }
+    db.commit()
+    return True
+
+
+def _mp_access_token(tenant: Tenant, db: Session) -> str:
+    """Devuelve el access_token vigente del tenant, refrescándolo si es necesario.
+
+    Nota: el access_token de MercadoPago dura 180 días por default. Si
+    expires_at está presente y venció, intentamos refrescar; si no hay
+    refresh_token o el refresh falla, lanzamos error para que el admin
+    reconecte la cuenta.
+    """
+    cfg = _mp_cfg(tenant)
+    access_token = cfg.get("access_token")
+    if not access_token:
+        raise ReservaError("Este tenant no tiene MercadoPago conectado", codigo="mp_no_conectado")
+    expires_at = cfg.get("expires_at")
+    if expires_at:
+        try:
+            exp = datetime.fromisoformat(expires_at)
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > exp:
+                if not _mp_refrescar_tokens(tenant, db):
+                    raise ReservaError(
+                        "El token de MercadoPago expiró; reconecta la cuenta",
+                        codigo="mp_token_expirado",
+                    )
+                access_token = _mp_cfg(tenant).get("access_token")
+        except (ValueError, TypeError):
+            pass
+    return access_token
+
+
+def _mp_client(tenant: Tenant, db: Session) -> mercadopago.SDK:
+    access_token = _mp_access_token(tenant, db)
+    return mercadopago.SDK(access_token)
+
+
+def _mp_base_url(request: Optional[Any] = None) -> str:
+    """URL base pública del backend para webhooks y back_urls."""
+    base = os.environ.get("API_BASE_URL", "")
+    if base:
+        return base.rstrip("/")
+    if request is not None:
+        return str(request.base_url).rstrip("/")
+    return "http://localhost:8000"
+
+
+def _mp_preferencia_body(
+    title: str,
+    unit_price: Decimal,
+    quantity: int,
+    external_reference: str,
+    base_url: str,
+    notification_url: str,
+    payer_email: Optional[str] = None,
+    payer_name: Optional[str] = None,
+) -> dict:
+    return {
+        "items": [
+            {
+                "title": title,
+                "quantity": quantity,
+                "unit_price": float(unit_price),
+                "currency_id": "MXN",  # MercadoPago usa el tenant.moneda en producción si es soportado
+            }
+        ],
+        "payer": {
+            "email": payer_email or "",
+            "name": payer_name or "",
+        },
+        "external_reference": external_reference,
+        "back_urls": {
+            "success": f"{base_url}/api/v2/mercadopago/redirect?reference={httpx.quote(external_reference)}&status=success",
+            "pending": f"{base_url}/api/v2/mercadopago/redirect?reference={httpx.quote(external_reference)}&status=pending",
+            "failure": f"{base_url}/api/v2/mercadopago/redirect?reference={httpx.quote(external_reference)}&status=failure",
+        },
+        "auto_return": "approved",
+        "notification_url": notification_url,
+    }
+
+
+def iniciar_checkout(
+    tenant: Tenant,
+    reserva: Reserva,
+    usuario: Usuario,
+    request: Optional[Any] = None,
+) -> Optional[CheckoutUrlOut]:
+    """Crea una preferencia de MercadoPago para una reserva suelta."""
+    db = None
+    if request is None:
+        # Para compatibilidad con el caller actual en crear_reserva, que no pasa request.
+        # En ese caso no podemos refrescar tokens ni guardar nada; si expiró fallará.
+        cfg = _mp_cfg(tenant)
+        access_token = cfg.get("access_token")
+        if not access_token:
+            return None
+        sdk = mercadopago.SDK(access_token)
+    else:
+        # Obtenemos session desde request para refrescar token si hace falta.
+        from app.database import get_db
+        db = next(get_db())
+        sdk = _mp_client(tenant, db)
+
+    base_url = _mp_base_url(request)
+    notification_url = f"{base_url}/api/v2/webhooks/mercadopago"
+    external_reference = f"reserva:{reserva.folio}"
+    title = f"Reserva {reserva.folio}"
+    body = _mp_preferencia_body(
+        title=title,
+        unit_price=reserva.precio_final or Decimal("0"),
+        quantity=1,
+        external_reference=external_reference,
+        base_url=base_url,
+        notification_url=notification_url,
+        payer_email=usuario.email,
+        payer_name=f"{usuario.nombre} {usuario.apellido or ''}".strip(),
+    )
+    try:
+        resp = sdk.preference().create(body)
+    except Exception:
+        log.exception("Fallo al crear preferencia de MercadoPago")
+        return None
+    if resp.get("status", 0) // 100 != 2:
+        log.warning("MercadoPago preference error: %s", resp)
+        return None
+    init_point = resp.get("response", {}).get("init_point")
+    if not init_point:
+        return None
+    return CheckoutUrlOut(url=init_point, proveedor="mercadopago", expira_en=reserva.hold_expira_en)
+
+
+def crear_preferencia_paquete(
+    tenant: Tenant,
+    inscripcion: InscripcionSerie,
+    db: Session,
+    request: Optional[Any] = None,
+) -> Optional[CheckoutUrlOut]:
+    """Crea una preferencia de MercadoPago para pagar un paquete de serie."""
+    sdk = _mp_client(tenant, db)
+    serie = inscripcion.serie
+    servicio = serie.servicio if serie else None
+    if servicio is None or servicio.precio_paquete is None:
+        raise ReservaError("El servicio no tiene precio de paquete", codigo="servicio_sin_precio_paquete")
+    usuario = inscripcion.cliente
+    if usuario is None:
+        raise ReservaError("Cliente no encontrado", codigo="not_found")
+
+    base_url = _mp_base_url(request)
+    notification_url = f"{base_url}/api/v2/webhooks/mercadopago"
+    external_reference = f"inscripcion:{inscripcion.id}"
+    title = f"Paquete {servicio.nombre}"
+    body = _mp_preferencia_body(
+        title=title,
+        unit_price=servicio.precio_paquete,
+        quantity=1,
+        external_reference=external_reference,
+        base_url=base_url,
+        notification_url=notification_url,
+        payer_email=usuario.email,
+        payer_name=f"{usuario.nombre} {usuario.apellido or ''}".strip(),
+    )
+    try:
+        resp = sdk.preference().create(body)
+    except Exception:
+        log.exception("Fallo al crear preferencia de paquete MercadoPago")
+        return None
+    if resp.get("status", 0) // 100 != 2:
+        log.warning("MercadoPago preference paquete error: %s", resp)
+        return None
+    init_point = resp.get("response", {}).get("init_point")
+    if not init_point:
+        return None
+    return CheckoutUrlOut(url=init_point, proveedor="mercadopago")
+
+
+def _marcar_reserva_pagada(
+    db: Session,
+    reserva: Reserva,
+    monto: Decimal,
+    metodo: str,
+) -> None:
+    """Marca una reserva como pagada, actualizando sesion si aplica."""
+    reserva.estado_pago = EstadoPagoReserva.COMPLETADO
+    reserva.pagado_en = utcnow()
+    reserva.metodo_pago_usado = MetodoPagoUsado(metodo)
+    reserva.precio_final = Decimal(str(monto))
+    reserva.hold_expira_en = None
+    actualizar_estado_sesion(db, reserva.sesion_id, reserva.tenant_id)
+
+
+def confirmar_pago_por_referencia(
+    db: Session,
+    referencia: str,
+    monto: Decimal,
+    metodo: str = "mercadopago",
+) -> Dict[str, Any]:
+    """Confirma un pago a partir de una referencia MercadoPago.
+
+    Formatos:
+      - reserva:{folio}
+      - inscripcion:{id}
+    """
+    if referencia.startswith("reserva:"):
+        folio = referencia[len("reserva:"):]
+        reserva = db.execute(
+            select(Reserva).where(Reserva.folio == folio)
+        ).scalar_one_or_none()
+        if not reserva:
+            raise ReservaError("Reserva no encontrada", codigo="not_found")
+        if reserva.estado not in (EstadoReserva.EN_ESPERA, EstadoReserva.CONFIRMADA):
+            raise ReservaError("La reserva no admite pago", codigo="estado_invalido")
+        if reserva.estado_pago != EstadoPagoReserva.PENDIENTE:
+            raise ReservaError("La reserva ya no tiene pago pendiente", codigo="estado_invalido")
+        if reserva.estado == EstadoReserva.EN_ESPERA:
+            reserva.estado = EstadoReserva.CONFIRMADA
+        _marcar_reserva_pagada(db, reserva, monto, metodo)
+        registrar_bitacora(
+            db, reserva.tenant_id, "reserva", reserva.id, "pago_confirmado",
+            detalles={"referencia": referencia, "monto": str(monto), "metodo": metodo},
+        )
+        return {"tipo": "reserva", "folio": folio, "reserva_id": reserva.id}
+
+    if referencia.startswith("inscripcion:"):
+        inscripcion_id = int(referencia[len("inscripcion:"):])
+        inscripcion = db.execute(
+            select(InscripcionSerie)
+            .where(InscripcionSerie.id == inscripcion_id)
+            .options(joinedload(InscripcionSerie.serie))
+        ).scalar_one_or_none()
+        if not inscripcion:
+            raise ReservaError("Inscripción no encontrada", codigo="not_found")
+        if inscripcion.estado != EstadoInscripcion.CONFIRMADA:
+            raise ReservaError("La inscripción no está confirmada", codigo="estado_invalido")
+        if inscripcion.modalidad_cobro != ModalidadCobro.PAQUETE:
+            raise ReservaError("La inscripción no es de paquete", codigo="modalidad_no_permitida")
+        reservas = db.execute(
+            select(Reserva).where(
+                Reserva.tenant_id == inscripcion.tenant_id,
+                Reserva.inscripcion_id == inscripcion.id,
+            )
+        ).scalars().all()
+        if not reservas:
+            raise ReservaError("La inscripción no tiene reservas", codigo="not_found")
+        pendientes = [r for r in reservas if r.estado_pago == EstadoPagoReserva.PENDIENTE]
+        if not pendientes:
+            raise ReservaError("El paquete ya está pagado", codigo="estado_invalido")
+        for r in pendientes:
+            _marcar_reserva_pagada(db, r, monto / len(pendientes), metodo)
+        registrar_bitacora(
+            db, inscripcion.tenant_id, "inscripcion_serie", inscripcion.id, "pago_confirmado",
+            detalles={"referencia": referencia, "monto": str(monto), "metodo": metodo, "reservas_pagadas": len(pendientes)},
+        )
+        return {"tipo": "inscripcion", "inscripcion_id": inscripcion.id, "reservas_pagadas": len(pendientes)}
+
+    raise ReservaError("Referencia de pago inválida", codigo="referencia_invalida")
 
 
 def _smtp_cfg(tenant: Tenant) -> dict:

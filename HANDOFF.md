@@ -203,8 +203,9 @@ El router traduce `ReservaError` a 4xx con este formato:
 - Selección de tenant para clientes sin membresía (`GET /tenants/publicos` + `SeleccionTenant`)
 - Gestión global de usuarios (superadmin, cross-tenant): buscar/listar (`GET /superadmin/usuarios`), detalle con membresías (`GET .../{id}`), vincular a cualquier tenant (`POST .../vincular`, reusa `_vincular_usuario_a_tenant()`), desvincular (`POST .../{id}/desvincular/{tenant_id}`), desactivar cuenta completa (`POST .../{id}/desactivar` — cancela reservas activas y solicitudes pendientes en cascada) y purgar (`POST .../{id}/purgar` — anonimiza, no borra la fila). `get_current_user()` y `POST /auth/login` rechazan cuentas con `activo=False`.
 - Reclamar/activar cuenta por email, con branding del tenant: token genérico de un solo uso en `Usuario` (`acceso_token_hash`/`acceso_token_expira_en`, 48h, reusable a futuro para "olvidé mi contraseña"). Dispara automático en 3 puntos (`_vincular_usuario_a_tenant()`, `crear_reserva()` de invitado nuevo integrado al correo de confirmación, `inscribir_cliente_en_serie()`) y por autoservicio público `POST /api/v2/{tenant_slug}/reclamar-cuenta` (anti-enumeración, rate limited). Activación global (`GET /auth/activar-cuenta/validar`, `POST /auth/activar-cuenta`, auto-login). `_email_shell()`/`_enviar_smtp()` nuevos en `services_v2_2.py` — branding compartido por `enviar_email_confirmacion()` y `enviar_email_activacion()`. Cierra el hueco de `POST /auth/register` que dejaba "completar registro" de un invitado sin verificar el email.
-- Precio de paquete fijo por serie (`SerieReserva.precio_paquete`), definido una sola vez al crear/configurar la serie — ya no se re-captura por cada cliente inscrito.
-- Inscripción a serie como invitación: `InscripcionSerie` gana `estado` (invitada/confirmada/cancelada); el admin solo invita (`POST /admin/series/{id}/inscripciones`, sin reservas todavía) o retira una invitación pendiente (`POST .../cancelar`); el cliente elige modalidad + método de pago desde su portal (`GET /mis-series`, `POST /mis-series/{id}/confirmar`), lo que genera las N reservas. Reinvitar a alguien con una invitación `cancelada` la reactiva en vez de bloquear. `metodo_pago=online` responde `pago_en_linea_no_disponible` hasta que exista pago en línea real.
+- Precio de paquete fijo por servicio recurrente (`Servicio.precio_paquete`), movido desde `SerieReserva` en Prompt H.
+- Inscripción a serie como invitación: `InscripcionSerie` gana `estado` (invitada/confirmada/cancelada); el admin solo invita (`POST /admin/series/{id}/inscripciones`, sin reservas todavía) o retira una invitación pendiente (`POST .../cancelar`); el cliente elige modalidad + método de pago desde su portal (`GET /mis-series`, `POST /mis-series/{id}/confirmar`), lo que genera las N reservas. Reinvitar a alguien con una invitación `cancelada` la reactiva en vez de bloquear. `metodo_pago=online` ya no se rechaza: genera las reservas con `estado_pago=PENDIENTE` para que el cliente pague después.
+- Pago en línea con MercadoPago por tenant (Prompt G): cada tenant conecta su propia cuenta vía OAuth Connect (`GET /admin/mercadopago/conectar` + callback `GET /api/v2/mercadopago/callback`), dinero directo al tenant, sin comisión de plataforma. Checkout Pro para reservas sueltas (`POST /reservas/{folio}/checkout`) y paquetes de serie (`POST /inscripciones/{id}/checkout`). Webhook `POST /api/v2/webhooks/mercadopago` re-consulta el pago a la API de MP antes de marcar nada como pagado. Credenciales cifradas en `Tenant.pago_config` (`EncryptedJSON`).
 
 ### Frontend ✅
 - Login con persistencia en sessionStorage
@@ -223,14 +224,16 @@ El router traduce `ReservaError` a 4xx con este formato:
 - Navegación por rol
 - Gestión global de usuarios (`superadmin/GestionUsuariosGlobal.jsx`, ruta `/superadmin/usuarios`, botón "Usuarios" en `GestionTenants.jsx`): tabla con buscador + paginación, botón fijo "+ Vincular usuario", modal de detalle con membresías por tenant, confirmación por texto para desactivar (email completo) y purgar (`PURGAR`)
 - Reclamar/activar cuenta con branding del tenant: `Reclamar.jsx` (`/t/:tenantSlug/reclamar`) y `Activar.jsx` (`/t/:tenantSlug/activar?token=...`), logo/color del tenant vía `GET /tenants/publicos` filtrado por slug. Link condicional "Reclama tu cuenta" en `Login.jsx` (solo si hay `tenantSlug` en sessionStorage).
-- `MisSeries.jsx` (ruta `/mis-series`, link desde `MisReservas.jsx`): el cliente ve sus invitaciones a series pendientes con las opciones de precio (sesión vs. paquete) y confirma eligiendo modalidad + método de pago. `InscribirClientesSerieModal.jsx` (admin) se redujo a un multi-select de "a quién invito"; `SeriesTab.jsx` muestra el estado de cada inscripción (invitada/confirmada/cancelada) con botón de cancelar invitación.
+- `MisSeries.jsx` (ruta `/mis-series`, link desde `MisReservas.jsx`): el cliente ve sus invitaciones a series pendientes con las opciones de precio (sesión vs. paquete) y confirma eligiendo modalidad + método de pago. `InscribirClientesSerieModal.jsx` (admin) se redujo a un multi-select de "a quién invito"; `SeriesTab.jsx` muestra el estado de cada inscripción (invitada/confirmada/cancelada) con botón de cancelar invitación. Inscripciones confirmadas de paquete muestran botón "Pagar paquete" si aún no están pagadas.
+- Botón "Pagar ahora" en `MisReservas.jsx` para reservas sueltas confirmadas con `estado_pago=PENDIENTE`.
+- Tab "Pagos" en `PanelAdmin.jsx` para que el admin del tenant conecte/reconecte su cuenta de MercadoPago (`MercadoPagoTab.jsx`).
 
 ---
 
 ## 9. STUBS — PENDIENTES
 
 ```python
-svc.iniciar_checkout()          # Stripe / MercadoPago (Sprint 4)
+svc.iniciar_checkout()          # MercadoPago Checkout Pro (Sprint 4) — IMPLEMENTADO
 svc.sincronizar_calendario()    # Google Calendar API (Sprint 4)
 ```
 

@@ -66,7 +66,6 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
     const defaultModalidad = serie.cobro_por_sesion_habilitado ? 'sesion' : 'paquete'
     return configs[usuarioId] ?? {
       modalidad_cobro: defaultModalidad,
-      precio_paquete: '',
       metodo_pago: 'local',
     }
   }
@@ -77,13 +76,8 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
       const cliente = clientes.find(c => c.usuario_id === usuarioId)
       const nombre = cliente?.nombre ?? `Cliente ${usuarioId}`
 
-      if (cfg.modalidad_cobro === 'paquete') {
-        if (!serie.cobro_por_paquete_habilitado) {
-          return `${nombre}: modalidad 'paquete' no está habilitada para esta serie`
-        }
-        if (!cfg.precio_paquete || parseFloat(cfg.precio_paquete) <= 0) {
-          return `${nombre}: ingresa un precio de paquete válido`
-        }
+      if (cfg.modalidad_cobro === 'paquete' && !serie.cobro_por_paquete_habilitado) {
+        return `${nombre}: modalidad 'paquete' no está habilitada para esta serie`
       }
       if (cfg.modalidad_cobro === 'sesion' && !serie.cobro_por_sesion_habilitado) {
         return `${nombre}: modalidad 'sesión' no está habilitada para esta serie`
@@ -128,7 +122,6 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
           body: {
             cliente_usuario_id: usuarioId,
             modalidad_cobro: cfg.modalidad_cobro,
-            precio_paquete: cfg.modalidad_cobro === 'paquete' ? parseFloat(cfg.precio_paquete) : null,
             metodo_pago: cfg.metodo_pago,
           },
           headers: { Authorization: `Bearer ${token}` },
@@ -240,21 +233,6 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
                         {serie.cobro_por_paquete_habilitado && <option value="paquete">Por paquete</option>}
                       </select>
                     </div>
-                    {cfg.modalidad_cobro === 'paquete' && (
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">Precio paquete</label>
-                        <input
-                          type="number"
-                          value={cfg.precio_paquete}
-                          onChange={(e) => actualizarConfig(usuarioId, 'precio_paquete', e.target.value)}
-                          min="0"
-                          step="0.01"
-                          disabled={loading}
-                          placeholder="Ej: 1500"
-                          className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-                        />
-                      </div>
-                    )}
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-600">Método de pago</label>
                       <select

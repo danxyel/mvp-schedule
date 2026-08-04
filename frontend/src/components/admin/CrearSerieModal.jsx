@@ -100,7 +100,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
   const validar = () => {
     if (!form.fecha_inicio) return 'Selecciona una fecha de inicio'
     if (!modalidadesValidas) return 'Debes habilitar al menos una modalidad de cobro'
-    if (form.modalidad_cobro === 'paquete' && !form.precio_paquete) {
+    if (form.cobro_por_paquete_habilitado && !form.precio_paquete) {
       return 'Ingresa el precio del paquete'
     }
     return null
@@ -129,6 +129,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
       asesor_id: form.asesor_id ? parseInt(form.asesor_id) : null,
       cobro_por_sesion_habilitado: form.cobro_por_sesion_habilitado,
       cobro_por_paquete_habilitado: form.cobro_por_paquete_habilitado,
+      precio_paquete: form.precio_paquete ? parseFloat(form.precio_paquete) : null,
     }
 
     let endpoint, params, body
@@ -137,7 +138,6 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
       params = { path: { tenant_slug: tenantSlug, solicitud_id: solicitud.id } }
       body = {
         ...basePayload,
-        precio_paquete: form.precio_paquete ? parseFloat(form.precio_paquete) : null,
         modalidad_cobro: form.modalidad_cobro,
         metodo_pago: form.metodo_pago,
       }
@@ -340,6 +340,27 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
           )}
         </div>
 
+        {/* Precio del paquete: aplica al patrón de la serie, no por cliente */}
+        {form.cobro_por_paquete_habilitado && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Precio del paquete <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={form.precio_paquete}
+              onChange={handleChange('precio_paquete')}
+              min="0"
+              step="0.01"
+              placeholder="Ej: 1500.00"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Precio único para toda la serie — cada cliente que se inscriba como "paquete" paga este monto.
+            </p>
+          </div>
+        )}
+
         {/* Campos solo para confirmación desde solicitud */}
         {esDesdeSolicitud && (
           <>
@@ -360,24 +381,6 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
                 <p className="mt-1 text-xs text-gray-500">
                   Informada por las notas del cliente o por otro canal
                 </p>
-              </div>
-            )}
-
-            {/* Precio paquete */}
-            {form.modalidad_cobro === 'paquete' && (
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Precio del paquete <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={form.precio_paquete}
-                  onChange={handleChange('precio_paquete')}
-                  min="0"
-                  step="0.01"
-                  placeholder="Ej: 1500.00"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
               </div>
             )}
 

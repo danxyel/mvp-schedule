@@ -116,7 +116,7 @@ export default function SeriesTab({ tenantSlug, token }) {
 
   const abrirPago = (inscripcion) => {
     setPagoModal(inscripcion)
-    setMontoPago(inscripcion.precio_paquete || '')
+    setMontoPago(detalleSerie?.precio_paquete || '')
     setMetodoPago('efectivo')
     setPagoError(null)
     setPagoExito(null)
@@ -367,8 +367,8 @@ export default function SeriesTab({ tenantSlug, token }) {
                         <p className="text-xs text-gray-500">{ins.email_cliente}</p>
                         <p className="mt-1 text-xs text-gray-600">
                           {MODALIDAD_LABEL[ins.modalidad_cobro]}{" "}
-                          {ins.modalidad_cobro === 'paquete' && ins.precio_paquete && (
-                            <span>- ${ins.precio_paquete}</span>
+                          {ins.modalidad_cobro === 'paquete' && detalleSerie.precio_paquete && (
+                            <span>- ${detalleSerie.precio_paquete}</span>
                           )}
                           {" "}· {ins.num_reservas_creadas} reservas
                           {ins.num_reservas_omitidas > 0 && (
@@ -456,12 +456,12 @@ export default function SeriesTab({ tenantSlug, token }) {
                 onChange={(e) => setMontoPago(e.target.value)}
                 min="0"
                 step="0.01"
-                placeholder={pagoModal.precio_paquete || 'Ej: 1500.00'}
+                placeholder={detalleSerie?.precio_paquete || 'Ej: 1500.00'}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
-              {pagoModal.precio_paquete && (
+              {detalleSerie?.precio_paquete && (
                 <p className="mt-1 text-xs text-gray-500">
-                  Precio capturado al inscribir: ${pagoModal.precio_paquete}
+                  Precio del paquete de la serie: ${detalleSerie.precio_paquete}
                 </p>
               )}
             </div>

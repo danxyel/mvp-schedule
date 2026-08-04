@@ -1204,9 +1204,6 @@ def crear_serie(
         duracion_minutos=payload.duracion_minutos,
         num_repeticiones=payload.num_repeticiones,
         fecha_inicio=fecha_inicio_date,
-        cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
-        cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
-        precio_paquete=payload.precio_paquete,
     )
     db.add(serie)
     db.flush()
@@ -1218,9 +1215,6 @@ def crear_serie(
             "servicio_id": servicio.id,
             "num_repeticiones": payload.num_repeticiones,
             "asesor_id": payload.asesor_id,
-            "cobro_por_sesion_habilitado": payload.cobro_por_sesion_habilitado,
-            "cobro_por_paquete_habilitado": payload.cobro_por_paquete_habilitado,
-            "precio_paquete": str(payload.precio_paquete) if payload.precio_paquete is not None else None,
         },
         ip=ip, user_agent=user_agent,
     )
@@ -1351,8 +1345,8 @@ def _generar_reservas_de_inscripcion(
     fechas_omitidas: List[Dict[str, Any]] = []
 
     precio_por_reserva = None
-    if inscripcion.modalidad_cobro == ModalidadCobro.PAQUETE and serie.precio_paquete is not None and fechas:
-        precio_por_reserva = serie.precio_paquete / Decimal(len(fechas))
+    if inscripcion.modalidad_cobro == ModalidadCobro.PAQUETE and servicio.precio_paquete is not None and fechas:
+        precio_por_reserva = servicio.precio_paquete / Decimal(len(fechas))
 
     for fecha in fechas:
         try:
@@ -1437,27 +1431,30 @@ def confirmar_inscripcion_serie(
     if serie is None or serie.estado == EstadoSerie.CANCELADA:
         raise ReservaError("La serie está cancelada", codigo="serie_cancelada")
 
+    servicio = db.get(Servicio, serie.servicio_id)
+
     if payload.metodo_pago == MetodoPagoEnum.ONLINE:
         raise ReservaError(
             "El pago en línea todavía no está disponible para este tenant",
             codigo="pago_en_linea_no_disponible",
         )
 
-    # Estado inconsistente de la serie (no un error del cliente):
-    # cobro_por_paquete_habilitado=True pero la serie nunca tuvo precio
-    # (posible en series creadas antes de que precio_paquete existiera).
-    if payload.modalidad_cobro == ModalidadCobroEnum.PAQUETE and serie.precio_paquete is None:
+    # Estado inconsistente del servicio (no un error del cliente):
+    # cobro_por_paquete_habilitado=True pero el servicio no tiene precio de paquete.
+    if payload.modalidad_cobro == ModalidadCobroEnum.PAQUETE and (
+        servicio is None or servicio.precio_paquete is None
+    ):
         raise ReservaError(
-            "La serie no tiene un precio de paquete configurado",
-            codigo="serie_sin_precio_paquete",
+            "El servicio no tiene un precio de paquete configurado",
+            codigo="servicio_sin_precio_paquete",
         )
 
     try:
         validar_modalidad_cobro(
             payload.modalidad_cobro,
-            serie.precio_paquete,
-            serie.cobro_por_sesion_habilitado,
-            serie.cobro_por_paquete_habilitado,
+            servicio.precio_paquete if servicio else None,
+            servicio.cobro_por_sesion_habilitado if servicio else False,
+            servicio.cobro_por_paquete_habilitado if servicio else False,
         )
     except ValueError as e:
         raise ReservaError(str(e), codigo="modalidad_no_permitida")
@@ -1601,9 +1598,6 @@ def confirmar_solicitud_como_serie(
         duracion_minutos=payload.duracion_minutos,
         num_repeticiones=payload.num_repeticiones,
         fecha_inicio=datetime.combine(fecha_inicio_local, time.min, tzinfo=ZoneInfo(tzname)),
-        cobro_por_sesion_habilitado=payload.cobro_por_sesion_habilitado,
-        cobro_por_paquete_habilitado=payload.cobro_por_paquete_habilitado,
-        precio_paquete=payload.precio_paquete,
     )
 
     serie = crear_serie(

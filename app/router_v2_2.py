@@ -157,7 +157,7 @@ _CODIGO_HTTP = {
     "pago_pendiente": status.HTTP_409_CONFLICT,
     "cliente_ya_inscrito": status.HTTP_409_CONFLICT,
     "modalidad_no_permitida": status.HTTP_422_UNPROCESSABLE_ENTITY,
-    "serie_sin_precio_paquete": status.HTTP_409_CONFLICT,
+    "servicio_sin_precio_paquete": status.HTTP_409_CONFLICT,
     "inscripcion_no_encontrada": status.HTTP_404_NOT_FOUND,
     "inscripcion_no_pendiente": status.HTTP_409_CONFLICT,
     "pago_en_linea_no_disponible": status.HTTP_409_CONFLICT,
@@ -1531,6 +1531,8 @@ def registrar_pago_inscripcion_local(
             {"codigo": "serie_cancelada", "mensaje": "La serie está cancelada"},
         )
 
+    servicio = db.get(Servicio, serie.servicio_id)
+
     reservas = db.execute(
         select(Reserva).where(
             Reserva.tenant_id == tenant.id,
@@ -1552,7 +1554,7 @@ def registrar_pago_inscripcion_local(
             {"codigo": "ya_pagado", "mensaje": "Todas las reservas ya tienen el pago registrado"},
         )
 
-    monto_a_distribuir = payload.monto if payload.monto is not None else serie.precio_paquete
+    monto_a_distribuir = payload.monto if payload.monto is not None else (servicio.precio_paquete if servicio else None)
 
     for reserva in pendientes:
         reserva.estado_pago = EstadoPagoReserva.COMPLETADO
@@ -1662,10 +1664,10 @@ def _inscripcion_cliente_out(db: Session, inscripcion: InscripcionSerie) -> Insc
         hora_inicio=serie.hora_inicio if serie else time(0, 0),
         num_repeticiones=serie.num_repeticiones if serie else 0,
         fecha_inicio=serie.fecha_inicio if serie else inscripcion.creado_en,
-        cobro_por_sesion_habilitado=serie.cobro_por_sesion_habilitado if serie else False,
-        cobro_por_paquete_habilitado=serie.cobro_por_paquete_habilitado if serie else False,
+        cobro_por_sesion_habilitado=servicio.cobro_por_sesion_habilitado if servicio else False,
+        cobro_por_paquete_habilitado=servicio.cobro_por_paquete_habilitado if servicio else False,
         precio_sesion=servicio.precio if servicio else None,
-        precio_paquete=serie.precio_paquete if serie else None,
+        precio_paquete=servicio.precio_paquete if servicio else None,
         num_reservas_creadas=num_creadas,
         creado_en=inscripcion.creado_en,
     )
@@ -1759,9 +1761,9 @@ def _serie_admin_out(
         duracion_minutos=serie.duracion_minutos,
         num_repeticiones=serie.num_repeticiones,
         fecha_inicio=serie.fecha_inicio,
-        cobro_por_sesion_habilitado=serie.cobro_por_sesion_habilitado,
-        cobro_por_paquete_habilitado=serie.cobro_por_paquete_habilitado,
-        precio_paquete=serie.precio_paquete,
+        cobro_por_sesion_habilitado=servicio.cobro_por_sesion_habilitado if servicio else False,
+        cobro_por_paquete_habilitado=servicio.cobro_por_paquete_habilitado if servicio else False,
+        precio_paquete=servicio.precio_paquete if servicio else None,
         estado=serie.estado.value,
         num_inscripciones=num_inscripciones,
         num_reservas_creadas_total=num_reservas_creadas_total,
@@ -1819,6 +1821,9 @@ def crear_servicio_admin(
         precio=body.precio,
         moneda=body.moneda,
         pago_requerido=body.pago_requerido,
+        cobro_por_sesion_habilitado=body.cobro_por_sesion_habilitado,
+        cobro_por_paquete_habilitado=body.cobro_por_paquete_habilitado,
+        precio_paquete=body.precio_paquete,
         visible_web=body.visible_web,
         requiere_confirmacion=body.requiere_confirmacion,
     )
@@ -1857,6 +1862,26 @@ def actualizar_servicio_admin(
 
     for campo, valor in cambios.items():
         setattr(s, campo, valor)
+
+    # Validación final del estado de cobro tras un PATCH parcial
+    if s.cobro_por_paquete_habilitado and s.tipo_agenda != TipoAgenda.RECURRENTE:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "El cobro por paquete solo está disponible para servicios recurrentes",
+        )
+    if s.cobro_por_paquete_habilitado and s.precio_paquete is None:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "precio_paquete es obligatorio cuando el cobro por paquete está habilitado",
+        )
+    if not s.cobro_por_sesion_habilitado and not s.cobro_por_paquete_habilitado:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Debe habilitar al menos una modalidad de cobro",
+        )
 
     try:
         db.commit()

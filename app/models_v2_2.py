@@ -399,6 +399,9 @@ class Servicio(Base, TenantScopedMixin):
     imagen_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     metodo_pago: Mapped[Optional[MetodoPago]] = mapped_column(SQLEnum(MetodoPago), nullable=True)
     pago_requerido: Mapped[bool] = mapped_column(default=True)
+    cobro_por_sesion_habilitado: Mapped[bool] = mapped_column(default=True)
+    cobro_por_paquete_habilitado: Mapped[bool] = mapped_column(default=False)
+    precio_paquete: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     creacion_por_alumno: Mapped[bool] = mapped_column(default=False)
     formulario_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("formularios.id", ondelete="SET NULL"), nullable=True
@@ -414,6 +417,10 @@ class Servicio(Base, TenantScopedMixin):
         CheckConstraint("cupo_minimo >= 1", name="ck_servicio_cupo_min"),
         CheckConstraint("cupo_maximo >= cupo_minimo", name="ck_servicio_cupo_coherente"),
         CheckConstraint("precio IS NULL OR precio >= 0", name="ck_servicio_precio_no_negativo"),
+        CheckConstraint(
+            "precio_paquete IS NULL OR precio_paquete >= 0",
+            name="ck_servicio_precio_paquete_no_negativo",
+        ),
         CheckConstraint("buffer_antes_min >= 0 AND buffer_despues_min >= 0", name="ck_servicio_buffers"),
         CheckConstraint(
             "tipo_agenda <> 'INDIVIDUAL' OR cupo_maximo = 1",
@@ -636,11 +643,6 @@ class SerieReserva(Base, TenantScopedMixin):
     num_repeticiones: Mapped[int] = mapped_column(default=1)
     fecha_inicio: Mapped[date] = mapped_column(Date)
 
-    # Modalidades de cobro habilitadas por admin
-    cobro_por_sesion_habilitado: Mapped[bool] = mapped_column(default=True)
-    cobro_por_paquete_habilitado: Mapped[bool] = mapped_column(default=False)
-    precio_paquete: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
-
     # Estado
     estado: Mapped[EstadoSerie] = mapped_column(SQLEnum(EstadoSerie), default=EstadoSerie.ACTIVA)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -651,7 +653,6 @@ class SerieReserva(Base, TenantScopedMixin):
         CheckConstraint("num_repeticiones <= 50", name="ck_serie_repeticiones_maximo"),
         CheckConstraint("dia_semana IS NULL OR (dia_semana >= 0 AND dia_semana <= 6)", name="ck_serie_dia_semana_rango"),
         CheckConstraint("duracion_minutos > 0", name="ck_serie_duracion_positiva"),
-        CheckConstraint("precio_paquete IS NULL OR precio_paquete >= 0", name="ck_serie_precio_no_negativo"),
         Index("idx_series_estado", "tenant_id", "estado"),
     )
 

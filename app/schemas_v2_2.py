@@ -502,11 +502,12 @@ class SolicitudConfirmarSerieIn(BaseModel):
     """Parámetros para convertir una solicitud en una serie recurrente.
 
     La fecha de inicio, servicio y cliente se toman de la solicitud. El
-    staff define el patrón y las modalidades de cobro — pero NO elige la
-    modalidad ni el método de pago del cliente: eso lo hace el cliente
-    desde su portal (POST /mis-series/{id}/confirmar), igual que en el
-    camino de inscribir directamente. Confirmar una solicitud como serie
-    solo crea la serie + una invitación (estado=invitada) para el cliente.
+    staff define el patrón de recurrencia — las modalidades de cobro y el
+    precio de paquete se heredan del servicio. NO elige la modalidad ni el
+    método de pago del cliente: eso lo hace el cliente desde su portal
+    (POST /mis-series/{id}/confirmar), igual que en el camino de inscribir
+    directamente. Confirmar una solicitud como serie solo crea la serie +
+    una invitación (estado=invitada) para el cliente.
     """
     frecuencia: str = Field(..., pattern=r"^(semanal|quincenal|mensual)$")
     dia_semana: Optional[int] = Field(default=None, ge=0, le=6)
@@ -514,17 +515,6 @@ class SolicitudConfirmarSerieIn(BaseModel):
     duracion_minutos: int = Field(default=60, gt=0)
     num_repeticiones: int = Field(default=1, ge=1, le=50)
     asesor_id: Optional[int] = Field(default=None, gt=0)
-    cobro_por_sesion_habilitado: bool = Field(default=True)
-    cobro_por_paquete_habilitado: bool = Field(default=False)
-    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
-
-    @model_validator(mode="after")
-    def validar_modalidades(self):
-        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
-            raise ValueError("Debe habilitar al menos una modalidad de cobro")
-        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
-            raise ValueError("precio_paquete es obligatorio cuando el cobro por paquete está habilitado")
-        return self
 
     model_config = ConfigDict(extra="forbid")
 
@@ -541,6 +531,7 @@ class SolicitudRechazarIn(BaseModel):
 class SerieReservaCreate(BaseModel):
     """Crear el patrón de horario de una serie recurrente.
 
+    Las modalidades de cobro y el precio de paquete se heredan del servicio.
     La inscripción de clientes es un paso posterior.
     """
     servicio_id: int = Field(..., gt=0)
@@ -554,24 +545,11 @@ class SerieReservaCreate(BaseModel):
     num_repeticiones: int = Field(default=1, ge=1, le=50)
     fecha_inicio: datetime
 
-    # Modalidades de cobro que se ofrecerán a quienes se inscriban
-    cobro_por_sesion_habilitado: bool = Field(default=True)
-    cobro_por_paquete_habilitado: bool = Field(default=False)
-    precio_paquete: Optional[Decimal] = Field(default=None, ge=0)
-
     @field_validator("fecha_inicio")
     @classmethod
     def validar_fecha_inicio(cls, v: datetime) -> datetime:
         v = exigir_aware(v, "fecha_inicio")
         return v
-
-    @model_validator(mode="after")
-    def validar_modalidades(self):
-        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
-            raise ValueError("Debe habilitar al menos una modalidad de cobro")
-        if self.cobro_por_paquete_habilitado and self.precio_paquete is None:
-            raise ValueError("precio_paquete es obligatorio cuando el cobro por paquete está habilitado")
-        return self
 
     model_config = ConfigDict(extra="forbid")
 
@@ -617,7 +595,7 @@ class InscripcionSerieClienteOut(BaseModel):
 
     Trae lo que el cliente necesita para decidir cómo confirmar: el
     servicio, el patrón de horario, las modalidades habilitadas y sus
-    precios (sesión = servicio.precio, paquete = serie.precio_paquete).
+    precios (sesión = servicio.precio, paquete = servicio.precio_paquete).
     """
     id: int
     serie_id: int
@@ -793,6 +771,9 @@ class ServicioAdminIn(BaseModel):
     precio: Optional[Decimal] = Field(None, ge=0)
     moneda: str = Field("MXN", min_length=3, max_length=3)
     pago_requerido: bool = True
+    cobro_por_sesion_habilitado: bool = True
+    cobro_por_paquete_habilitado: bool = False
+    precio_paquete: Optional[Decimal] = Field(None, ge=0)
     visible_web: bool = True
     requiere_confirmacion: bool = False
     model_config = ConfigDict(extra="forbid")
@@ -803,6 +784,17 @@ class ServicioAdminIn(BaseModel):
             raise ValueError("cupo_maximo no puede ser menor que cupo_minimo")
         if self.tipo_agenda == TipoAgendaEnum.INDIVIDUAL and self.cupo_maximo != 1:
             raise ValueError("Un servicio individual solo admite cupo_maximo = 1")
+        return self
+
+    @model_validator(mode="after")
+    def _validar_modalidades_cobro(self):
+        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
+            raise ValueError("Debe habilitar al menos una modalidad de cobro")
+        if self.cobro_por_paquete_habilitado:
+            if self.tipo_agenda != TipoAgendaEnum.RECURRENTE:
+                raise ValueError("El cobro por paquete solo está disponible para servicios recurrentes")
+            if self.precio_paquete is None:
+                raise ValueError("precio_paquete es obligatorio cuando el cobro por paquete está habilitado")
         return self
 
 
@@ -823,6 +815,9 @@ class ServicioAdminUpdate(BaseModel):
     precio: Optional[Decimal] = Field(None, ge=0)
     moneda: Optional[str] = Field(None, min_length=3, max_length=3)
     pago_requerido: Optional[bool] = None
+    cobro_por_sesion_habilitado: Optional[bool] = None
+    cobro_por_paquete_habilitado: Optional[bool] = None
+    precio_paquete: Optional[Decimal] = Field(None, ge=0)
     visible_web: Optional[bool] = None
     requiere_confirmacion: Optional[bool] = None
     model_config = ConfigDict(extra="forbid")
@@ -835,6 +830,22 @@ class ServicioAdminUpdate(BaseModel):
         if self.tipo_agenda == TipoAgendaEnum.INDIVIDUAL and self.cupo_maximo is not None:
             if self.cupo_maximo != 1:
                 raise ValueError("Un servicio individual solo admite cupo_maximo = 1")
+        return self
+
+    @model_validator(mode="after")
+    def _validar_modalidades_cobro(self):
+        if self.cobro_por_paquete_habilitado:
+            if self.tipo_agenda is not None and self.tipo_agenda != TipoAgendaEnum.RECURRENTE:
+                raise ValueError("El cobro por paquete solo está disponible para servicios recurrentes")
+            if self.precio_paquete is None and self.cobro_por_sesion_habilitado is not False:
+                # precio_paquete es obligatorio si paquete queda habilitado;
+                # si sesión también está habilitada, el campo no es obligatorio
+                # en el payload, pero no podemos validar sin leer el modelo.
+                # Para PATCH parcial aceptamos NULL y el endpoint debe validar
+                # el estado final si paquete queda habilitado sin precio.
+                pass
+        if self.cobro_por_sesion_habilitado is False and self.cobro_por_paquete_habilitado is False:
+            raise ValueError("Debe habilitar al menos una modalidad de cobro")
         return self
 
 
@@ -879,6 +890,9 @@ class ServicioAdminOut(BaseModel):
     precio: Optional[Decimal] = None
     moneda: str
     pago_requerido: bool
+    cobro_por_sesion_habilitado: bool = True
+    cobro_por_paquete_habilitado: bool = False
+    precio_paquete: Optional[Decimal] = None
     requiere_confirmacion: bool = False
     visible_web: bool
     activo: bool

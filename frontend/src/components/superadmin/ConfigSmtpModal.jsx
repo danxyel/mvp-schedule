@@ -6,6 +6,7 @@ const CAMPO = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outlin
 
 export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) {
   const [form, setForm] = useState({
+    metodo: 'smtp',
     host: '',
     port: '587',
     user: '',
@@ -25,6 +26,7 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
     if (!tenant) return
     const cfg = tenant.smtp_config ?? {}
     setForm({
+      metodo: cfg.metodo ?? 'smtp',
       host: cfg.host ?? '',
       port: cfg.port != null ? String(cfg.port) : '587',
       user: cfg.user ?? '',
@@ -41,7 +43,7 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
     e.preventDefault()
     if (loading) return
 
-    const smtp_config = {}
+    const smtp_config = { metodo: form.metodo }
     if (form.host.trim()) smtp_config.host = form.host.trim()
     if (form.port.trim()) smtp_config.port = Number(form.port)
     if (form.user.trim()) smtp_config.user = form.user.trim()
@@ -52,8 +54,8 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
     smtp_config.ssl = form.ssl
     smtp_config.console = form.console
 
-    if (!smtp_config.host) {
-      setError('El host es obligatorio para configurar el email')
+    if (form.metodo === 'smtp' && !smtp_config.host) {
+      setError('El host es obligatorio para configurar el email por SMTP')
       return
     }
 
@@ -79,15 +81,37 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
   return (
     <Modal title={`Configuración de email — ${tenant.nombre}`} onClose={onClose} maxWidth="max-w-2xl">
       <form onSubmit={guardar} className="space-y-4" noValidate>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="smtp-metodo" className="mb-1 block text-sm font-medium text-gray-700">
+            Método de envío
+          </label>
+          <select
+            id="smtp-metodo"
+            value={form.metodo}
+            onChange={(e) => set('metodo', e.target.value)}
+            className={CAMPO}
+          >
+            <option value="smtp">SMTP propio</option>
+            <option value="api">API centralizada (Resend) — pruebas</option>
+          </select>
+          {form.metodo === 'api' && (
+            <p className="mt-1 text-xs text-gray-500">
+              En modo API los correos salen por la cuenta Resend de Daniel. El tenant sigue
+              apareciendo como remitente y el Reply-To apunta a su correo configurado.
+            </p>
+          )}
+        </div>
+
+        <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${form.metodo === 'api' ? 'opacity-60' : ''}`}>
           <div>
             <label htmlFor="smtp-host" className="mb-1 block text-sm font-medium text-gray-700">
-              Servidor SMTP (host) *
+              Servidor SMTP (host) {form.metodo === 'smtp' && <span className="text-red-500">*</span>}
             </label>
             <input
               id="smtp-host"
               type="text"
-              required
+              required={form.metodo === 'smtp'}
+              disabled={form.metodo === 'api'}
               value={form.host}
               onChange={(e) => set('host', e.target.value)}
               className={CAMPO}
@@ -103,6 +127,7 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
               type="number"
               min="1"
               max="65535"
+              disabled={form.metodo === 'api'}
               value={form.port}
               onChange={(e) => set('port', e.target.value)}
               className={CAMPO}
@@ -116,6 +141,7 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
             <input
               id="smtp-user"
               type="text"
+              disabled={form.metodo === 'api'}
               value={form.user}
               onChange={(e) => set('user', e.target.value)}
               className={CAMPO}
@@ -130,6 +156,7 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
               id="smtp-password"
               type="password"
               autoComplete="new-password"
+              disabled={form.metodo === 'api'}
               value={form.password}
               onChange={(e) => set('password', e.target.value)}
               className={CAMPO}
@@ -164,10 +191,11 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
           </div>
         </div>
 
-        <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className={`space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-4 ${form.metodo === 'api' ? 'opacity-60' : ''}`}>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
+              disabled={form.metodo === 'api'}
               checked={form.tls}
               onChange={(e) => set('tls', e.target.checked)}
               className="h-4 w-4 rounded border-gray-300"
@@ -177,6 +205,7 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
+              disabled={form.metodo === 'api'}
               checked={form.ssl}
               onChange={(e) => set('ssl', e.target.checked)}
               className="h-4 w-4 rounded border-gray-300"

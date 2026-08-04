@@ -14,6 +14,23 @@ en producción sí tendrán su propio SMTP funcionando normalmente (planes pagad
 providers que no usan esos puertos bloqueados). Lo que se necesita es una alternativa
 gratuita **para pruebas / tenants sin SMTP propio**, sin descartar el modelo actual.
 
+**Limitación aceptada explícitamente por Daniel:** la cuenta de Resend ya existe
+pero **no tiene dominio propio verificado** (decisión: seguir sin comprar dominio
+por ahora). Esto activa el modo *sandbox* de Resend, con dos restricciones que no
+se pueden evitar desde el código:
+1. El remitente (`from`) solo puede ser la dirección fija `onboarding@resend.dev`
+   — no se puede usar una dirección propia hasta verificar un dominio.
+2. El destinatario (`to`) solo puede ser el correo con el que se registró la
+   cuenta de Resend (el Gmail de Daniel) — cualquier otro destinatario lo
+   rechaza la API. Esto significa que, mientras siga en sandbox, `metodo="api"`
+   **no puede entregar correos reales a clientes de un tenant** — solo sirve
+   para probar que el flujo de código funciona (el correo llegará siempre al
+   Gmail de Daniel, sin importar a quién iba dirigido realmente). No es un bug
+   a corregir en este prompt — es una limitación de cuenta, aceptada para esta
+   fase de pruebas. El día que se verifique un dominio, ambas restricciones se
+   levantan solas sin tocar código (Resend las quita automáticamente al
+   verificar).
+
 ## Decisión de arquitectura (ya tomada, no discutir de nuevo)
 
 1. **No hay migración de base de datos.** `smtp_config` sigue siendo el mismo
@@ -24,9 +41,13 @@ gratuita **para pruebas / tenants sin SMTP propio**, sin descartar el modelo act
    `https://api.resend.com/emails`) usando credenciales **globales** por variable
    de entorno — **no** por tenant:
    - `RESEND_API_KEY`
-   - `RESEND_FROM_EMAIL` (una dirección del dominio que Daniel verificó en Resend,
-     ej. `notificaciones@dominio-daniel.com`)
-   - Un solo dominio verificado por Daniel Consultoría; ningún tenant necesita su
+   - `RESEND_FROM_EMAIL` — **por ahora, mientras no haya dominio verificado, debe
+     ser literalmente `onboarding@resend.dev`** (es la única dirección que Resend
+     permite sin dominio propio; usar cualquier otra devuelve error de la API).
+     El día que Daniel verifique un dominio, este valor cambia a una dirección
+     propia (ej. `notificaciones@dominio-daniel.com`) — sin tocar código, es
+     solo la variable de entorno en Render.
+   - Un solo dominio verificado por Daniel Consultoría (cuando exista); ningún tenant necesita su
      propia cuenta Resend ni verificar DNS. Esto es intencional: verificar dominio
      propio por tenant no es viable para tenants sin equipo técnico (caso real:
      "students"). Motivo explícito de Daniel: sirve para pruebas ahora; en
@@ -93,11 +114,13 @@ gratuita **para pruebas / tenants sin SMTP propio**, sin descartar el modelo act
 
 ```
 RESEND_API_KEY=...
-RESEND_FROM_EMAIL=notificaciones@<dominio-verificado-en-resend>
+RESEND_FROM_EMAIL=onboarding@resend.dev   # cambiar cuando exista dominio verificado
 ```
 
 Sin estas dos variables, cualquier tenant con `metodo="api"` simplemente no
-manda correo (mismo comportamiento silencioso ya documentado, con log).
+manda correo (mismo comportamiento silencioso ya documentado, con log). Con
+`onboarding@resend.dev` y sin dominio, recuerda que solo entrega al Gmail de
+Daniel — ver limitación de sandbox arriba.
 
 ## Fuera de alcance (no tocar en este prompt)
 

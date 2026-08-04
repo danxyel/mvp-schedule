@@ -15,6 +15,8 @@ import string
 import logging
 import os
 import smtplib
+import socket
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone, date, time
 from decimal import Decimal
 from email.mime.multipart import MIMEMultipart
@@ -1892,6 +1894,31 @@ def _email_shell(tenant: Tenant, cuerpo_interior_html: str) -> str:
 </table>"""
 
 
+@contextmanager
+def _forzar_resolucion_ipv4():
+    """Fuerza que las conexiones de socket dentro del bloque usen IPv4.
+
+    `getaddrinfo` en Linux devuelve direcciones IPv6 primero cuando el host
+    tiene registro AAAA (muchos proveedores SMTP lo tienen, incluido
+    Gmail). En Render el contenedor no tiene salida IPv6 funcional, así
+    que `smtplib.SMTP(host, port)` truena con `OSError: Network is
+    unreachable` de inmediato en vez de intentar IPv4 como fallback. Se
+    monkeypatchea `socket.getaddrinfo` solo durante el envío del correo —
+    se sigue pasando el hostname original (no una IP) a smtplib, así que
+    la validación de certificado TLS no se ve afectada.
+    """
+    original = socket.getaddrinfo
+
+    def _solo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+        return original(host, port, socket.AF_INET, type, proto, flags)
+
+    socket.getaddrinfo = _solo_ipv4
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original
+
+
 def _enviar_smtp(tenant: Tenant, destinatario_email: str, asunto: str, texto_plano: str, cuerpo_html: str) -> None:
     """Manda un correo transaccional por el SMTP del tenant.
 
@@ -1925,18 +1952,19 @@ def _enviar_smtp(tenant: Tenant, destinatario_email: str, asunto: str, texto_pla
     password = cfg.get("password")
     from_email = cfg.get("from_email")
 
-    if cfg.get("ssl"):
-        server = smtplib.SMTP_SSL(host, port, timeout=15)
-    else:
-        server = smtplib.SMTP(host, port, timeout=15)
-        if cfg.get("tls", True):
-            server.starttls()
-    try:
-        if user:
-            server.login(user, password or "")
-        server.sendmail(from_email, [destinatario_email], msg.as_string())
-    finally:
-        server.quit()
+    with _forzar_resolucion_ipv4():
+        if cfg.get("ssl"):
+            server = smtplib.SMTP_SSL(host, port, timeout=15)
+        else:
+            server = smtplib.SMTP(host, port, timeout=15)
+            if cfg.get("tls", True):
+                server.starttls()
+        try:
+            if user:
+                server.login(user, password or "")
+            server.sendmail(from_email, [destinatario_email], msg.as_string())
+        finally:
+            server.quit()
     log.info("Correo enviado a %s (%s)", destinatario_email, asunto)
 
 

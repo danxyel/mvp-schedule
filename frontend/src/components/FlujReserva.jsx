@@ -66,7 +66,8 @@ export default function FlujReserva() {
   const location = useLocation()
   const slot = location.state?.slot
   const token = sessionStorage.getItem('token')
-  
+  const usuarioSesion = token ? JSON.parse(sessionStorage.getItem('usuario') || 'null') : null
+
   const [servicio, setServicio] = useState(null)
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({ email: '', nombre: '', telefono: '', notas: '' })
@@ -96,6 +97,7 @@ export default function FlujReserva() {
   }, [tenantSlug, servicioId])
 
   const validar = () => {
+    if (usuarioSesion) return true
     const errs = {}
     if (!form.nombre.trim()) errs.nombre = 'El nombre es obligatorio'
     if (!form.email.trim()) {
@@ -228,41 +230,49 @@ export default function FlujReserva() {
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Tus datos</h2>
 
           <div className="mb-4 space-y-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Nombre <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.nombre}
-                onChange={handleChange('nombre')}
-                className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
-                  errors.nombre ? 'border-red-400' : 'border-gray-300'
-                }`}
-                placeholder="Tu nombre"
-              />
-              {errors.nombre && (
-                <p className="mt-1 text-xs text-red-500">{errors.nombre}</p>
-              )}
-            </div>
+            {usuarioSesion ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                Vas a reservar como <span className="font-medium">{usuarioSesion.nombre}</span>.
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Nombre <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.nombre}
+                    onChange={handleChange('nombre')}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
+                      errors.nombre ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                    placeholder="Tu nombre"
+                  />
+                  {errors.nombre && (
+                    <p className="mt-1 text-xs text-red-500">{errors.nombre}</p>
+                  )}
+                </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={handleChange('email')}
-                className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
-                  errors.email ? 'border-red-400' : 'border-gray-300'
-                }`}
-                placeholder="correo@ejemplo.com"
-              />
-              {errors.email && (
-                <p className="mt-1 text-xs text-red-500">{errors.email}</p>
-              )}
-            </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={handleChange('email')}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
+                      errors.email ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                    placeholder="correo@ejemplo.com"
+                  />
+                  {errors.email && (
+                    <p className="mt-1 text-xs text-red-500">{errors.email}</p>
+                  )}
+                </div>
+              </>
+            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">

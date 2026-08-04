@@ -4648,21 +4648,6 @@
             "$ref": "#/components/schemas/ModalidadCobroEnum",
             "default": "sesion"
           },
-          "precio_paquete": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0.0
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Precio Paquete"
-          },
           "metodo_pago": {
             "$ref": "#/components/schemas/MetodoPagoEnum",
             "default": "local"
@@ -4674,7 +4659,7 @@
           "cliente_usuario_id"
         ],
         "title": "InscripcionSerieCreate",
-        "description": "Inscribir un cliente a una serie recurrente existente."
+        "description": "Inscribir un cliente a una serie recurrente existente.\n\nEl precio del paquete ya no se captura aquí — vive en\n`SerieReserva.precio_paquete`, fijo para toda la serie."
       },
       "InscripcionSerieOut": {
         "properties": {
@@ -4714,17 +4699,6 @@
           },
           "modalidad_cobro": {
             "$ref": "#/components/schemas/ModalidadCobroEnum"
-          },
-          "precio_paquete": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Precio Paquete"
           },
           "num_reservas_creadas": {
             "type": "integer",
@@ -5748,6 +5722,21 @@
             "type": "boolean",
             "title": "Cobro Por Paquete Habilitado",
             "default": false
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
           }
         },
         "additionalProperties": false,
@@ -5844,6 +5833,17 @@
           "cobro_por_paquete_habilitado": {
             "type": "boolean",
             "title": "Cobro Por Paquete Habilitado"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
           },
           "estado": {
             "$ref": "#/components/schemas/EstadoSerieEnum"

@@ -1363,14 +1363,15 @@ export interface components {
         /**
          * InscripcionSerieCreate
          * @description Inscribir un cliente a una serie recurrente existente.
+         *
+         *     El precio del paquete ya no se captura aquí — vive en
+         *     `SerieReserva.precio_paquete`, fijo para toda la serie.
          */
         InscripcionSerieCreate: {
             /** Cliente Usuario Id */
             cliente_usuario_id: number;
             /** @default sesion */
             modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
-            /** Precio Paquete */
-            precio_paquete?: number | string | null;
             /** @default local */
             metodo_pago: components["schemas"]["MetodoPagoEnum"];
         };
@@ -1390,8 +1391,6 @@ export interface components {
             /** Email Cliente */
             email_cliente?: string | null;
             modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
-            /** Precio Paquete */
-            precio_paquete?: string | null;
             /**
              * Num Reservas Creadas
              * @default 0
@@ -1772,6 +1771,8 @@ export interface components {
              * @default false
              */
             cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
         };
         /**
          * SerieReservaOut
@@ -1810,6 +1811,8 @@ export interface components {
             cobro_por_sesion_habilitado: boolean;
             /** Cobro Por Paquete Habilitado */
             cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: string | null;
             estado: components["schemas"]["EstadoSerieEnum"];
             /**
              * Num Inscripciones

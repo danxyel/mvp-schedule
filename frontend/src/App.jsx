@@ -9,6 +9,7 @@ import DetalleReserva from './components/DetalleReserva'
 import DetalleReservaPublica from './components/DetalleReservaPublica'
 import PanelAdmin from './components/admin/PanelAdmin'
 import GestionTenants from './components/superadmin/GestionTenants'
+import GestionUsuariosGlobal from './components/superadmin/GestionUsuariosGlobal'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -54,15 +55,24 @@ function App() {
           }
         />
         
-        <Route 
-          path="/superadmin" 
+        <Route
+          path="/superadmin"
           element={
             <ProtectedRoute allowedRoles={['superadmin']}>
               <GestionTenants />
             </ProtectedRoute>
-          } 
+          }
         />
-        
+
+        <Route
+          path="/superadmin/usuarios"
+          element={
+            <ProtectedRoute allowedRoles={['superadmin']}>
+              <GestionUsuariosGlobal />
+            </ProtectedRoute>
+          }
+        />
+
         <Route 
           path="/seleccion-tenant" 
           element={

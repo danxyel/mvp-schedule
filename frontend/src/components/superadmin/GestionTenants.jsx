@@ -292,13 +292,22 @@ export default function GestionTenants() {
     <div className="mx-auto min-w-0 max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Gestión de Tenants</h2>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Volver
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/superadmin/usuarios')}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Usuarios
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Volver
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

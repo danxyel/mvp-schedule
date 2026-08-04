@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import { getLocalOffset } from '../../utils/fechas'
+import { errorMensaje } from '../../utils/errores'
 
 const FRECUENCIAS = [
   { value: 'semanal', label: 'Semanal' },
@@ -18,10 +19,6 @@ const DIAS_SEMANA = [
   { value: 5, label: 'Sábado' },
   { value: 6, label: 'Domingo' },
 ]
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
-}
 
 function toDateInputValue(date) {
   const offset = date.getTimezoneOffset() * 60000

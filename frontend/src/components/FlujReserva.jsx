@@ -323,8 +323,16 @@ export default function FlujReserva() {
     )
   }
 
-  const errorCodigo = errorReserva?.codigo
-  const errorMensaje = ERROR_MESSAGES[errorCodigo] ?? errorReserva?.mensaje ?? 'Ocurrió un error inesperado.'
+  // El backend envuelve errores de negocio como HTTPException(status, {codigo, mensaje}),
+  // que FastAPI serializa como {"detail": {"codigo": ..., "mensaje": ...}}. openapi-fetch
+  // no desenvuelve `detail`, así que el código/mensaje real vive en errorReserva.detail,
+  // no en el nivel superior.
+  const errorCodigo = errorReserva?.detail?.codigo ?? errorReserva?.codigo
+  const errorMensaje =
+    ERROR_MESSAGES[errorCodigo] ??
+    errorReserva?.detail?.mensaje ??
+    errorReserva?.mensaje ??
+    'Ocurrió un error inesperado.'
   const esConfirmada = resultado?.reserva?.estado === 'confirmada'
   const esEnEspera = resultado?.reserva?.estado === 'en_espera'
   const esNuevoEstadoPendiente = resultado?.reserva?.estado === 'pendiente'

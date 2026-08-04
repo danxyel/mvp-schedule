@@ -3,6 +3,7 @@ import client from '../../api/client'
 import Modal from '../common/Modal'
 import HorarioServicio from './HorarioServicio'
 import CrearSerieModal from './CrearSerieModal'
+import { errorMensaje } from '../../utils/errores'
 const TIPO_BADGE = {
   individual: 'border-blue-200 bg-blue-100 text-blue-700',
   grupal: 'border-purple-200 bg-purple-100 text-purple-700',
@@ -81,10 +82,6 @@ const FORM_VACIO = {
   requiere_confirmacion: false,
   buffer_antes_min: 0,
   buffer_despues_min: 0,
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
 function formatPrecio(precio, moneda) {

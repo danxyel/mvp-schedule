@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
-}
-
+import { errorMensaje } from '../utils/errores'
 export default function SeleccionTenant() {
   const navigate = useNavigate()
   const [tenants, setTenants] = useState([])

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import Modal from '../common/Modal'
+import { errorMensaje } from '../../utils/errores'
 
 const LIMIT = 20
 const ROLES_VINCULABLES = [
@@ -82,7 +83,7 @@ export default function GestionUsuariosGlobal() {
       headers: authHeaders,
     })
     if (fetchErr) {
-      setError(fetchErr.detail ?? 'Error al cargar usuarios')
+      setError(errorMensaje(fetchErr) ?? 'Error al cargar usuarios')
       setLoading(false)
       return
     }
@@ -114,7 +115,7 @@ export default function GestionUsuariosGlobal() {
     })
     setDetalleLoading(false)
     if (fetchErr) {
-      setDetalleError(fetchErr.detail ?? 'No se pudo cargar el usuario')
+      setDetalleError(errorMensaje(fetchErr) ?? 'No se pudo cargar el usuario')
       return
     }
     setDetalle(data)
@@ -154,7 +155,7 @@ export default function GestionUsuariosGlobal() {
     })
     setVincularLoading(false)
     if (fetchErr) {
-      setVincularError(fetchErr.detail ?? 'No se pudo vincular al usuario')
+      setVincularError(errorMensaje(fetchErr) ?? 'No se pudo vincular al usuario')
       return
     }
     setVincularAbierto(false)
@@ -173,7 +174,7 @@ export default function GestionUsuariosGlobal() {
     )
     setDesvincularLoadingId(null)
     if (fetchErr) {
-      setDetalleError(fetchErr.detail ?? 'No se pudo desvincular')
+      setDetalleError(errorMensaje(fetchErr) ?? 'No se pudo desvincular')
       return
     }
     refrescarDetalle(usuarioId)
@@ -190,7 +191,7 @@ export default function GestionUsuariosGlobal() {
     })
     setDesactivarLoading(false)
     if (fetchErr) {
-      setDesactivarError(fetchErr.detail ?? 'No se pudo desactivar la cuenta')
+      setDesactivarError(errorMensaje(fetchErr) ?? 'No se pudo desactivar la cuenta')
       return
     }
     const id = confirmarDesactivar.id
@@ -209,7 +210,7 @@ export default function GestionUsuariosGlobal() {
     })
     setPurgarLoading(false)
     if (fetchErr) {
-      setPurgarError(fetchErr.detail ?? 'No se pudo purgar la cuenta')
+      setPurgarError(errorMensaje(fetchErr) ?? 'No se pudo purgar la cuenta')
       return
     }
     const id = confirmarPurgar.id

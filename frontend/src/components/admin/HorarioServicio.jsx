@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
+import { errorMensaje } from '../../utils/errores'
 const DIAS = [
   'Lunes',
   'Martes',
@@ -10,10 +11,6 @@ const DIAS = [
   'Sábado',
   'Domingo',
 ]
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
-}
 
 export default function HorarioServicio({
   servicio,

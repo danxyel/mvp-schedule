@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import InscribirClientesSerieModal from './InscribirClientesSerieModal'
+import { errorMensaje } from '../../utils/errores'
 
 const FRECUENCIA_LABEL = {
   semanal: 'Semanal',
@@ -54,10 +55,6 @@ const ESTADO_PAGO_BADGE = {
   parcial: 'border-orange-200 bg-orange-100 text-orange-700',
   completo: 'border-green-200 bg-green-100 text-green-700',
   exento: 'border-gray-200 bg-gray-100 text-gray-600',
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
 function formatFecha(fecha) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
+import { errorMensaje } from '../../utils/errores'
 const CAMPO = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500'
 
 export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) {
@@ -68,7 +69,7 @@ export default function ConfigSmtpModal({ tenant, token, onClose, onGuardado }) 
     )
     setLoading(false)
     if (fetchErr) {
-      setError(fetchErr.detail ?? 'No se pudo guardar la configuración')
+      setError(errorMensaje(fetchErr) ?? 'No se pudo guardar la configuración')
       return
     }
     onGuardado(data)

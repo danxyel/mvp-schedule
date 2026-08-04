@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import { getLocalOffset } from '../../utils/fechas'
+import { errorMensaje } from '../../utils/errores'
 const DIAS = [
   'Lunes',
   'Martes',
@@ -41,10 +42,6 @@ function formatFecha(utcString) {
     minute: '2-digit',
     hour12: true,
   })
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
 export default function HorariosAsesor({ asesor, tenantSlug, token, onClose }) {

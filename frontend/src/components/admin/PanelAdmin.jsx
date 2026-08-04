@@ -8,6 +8,7 @@ import CrearSerieModal from './CrearSerieModal'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
+import { errorMensaje } from '../../utils/errores'
 const SESION_BADGE = {
   abierta: 'bg-green-100 text-green-700 border-green-200',
   confirmada: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -112,11 +113,6 @@ function getHoraMin(utcString, timezone) {
   }).formatToParts(new Date(utcString))
   const get = (t) => parts.find((p) => p.type === t)?.value
   return `${get('hour') ?? '00'}:${get('minute') ?? '00'}`
-}
-
-function errorMensaje(err) {
-  if (err?.detail && typeof err.detail === 'string') return err.detail
-  return err?.mensaje ?? err?.detail?.mensaje ?? err?.message ?? JSON.stringify(err)
 }
 
 function Badge({ value, map, labelMap }) {

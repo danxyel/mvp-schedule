@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import HorariosAsesor from './HorariosAsesor'
 import Modal from '../common/Modal'
+import { errorMensaje } from '../../utils/errores'
 const ROL_BADGE = {
   superadmin: 'border-gray-900 bg-gray-900 text-white',
   admin: 'border-purple-200 bg-purple-100 text-purple-700',
@@ -30,10 +31,6 @@ const ESTADO_LABEL = {
 const ESTADO_BADGE = {
   true: 'border-green-200 bg-green-100 text-green-700',
   false: 'border-gray-200 bg-gray-100 text-gray-600',
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
 function Badge({ value, map, labelMap }) {

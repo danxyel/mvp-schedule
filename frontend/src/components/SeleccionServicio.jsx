@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
+import { errorMensaje } from '../utils/errores'
 const MODALIDAD_INFO = {
   virtual: { icon: '💻', label: 'Virtual' },
   presencial: { icon: '📍', label: 'Presencial' },
@@ -11,10 +12,6 @@ const TIPO_INFO = {
   individual: { label: 'Individual', className: 'border-blue-200 bg-blue-100 text-blue-700' },
   grupal: { label: 'Grupal', className: 'border-purple-200 bg-purple-100 text-purple-700' },
   recurrente: { label: 'Recurrente', className: 'border-orange-200 bg-orange-100 text-orange-700' },
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
 function formatPrecio(precio, moneda) {

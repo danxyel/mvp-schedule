@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
+import { errorMensaje } from '../utils/errores'
 
 // "online" no se ofrece todavía: el backend siempre lo rechaza con
 // pago_en_linea_no_disponible hasta que exista pago en línea real
@@ -18,10 +19,6 @@ const FRECUENCIA_LABEL = {
 
 const DIA_LABEL = {
   0: 'Lunes', 1: 'Martes', 2: 'Miércoles', 3: 'Jueves', 4: 'Viernes', 5: 'Sábado', 6: 'Domingo',
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
 
 function formatFecha(fecha) {

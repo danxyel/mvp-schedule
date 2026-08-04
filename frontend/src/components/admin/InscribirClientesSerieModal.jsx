@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
-}
+import { errorMensaje } from '../../utils/errores'
 
 export default function InscribirClientesSerieModal({ serie, onClose, onCreado }) {
   const [clientes, setClientes] = useState([])

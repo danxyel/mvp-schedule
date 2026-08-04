@@ -1645,12 +1645,14 @@ def _inscripcion_cliente_out(db: Session, inscripcion: InscripcionSerie) -> Insc
     serie = inscripcion.serie
     servicio = serie.servicio if serie else None
 
-    num_creadas = db.execute(
-        select(func.count(Reserva.id)).where(
+    reservas = db.execute(
+        select(Reserva).where(
             Reserva.tenant_id == inscripcion.tenant_id,
             Reserva.inscripcion_id == inscripcion.id,
         )
-    ).scalar_one()
+    ).scalars().all()
+
+    num_creadas = len(reservas)
 
     return InscripcionSerieClienteOut(
         id=inscripcion.id,
@@ -1669,6 +1671,7 @@ def _inscripcion_cliente_out(db: Session, inscripcion: InscripcionSerie) -> Insc
         precio_sesion=servicio.precio if servicio else None,
         precio_paquete=servicio.precio_paquete if servicio else None,
         num_reservas_creadas=num_creadas,
+        estado_pago=_estado_pago_inscripcion(reservas),
         creado_en=inscripcion.creado_en,
     )
 
@@ -2819,6 +2822,7 @@ def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
             "ssl": smtp.get("ssl", False),
             "console": smtp.get("console", False),
         }
+    pago = t.pago_config if isinstance(t.pago_config, dict) else {}
     return TenantAdminOut(
         id=t.id,
         slug=t.slug,
@@ -2835,6 +2839,7 @@ def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
         total_usuarios=total_usuarios,
         smtp_configurado=bool(smtp.get("host")),
         smtp_config=smtp_salida,
+        pago_configurado=bool(pago.get("access_token")),
     )
 
 

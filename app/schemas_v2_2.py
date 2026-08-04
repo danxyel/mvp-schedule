@@ -613,6 +613,7 @@ class InscripcionSerieClienteOut(BaseModel):
     precio_sesion: Optional[Decimal] = None
     precio_paquete: Optional[Decimal] = None
     num_reservas_creadas: int = 0
+    estado_pago: str = "pendiente"  # pendiente | completo | parcial | exento
     creado_en: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -688,6 +689,7 @@ class TenantAdminOut(BaseModel):
     # Campos NO sensibles de smtp_config, para que el frontend pueda precargar
     # el formulario al reabrir el modal. `password` NUNCA sale por aquí.
     smtp_config: Optional[dict] = None
+    pago_configurado: bool = False
 
 
 class TenantUpdate(BaseModel):

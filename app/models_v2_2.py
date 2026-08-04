@@ -231,8 +231,7 @@ class Tenant(Base):
     remitente_nombre: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     stripe_account_id: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     stripe_public_key: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
-    mp_access_token: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
-    mp_public_key: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    pago_config: Mapped[Optional[dict]] = mapped_column(EncryptedJSON, nullable=True)
 
     max_asesores: Mapped[int] = mapped_column(default=5)
     max_sedes: Mapped[int] = mapped_column(default=1)

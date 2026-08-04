@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './components/Login'
+import Reclamar from './components/Reclamar'
+import Activar from './components/Activar'
 import SeleccionServicio from './components/SeleccionServicio'
 import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
@@ -26,6 +28,8 @@ function App() {
         <Route path="/t/:tenantSlug" element={<SeleccionServicio />} />
         <Route path="/t/:tenantSlug/servicio/:servicioId" element={<CalendarioDisponibilidad />} />
         <Route path="/t/:tenantSlug/reservar/:servicioId" element={<FlujReserva />} />
+        <Route path="/t/:tenantSlug/reclamar" element={<Reclamar />} />
+        <Route path="/t/:tenantSlug/activar" element={<Activar />} />
         
         {/* Rutas protegidas */}
         <Route 

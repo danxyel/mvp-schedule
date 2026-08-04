@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
 
 function persistirSesion({ token, usuario, tenantSlug, tenantNombre }) {
@@ -15,6 +15,7 @@ function persistirSesion({ token, usuario, tenantSlug, tenantNombre }) {
 
 export default function Login() {
   const navigate = useNavigate()
+  const tenantSlug = sessionStorage.getItem('tenantSlug')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -141,6 +142,13 @@ export default function Login() {
           </button>
         </form>
 
+        {tenantSlug && (
+          <div className="mt-4 text-center">
+            <Link to={`/t/${tenantSlug}/reclamar`} className="text-sm text-blue-600 hover:underline">
+              ¿No tienes contraseña? Reclama tu cuenta
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   )

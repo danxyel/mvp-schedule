@@ -337,6 +337,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/mis-series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Mis Series */
+        get: operations["listar_mis_series_api_v2__tenant_slug__mis_series_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/mis-series/{inscripcion_id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Mi Inscripcion Serie
+         * @description El cliente elige modalidad_cobro/metodo_pago para una invitación
+         *     suya pendiente. Genera las N reservas y la pasa a CONFIRMADA.
+         */
+        post: operations["confirmar_mi_inscripcion_serie_api_v2__tenant_slug__mis_series__inscripcion_id__confirmar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/reservas": {
         parameters: {
             query?: never;
@@ -537,6 +575,26 @@ export interface paths {
          * @description Registra el pago de un paquete para un cliente específico de una serie.
          */
         post: operations["registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/cancelar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancelar Invitacion Serie Admin
+         * @description Retira una invitación a serie que sigue pendiente (INVITADA).
+         */
+        post: operations["cancelar_invitacion_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__cancelar_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1282,6 +1340,15 @@ export interface components {
             /** Expira En */
             expira_en?: string | null;
         };
+        /**
+         * ConfirmarInscripcionIn
+         * @description El cliente confirma su invitación: elige modalidad y método de pago.
+         */
+        ConfirmarInscripcionIn: {
+            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
+            /** @default local */
+            metodo_pago: components["schemas"]["MetodoPagoEnum"];
+        };
         /** DisponibilidadDiaOut */
         DisponibilidadDiaOut: {
             /**
@@ -1296,6 +1363,11 @@ export interface components {
             /** Slots */
             slots: components["schemas"]["SlotDisponible"][];
         };
+        /**
+         * EstadoInscripcionEnum
+         * @enum {string}
+         */
+        EstadoInscripcionEnum: "invitada" | "confirmada" | "cancelada";
         /**
          * EstadoPagoEnum
          * @enum {string}
@@ -1361,23 +1433,74 @@ export interface components {
             creado_en: string;
         };
         /**
-         * InscripcionSerieCreate
-         * @description Inscribir un cliente a una serie recurrente existente.
+         * InscripcionSerieClienteOut
+         * @description Vista de una inscripción a serie para el cliente dueño (GET /mis-series).
          *
-         *     El precio del paquete ya no se captura aquí — vive en
-         *     `SerieReserva.precio_paquete`, fijo para toda la serie.
+         *     Trae lo que el cliente necesita para decidir cómo confirmar: el
+         *     servicio, el patrón de horario, las modalidades habilitadas y sus
+         *     precios (sesión = servicio.precio, paquete = serie.precio_paquete).
+         */
+        InscripcionSerieClienteOut: {
+            /** Id */
+            id: number;
+            /** Serie Id */
+            serie_id: number;
+            estado: components["schemas"]["EstadoInscripcionEnum"];
+            modalidad_cobro?: components["schemas"]["ModalidadCobroEnum"] | null;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /** Num Repeticiones */
+            num_repeticiones: number;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+            /** Cobro Por Sesion Habilitado */
+            cobro_por_sesion_habilitado: boolean;
+            /** Cobro Por Paquete Habilitado */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Sesion */
+            precio_sesion?: string | null;
+            /** Precio Paquete */
+            precio_paquete?: string | null;
+            /**
+             * Num Reservas Creadas
+             * @default 0
+             */
+            num_reservas_creadas: number;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /**
+         * InscripcionSerieCreate
+         * @description Invita a un cliente a una serie recurrente existente.
+         *
+         *     Ya no se captura modalidad de cobro ni método de pago aquí — eso lo
+         *     elige el cliente desde su portal (POST /mis-series/{id}/confirmar).
+         *     Esto solo crea la invitación (estado=invitada); no genera reservas.
          */
         InscripcionSerieCreate: {
             /** Cliente Usuario Id */
             cliente_usuario_id: number;
-            /** @default sesion */
-            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
-            /** @default local */
-            metodo_pago: components["schemas"]["MetodoPagoEnum"];
         };
         /**
          * InscripcionSerieOut
-         * @description Vista de una inscripción a serie.
+         * @description Vista de una inscripción a serie (admin).
          */
         InscripcionSerieOut: {
             /** Id */
@@ -1390,7 +1513,8 @@ export interface components {
             nombre_cliente?: string | null;
             /** Email Cliente */
             email_cliente?: string | null;
-            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
+            estado: components["schemas"]["EstadoInscripcionEnum"];
+            modalidad_cobro?: components["schemas"]["ModalidadCobroEnum"] | null;
             /**
              * Num Reservas Creadas
              * @default 0
@@ -2274,8 +2398,12 @@ export interface components {
          * SolicitudConfirmarSerieIn
          * @description Parámetros para convertir una solicitud en una serie recurrente.
          *
-         *     La fecha de inicio, servicio y cliente se toman de la solicitud.
-         *     El staff define el patrón y las modalidades de cobro.
+         *     La fecha de inicio, servicio y cliente se toman de la solicitud. El
+         *     staff define el patrón y las modalidades de cobro — pero NO elige la
+         *     modalidad ni el método de pago del cliente: eso lo hace el cliente
+         *     desde su portal (POST /mis-series/{id}/confirmar), igual que en el
+         *     camino de inscribir directamente. Confirmar una solicitud como serie
+         *     solo crea la serie + una invitación (estado=invitada) para el cliente.
          */
         SolicitudConfirmarSerieIn: {
             /** Frecuencia */
@@ -2311,10 +2439,6 @@ export interface components {
             cobro_por_paquete_habilitado: boolean;
             /** Precio Paquete */
             precio_paquete?: number | string | null;
-            /** @default sesion */
-            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
-            /** @default local */
-            metodo_pago: components["schemas"]["MetodoPagoEnum"];
         };
         /**
          * SolicitudCreate
@@ -3203,6 +3327,73 @@ export interface operations {
             };
         };
     };
+    listar_mis_series_api_v2__tenant_slug__mis_series_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieClienteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_mi_inscripcion_serie_api_v2__tenant_slug__mis_series__inscripcion_id__confirmar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inscripcion_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmarInscripcionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieClienteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_reservas_admin_api_v2__tenant_slug__admin_reservas_get: {
         parameters: {
             query?: {
@@ -3613,6 +3804,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancelar_invitacion_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__cancelar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                inscripcion_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieOut"];
                 };
             };
             /** @description Validation Error */

@@ -984,6 +984,125 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/mis-series": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Mis Series",
+        "operationId": "listar_mis_series_api_v2__tenant_slug__mis_series_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InscripcionSerieClienteOut"
+                  },
+                  "title": "Response Listar Mis Series Api V2  Tenant Slug  Mis Series Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/mis-series/{inscripcion_id}/confirmar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Confirmar Mi Inscripcion Serie",
+        "description": "El cliente elige modalidad_cobro/metodo_pago para una invitación\nsuya pendiente. Genera las N reservas y la pasa a CONFIRMADA.",
+        "operationId": "confirmar_mi_inscripcion_serie_api_v2__tenant_slug__mis_series__inscripcion_id__confirmar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmarInscripcionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InscripcionSerieClienteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/reservas": {
       "get": {
         "tags": [
@@ -1817,6 +1936,74 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/cancelar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Cancelar Invitacion Serie Admin",
+        "description": "Retira una invitación a serie que sigue pendiente (INVITADA).",
+        "operationId": "cancelar_invitacion_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__cancelar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InscripcionSerieOut"
                 }
               }
             }
@@ -4480,6 +4667,24 @@
         ],
         "title": "CheckoutUrlOut"
       },
+      "ConfirmarInscripcionIn": {
+        "properties": {
+          "modalidad_cobro": {
+            "$ref": "#/components/schemas/ModalidadCobroEnum"
+          },
+          "metodo_pago": {
+            "$ref": "#/components/schemas/MetodoPagoEnum",
+            "default": "local"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "modalidad_cobro"
+        ],
+        "title": "ConfirmarInscripcionIn",
+        "description": "El cliente confirma su invitación: elige modalidad y método de pago."
+      },
       "DisponibilidadDiaOut": {
         "properties": {
           "fecha": {
@@ -4511,6 +4716,15 @@
           "slots"
         ],
         "title": "DisponibilidadDiaOut"
+      },
+      "EstadoInscripcionEnum": {
+        "type": "string",
+        "enum": [
+          "invitada",
+          "confirmada",
+          "cancelada"
+        ],
+        "title": "EstadoInscripcionEnum"
       },
       "EstadoPagoEnum": {
         "type": "string",
@@ -4637,20 +4851,137 @@
         ],
         "title": "HorarioAsesorOut"
       },
+      "InscripcionSerieClienteOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "serie_id": {
+            "type": "integer",
+            "title": "Serie Id"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoInscripcionEnum"
+          },
+          "modalidad_cobro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalidadCobroEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "frecuencia": {
+            "type": "string",
+            "title": "Frecuencia"
+          },
+          "dia_semana": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "num_repeticiones": {
+            "type": "integer",
+            "title": "Num Repeticiones"
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Inicio"
+          },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado"
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado"
+          },
+          "precio_sesion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Sesion"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
+          "num_reservas_creadas": {
+            "type": "integer",
+            "title": "Num Reservas Creadas",
+            "default": 0
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "serie_id",
+          "estado",
+          "servicio_id",
+          "frecuencia",
+          "hora_inicio",
+          "num_repeticiones",
+          "fecha_inicio",
+          "cobro_por_sesion_habilitado",
+          "cobro_por_paquete_habilitado",
+          "creado_en"
+        ],
+        "title": "InscripcionSerieClienteOut",
+        "description": "Vista de una inscripción a serie para el cliente dueño (GET /mis-series).\n\nTrae lo que el cliente necesita para decidir cómo confirmar: el\nservicio, el patrón de horario, las modalidades habilitadas y sus\nprecios (sesión = servicio.precio, paquete = serie.precio_paquete)."
+      },
       "InscripcionSerieCreate": {
         "properties": {
           "cliente_usuario_id": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
             "title": "Cliente Usuario Id"
-          },
-          "modalidad_cobro": {
-            "$ref": "#/components/schemas/ModalidadCobroEnum",
-            "default": "sesion"
-          },
-          "metodo_pago": {
-            "$ref": "#/components/schemas/MetodoPagoEnum",
-            "default": "local"
           }
         },
         "additionalProperties": false,
@@ -4659,7 +4990,7 @@
           "cliente_usuario_id"
         ],
         "title": "InscripcionSerieCreate",
-        "description": "Inscribir un cliente a una serie recurrente existente.\n\nEl precio del paquete ya no se captura aquí — vive en\n`SerieReserva.precio_paquete`, fijo para toda la serie."
+        "description": "Invita a un cliente a una serie recurrente existente.\n\nYa no se captura modalidad de cobro ni método de pago aquí — eso lo\nelige el cliente desde su portal (POST /mis-series/{id}/confirmar).\nEsto solo crea la invitación (estado=invitada); no genera reservas."
       },
       "InscripcionSerieOut": {
         "properties": {
@@ -4697,8 +5028,18 @@
             ],
             "title": "Email Cliente"
           },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoInscripcionEnum"
+          },
           "modalidad_cobro": {
-            "$ref": "#/components/schemas/ModalidadCobroEnum"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalidadCobroEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "num_reservas_creadas": {
             "type": "integer",
@@ -4739,12 +5080,12 @@
           "id",
           "serie_id",
           "cliente_usuario_id",
-          "modalidad_cobro",
+          "estado",
           "estado_pago",
           "creado_en"
         ],
         "title": "InscripcionSerieOut",
-        "description": "Vista de una inscripción a serie."
+        "description": "Vista de una inscripción a serie (admin)."
       },
       "MembresiaGlobalOut": {
         "properties": {
@@ -7379,14 +7720,6 @@
               }
             ],
             "title": "Precio Paquete"
-          },
-          "modalidad_cobro": {
-            "$ref": "#/components/schemas/ModalidadCobroEnum",
-            "default": "sesion"
-          },
-          "metodo_pago": {
-            "$ref": "#/components/schemas/MetodoPagoEnum",
-            "default": "local"
           }
         },
         "additionalProperties": false,
@@ -7396,7 +7729,7 @@
           "hora_inicio"
         ],
         "title": "SolicitudConfirmarSerieIn",
-        "description": "Parámetros para convertir una solicitud en una serie recurrente.\n\nLa fecha de inicio, servicio y cliente se toman de la solicitud.\nEl staff define el patrón y las modalidades de cobro."
+        "description": "Parámetros para convertir una solicitud en una serie recurrente.\n\nLa fecha de inicio, servicio y cliente se toman de la solicitud. El\nstaff define el patrón y las modalidades de cobro — pero NO elige la\nmodalidad ni el método de pago del cliente: eso lo hace el cliente\ndesde su portal (POST /mis-series/{id}/confirmar), igual que en el\ncamino de inscribir directamente. Confirmar una solicitud como serie\nsolo crea la serie + una invitación (estado=invitada) para el cliente."
       },
       "SolicitudCreate": {
         "properties": {

@@ -701,6 +701,41 @@ class UsuarioAdminOut(BaseModel):
     fecha_vinculacion: datetime
 
 
+# ============================================================
+# SUPERADMIN — USUARIOS GLOBALES
+# ============================================================
+class UsuarioGlobalOut(BaseModel):
+    id: int
+    email: str
+    nombre: str
+    apellido: Optional[str] = None
+    telefono: Optional[str] = None
+    activo: bool
+    desactivado_en: Optional[datetime] = None
+    purgado_en: Optional[datetime] = None
+    creado_en: datetime
+    total_tenants: int = 0
+
+
+class UsuariosGlobalPaginadosOut(BaseModel):
+    items: List[UsuarioGlobalOut]
+    paginacion: PaginacionOut
+
+
+class MembresiaGlobalOut(BaseModel):
+    ut_id: int
+    tenant_id: int
+    tenant_nombre: str
+    tenant_slug: str
+    rol: str
+    activo: bool
+    fecha_vinculacion: datetime
+
+
+class UsuarioGlobalDetalleOut(UsuarioGlobalOut):
+    tenants: List[MembresiaGlobalOut] = []
+
+
 class ServicioAdminIn(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=255)
     descripcion: Optional[str] = Field(None, max_length=2000)

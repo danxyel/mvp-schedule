@@ -40,6 +40,7 @@ from app.schemas_v2_2 import (
     TenantCreate, TenantAdminOut, TenantUpdate,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
+    UsuarioGlobalOut, UsuariosGlobalPaginadosOut, UsuarioGlobalDetalleOut, MembresiaGlobalOut,
     BloqueoCreate, BloqueoOut,
     exigir_aware,
 )
@@ -1747,16 +1748,21 @@ def listar_usuarios_admin(
     return [_usuario_admin_out(ut) for ut in filas]
 
 
-@router.post("/admin/usuarios/invitar", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
-def invitar_usuario(
-    email: str = Body(...),
-    nombre: str = Body(...),
-    rol: str = Body(...),
-    password: Optional[str] = Body(None, min_length=8),
-    db: Session = Depends(get_db),
-    tenant: Tenant = Depends(get_current_tenant),
-    staff: UsuarioTenant = Depends(requiere_admin),
-):
+def _vincular_usuario_a_tenant(
+    db: Session,
+    tenant_id: int,
+    email: str,
+    nombre: str,
+    rol: str,
+    actor_usuario_id: int,
+    password: Optional[str] = None,
+) -> UsuarioTenant:
+    """Busca por email; si existe lo vincula sin duplicar, si no existe lo crea.
+
+    Compartido por `POST /admin/usuarios/invitar` (tenant del contexto) y
+    `POST /superadmin/usuarios/vincular` (tenant explícito en el body) — no
+    hace commit, el caller decide la transacción.
+    """
     if rol not in _ROLES_VINCULABLES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Rol inválido")
 
@@ -1781,7 +1787,7 @@ def invitar_usuario(
     else:
         ya_vinculado = db.execute(
             select(UsuarioTenant).where(
-                UsuarioTenant.tenant_id == tenant.id,
+                UsuarioTenant.tenant_id == tenant_id,
                 UsuarioTenant.usuario_id == usuario.id,
             )
         ).scalar_one_or_none()
@@ -1796,15 +1802,29 @@ def invitar_usuario(
             usuario.password_hash = password_hash
             usuario.es_invitado = False
 
-    ut = UsuarioTenant(tenant_id=tenant.id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
+    ut = UsuarioTenant(tenant_id=tenant_id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
     db.add(ut)
     db.flush()
 
     svc.registrar_bitacora(
-        db, tenant.id, "usuario_tenant", ut.id, "invitar",
-        usuario_id=staff.usuario_id,
+        db, tenant_id, "usuario_tenant", ut.id, "invitar",
+        usuario_id=actor_usuario_id,
         detalles={"email": email_norm, "rol": rol, "password_set": bool(password_hash)},
     )
+    return ut
+
+
+@router.post("/admin/usuarios/invitar", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
+def invitar_usuario(
+    email: str = Body(...),
+    nombre: str = Body(...),
+    rol: str = Body(...),
+    password: Optional[str] = Body(None, min_length=8),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_admin),
+):
+    ut = _vincular_usuario_a_tenant(db, tenant.id, email, nombre, rol, staff.usuario_id, password=password)
 
     try:
         db.commit()
@@ -2666,3 +2686,298 @@ def actualizar_tenant(
     db.refresh(t)
 
     return _tenant_admin_out(t)
+
+
+# ============================================================
+# SUPERADMIN — USUARIOS GLOBALES (a través de todo el SaaS)
+# ============================================================
+_DIAS_MINIMOS_PURGA = 30
+_MOTIVO_DESACTIVACION_CUENTA = "Cuenta desactivada"
+
+
+def _membresias_usuario(db: Session, usuario_id: int) -> List[MembresiaGlobalOut]:
+    filas = db.execute(
+        select(UsuarioTenant, Tenant)
+        .join(Tenant, Tenant.id == UsuarioTenant.tenant_id)
+        .where(UsuarioTenant.usuario_id == usuario_id)
+        .order_by(Tenant.nombre)
+    ).all()
+    return [
+        MembresiaGlobalOut(
+            ut_id=ut.id,
+            tenant_id=t.id,
+            tenant_nombre=t.nombre,
+            tenant_slug=t.slug,
+            rol=ut.rol.value,
+            activo=ut.activo,
+            fecha_vinculacion=ut.fecha_vinculacion,
+        )
+        for ut, t in filas
+    ]
+
+
+@superadmin_router.get("/usuarios", response_model=UsuariosGlobalPaginadosOut)
+def listar_usuarios_global(
+    q: Optional[str] = Query(None, description="Busca por email o nombre"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: UsuarioTenant = Depends(requiere_superadmin),
+):
+    cond = []
+    if q and q.strip():
+        patron = f"%{q.strip().lower()}%"
+        cond.append(or_(func.lower(Usuario.email).like(patron), func.lower(Usuario.nombre).like(patron)))
+
+    total = db.execute(select(func.count(Usuario.id)).where(*cond)).scalar_one()
+
+    filas = db.execute(
+        select(Usuario, func.count(UsuarioTenant.id).label("total_tenants"))
+        .outerjoin(UsuarioTenant, UsuarioTenant.usuario_id == Usuario.id)
+        .where(*cond)
+        .group_by(Usuario.id)
+        .order_by(Usuario.creado_en.desc())
+        .limit(limit).offset(offset)
+    ).all()
+
+    items = [
+        UsuarioGlobalOut(
+            id=u.id, email=u.email, nombre=u.nombre, apellido=u.apellido,
+            telefono=u.telefono, activo=u.activo, desactivado_en=u.desactivado_en,
+            purgado_en=u.purgado_en, creado_en=u.creado_en, total_tenants=total_tenants,
+        )
+        for u, total_tenants in filas
+    ]
+    return UsuariosGlobalPaginadosOut(items=items, paginacion=PaginacionOut(total=total, limit=limit, offset=offset))
+
+
+@superadmin_router.get("/usuarios/{usuario_id}", response_model=UsuarioGlobalDetalleOut)
+def detalle_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    _: UsuarioTenant = Depends(requiere_superadmin),
+):
+    u = db.get(Usuario, usuario_id)
+    if u is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+
+    return UsuarioGlobalDetalleOut(
+        id=u.id, email=u.email, nombre=u.nombre, apellido=u.apellido,
+        telefono=u.telefono, activo=u.activo, desactivado_en=u.desactivado_en,
+        purgado_en=u.purgado_en, creado_en=u.creado_en,
+        total_tenants=len(u.tenants) if u.tenants else 0,
+        tenants=_membresias_usuario(db, u.id),
+    )
+
+
+@superadmin_router.post("/usuarios/vincular", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
+def vincular_usuario_global(
+    email: str = Body(...),
+    nombre: str = Body(...),
+    rol: str = Body(...),
+    tenant_id: int = Body(...),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant no encontrado")
+
+    ut = _vincular_usuario_a_tenant(db, tenant_id, email, nombre, rol, actor.usuario_id)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
+
+    ut = _usuario_tenant_admin(db, tenant_id, ut.id)
+    return _usuario_admin_out(ut)
+
+
+@superadmin_router.post("/usuarios/{usuario_id}/desvincular/{tenant_id}", response_model=OperacionOut)
+def desvincular_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    tenant_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    ut = db.execute(
+        select(UsuarioTenant).where(
+            UsuarioTenant.usuario_id == usuario_id,
+            UsuarioTenant.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if ut is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "El usuario no está vinculado a ese tenant")
+
+    if ut.rol == RolUsuario.ADMIN and _admins_activos_restantes(db, tenant_id, ut.id) == 0:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No puedes desvincular al único admin activo del tenant",
+        )
+
+    ut.activo = False
+    ut.desvinculado_en = utcnow()
+
+    svc.registrar_bitacora(
+        db, tenant_id, "usuario_tenant", ut.id, "desvincular",
+        usuario_id=actor.usuario_id,
+        detalles={"origen": "superadmin_global", "usuario_id": usuario_id},
+    )
+
+    db.commit()
+    return OperacionOut(
+        ok=True, mensaje="Usuario desvinculado del tenant",
+        detalle={"usuario_id": usuario_id, "tenant_id": tenant_id},
+    )
+
+
+@superadmin_router.post("/usuarios/{usuario_id}/desactivar", response_model=OperacionOut)
+def desactivar_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    """Desactiva la cuenta completa: bloquea login, desvincula de todos los
+    tenants (soft) y cancela sus reservas activas / solicitudes pendientes.
+
+    Reversible — no borra nada. `purgar` es el paso irreversible aparte.
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+    if not usuario.activo:
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está desactivado")
+
+    ahora = utcnow()
+    usuario.activo = False
+    usuario.desactivado_en = ahora
+
+    membresias = db.execute(
+        select(UsuarioTenant).where(UsuarioTenant.usuario_id == usuario_id)
+    ).scalars().all()
+
+    reservas_canceladas = 0
+    solicitudes_canceladas = 0
+
+    for ut in membresias:
+        tenant = db.get(Tenant, ut.tenant_id)
+        if tenant is None:
+            continue
+
+        if ut.activo:
+            ut.activo = False
+            ut.desvinculado_en = ahora
+
+        reservas = db.execute(
+            select(Reserva).where(
+                Reserva.tenant_id == tenant.id,
+                Reserva.creado_por_usuario_id == usuario_id,
+                Reserva.estado.notin_([EstadoReserva.CANCELADA, EstadoReserva.COMPLETADA, EstadoReserva.NO_SHOW]),
+            )
+        ).scalars().all()
+        for r in reservas:
+            try:
+                svc.cancelar_reserva(
+                    db, tenant, r,
+                    cancelado_por_usuario_id=actor.usuario_id,
+                    motivo=_MOTIVO_DESACTIVACION_CUENTA,
+                    forzar=True,
+                )
+                reservas_canceladas += 1
+            except ReservaError:
+                continue
+
+        solicitudes = db.execute(
+            select(SolicitudReserva).where(
+                SolicitudReserva.tenant_id == tenant.id,
+                SolicitudReserva.cliente_usuario_id == usuario_id,
+                SolicitudReserva.estado == EstadoSolicitud.PENDIENTE,
+            )
+        ).scalars().all()
+        for s in solicitudes:
+            s.estado = EstadoSolicitud.CANCELADA
+            s.resuelto_en = ahora
+            solicitudes_canceladas += 1
+
+        svc.registrar_bitacora(
+            db, tenant.id, "usuario_tenant", ut.id, "desactivar_cuenta_global",
+            usuario_id=actor.usuario_id,
+            detalles={"usuario_id": usuario_id, "email": usuario.email},
+        )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al desactivar usuario %s", usuario_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    return OperacionOut(
+        ok=True,
+        mensaje="Cuenta desactivada",
+        detalle={
+            "usuario_id": usuario_id,
+            "reservas_canceladas": reservas_canceladas,
+            "solicitudes_canceladas": solicitudes_canceladas,
+        },
+    )
+
+
+@superadmin_router.post("/usuarios/{usuario_id}/purgar", response_model=OperacionOut)
+def purgar_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    """Anonimiza la cuenta (UPDATE, no DELETE) — ver decisión en HANDOFF.md:
+    las FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son
+    RESTRICT y no se tocan, así que purgar no puede ser un DELETE FROM
+    usuarios real sin romper esas tablas. Solo se permite si la cuenta lleva
+    30+ días desactivada. Irreversible.
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+    if usuario.purgado_en is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya fue purgado")
+    if usuario.desactivado_en is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario debe estar desactivado antes de purgar")
+
+    dias_desactivado = (utcnow() - usuario.desactivado_en).days
+    if dias_desactivado < _DIAS_MINIMOS_PURGA:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Solo se puede purgar tras {_DIAS_MINIMOS_PURGA} días de desactivación "
+            f"(lleva {dias_desactivado})",
+        )
+
+    usuario.nombre = "Usuario eliminado"
+    usuario.apellido = None
+    usuario.telefono = None
+    usuario.password_hash = None
+    usuario.email = f"purgado+{usuario.id}@eliminado.local"
+    usuario.purgado_en = utcnow()
+
+    tenant_ids = db.execute(
+        select(UsuarioTenant.tenant_id).where(UsuarioTenant.usuario_id == usuario_id).distinct()
+    ).scalars().all()
+    for tenant_id in tenant_ids:
+        svc.registrar_bitacora(
+            db, tenant_id, "usuario", usuario_id, "purgar_cuenta_global",
+            usuario_id=actor.usuario_id,
+            detalles={"usuario_id": usuario_id},
+        )
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "No se pudo purgar (conflicto de datos)")
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al purgar usuario %s", usuario_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    return OperacionOut(ok=True, mensaje="Cuenta purgada", detalle={"usuario_id": usuario_id})

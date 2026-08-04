@@ -151,6 +151,8 @@ def login(
         usuario.password_hash.encode("utf-8"),
     ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email o contraseña incorrectos")
+    if not usuario.activo:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Esta cuenta fue desactivada. Contacta a tu administrador.")
     token = crear_token(usuario.id)
     rol, tenant_slug, tenant_nombre = _resolver_membresia(db, usuario.id)
 

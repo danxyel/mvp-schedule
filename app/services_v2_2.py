@@ -1379,6 +1379,25 @@ def _generar_reservas_de_inscripcion(
             if precio_por_reserva is not None:
                 reserva.precio_final = precio_por_reserva
 
+            # FIX: crear_reserva() decidió estado/estado_pago/hold usando
+            # servicio.precio (precio por sesión suelta), que no es el precio
+            # real de una reserva generada desde una inscripción de serie.
+            # Sobreescribimos con el precio real: paquete divide el total,
+            # sesión usa servicio.precio. Nunca hold ni EN_ESPERA aquí — el
+            # cliente ya confirmó su lugar; pagar es un paso aparte.
+            precio_real = (
+                precio_por_reserva
+                if inscripcion.modalidad_cobro == ModalidadCobro.PAQUETE
+                else servicio.precio
+            )
+            reserva.estado = EstadoReserva.CONFIRMADA
+            reserva.estado_pago = (
+                EstadoPagoReserva.EXENTO
+                if (not servicio.pago_requerido or not precio_real or precio_real <= 0)
+                else EstadoPagoReserva.PENDIENTE
+            )
+            reserva.hold_expira_en = None
+
             reservas_creadas.append(reserva)
 
         except ReservaError as e:

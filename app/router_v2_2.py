@@ -1848,6 +1848,7 @@ def _vincular_usuario_a_tenant(
         password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     usuario = db.execute(select(Usuario).where(Usuario.email == email_norm)).scalar_one_or_none()
+    ut_existente = None
     if usuario is None:
         usuario = Usuario(
             email=email_norm,
@@ -1858,13 +1859,13 @@ def _vincular_usuario_a_tenant(
         db.add(usuario)
         db.flush()
     else:
-        ya_vinculado = db.execute(
+        ut_existente = db.execute(
             select(UsuarioTenant).where(
                 UsuarioTenant.tenant_id == tenant_id,
                 UsuarioTenant.usuario_id == usuario.id,
             )
         ).scalar_one_or_none()
-        if ya_vinculado is not None:
+        if ut_existente is not None and ut_existente.activo:
             raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
         if password_hash:
             if usuario.password_hash is not None:
@@ -1875,12 +1876,24 @@ def _vincular_usuario_a_tenant(
             usuario.password_hash = password_hash
             usuario.es_invitado = False
 
-    ut = UsuarioTenant(tenant_id=tenant_id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
-    db.add(ut)
+    if ut_existente is not None:
+        # Ya existía una fila (desvinculado, activo=False) — desvincular es
+        # reversible y nunca borra la fila (uq_usuario_tenant no distingue
+        # activo), así que hay que reactivarla en vez de intentar un INSERT
+        # que violaría esa unique constraint.
+        ut = ut_existente
+        ut.activo = True
+        ut.desvinculado_en = None
+        ut.rol = _ROLES_VINCULABLES[rol]
+        accion_bitacora = "revincular"
+    else:
+        ut = UsuarioTenant(tenant_id=tenant_id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
+        db.add(ut)
+        accion_bitacora = "invitar"
     db.flush()
 
     svc.registrar_bitacora(
-        db, tenant_id, "usuario_tenant", ut.id, "invitar",
+        db, tenant_id, "usuario_tenant", ut.id, accion_bitacora,
         usuario_id=actor_usuario_id,
         detalles={"email": email_norm, "rol": rol, "password_set": bool(password_hash)},
     )

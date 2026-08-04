@@ -845,6 +845,121 @@ export interface paths {
         patch: operations["actualizar_tenant_api_v2_superadmin_tenants__tenant_id__patch"];
         trace?: never;
     };
+    "/api/v2/superadmin/usuarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Usuarios Global */
+        get: operations["listar_usuarios_global_api_v2_superadmin_usuarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle Usuario Global */
+        get: operations["detalle_usuario_global_api_v2_superadmin_usuarios__usuario_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/vincular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vincular Usuario Global */
+        post: operations["vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}/desvincular/{tenant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desvincular Usuario Global */
+        post: operations["desvincular_usuario_global_api_v2_superadmin_usuarios__usuario_id__desvincular__tenant_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}/desactivar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desactivar Usuario Global
+         * @description Desactiva la cuenta completa: bloquea login, desvincula de todos los
+         *     tenants (soft) y cancela sus reservas activas / solicitudes pendientes.
+         *
+         *     Reversible — no borra nada. `purgar` es el paso irreversible aparte.
+         */
+        post: operations["desactivar_usuario_global_api_v2_superadmin_usuarios__usuario_id__desactivar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}/purgar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Purgar Usuario Global
+         * @description Anonimiza la cuenta (UPDATE, no DELETE) — ver decisión en HANDOFF.md:
+         *     las FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son
+         *     RESTRICT y no se tocan, así que purgar no puede ser un DELETE FROM
+         *     usuarios real sin romper esas tablas. Solo se permite si la cuenta lleva
+         *     30+ días desactivada. Irreversible.
+         */
+        post: operations["purgar_usuario_global_api_v2_superadmin_usuarios__usuario_id__purgar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1053,6 +1168,17 @@ export interface components {
             /** Telefono */
             telefono?: string | null;
         };
+        /** Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post */
+        Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post: {
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Rol */
+            rol: string;
+            /** Tenant Id */
+            tenant_id: number;
+        };
         /**
          * CanalEnum
          * @enum {string}
@@ -1201,6 +1327,26 @@ export interface components {
              * Format: date-time
              */
             creado_en: string;
+        };
+        /** MembresiaGlobalOut */
+        MembresiaGlobalOut: {
+            /** Ut Id */
+            ut_id: number;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Tenant Nombre */
+            tenant_nombre: string;
+            /** Tenant Slug */
+            tenant_slug: string;
+            /** Rol */
+            rol: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Fecha Vinculacion
+             * Format: date-time
+             */
+            fecha_vinculacion: string;
         };
         /**
          * MetodoPagoEnum
@@ -2307,6 +2453,75 @@ export interface components {
              * Format: date-time
              */
             fecha_vinculacion: string;
+        };
+        /** UsuarioGlobalDetalleOut */
+        UsuarioGlobalDetalleOut: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Apellido */
+            apellido?: string | null;
+            /** Telefono */
+            telefono?: string | null;
+            /** Activo */
+            activo: boolean;
+            /** Desactivado En */
+            desactivado_en?: string | null;
+            /** Purgado En */
+            purgado_en?: string | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Total Tenants
+             * @default 0
+             */
+            total_tenants: number;
+            /**
+             * Tenants
+             * @default []
+             */
+            tenants: components["schemas"]["MembresiaGlobalOut"][];
+        };
+        /** UsuarioGlobalOut */
+        UsuarioGlobalOut: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Apellido */
+            apellido?: string | null;
+            /** Telefono */
+            telefono?: string | null;
+            /** Activo */
+            activo: boolean;
+            /** Desactivado En */
+            desactivado_en?: string | null;
+            /** Purgado En */
+            purgado_en?: string | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Total Tenants
+             * @default 0
+             */
+            total_tenants: number;
+        };
+        /** UsuariosGlobalPaginadosOut */
+        UsuariosGlobalPaginadosOut: {
+            /** Items */
+            items: components["schemas"]["UsuarioGlobalOut"][];
+            paginacion: components["schemas"]["PaginacionOut"];
         };
         /** ValidationError */
         ValidationError: {
@@ -4156,6 +4371,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_usuarios_global_api_v2_superadmin_usuarios_get: {
+        parameters: {
+            query?: {
+                /** @description Busca por email o nombre */
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuariosGlobalPaginadosOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_usuario_global_api_v2_superadmin_usuarios__usuario_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioGlobalDetalleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desvincular_usuario_global_api_v2_superadmin_usuarios__usuario_id__desvincular__tenant_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desactivar_usuario_global_api_v2_superadmin_usuarios__usuario_id__desactivar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purgar_usuario_global_api_v2_superadmin_usuarios__usuario_id__purgar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
                 };
             };
             /** @description Validation Error */

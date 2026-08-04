@@ -3430,6 +3430,335 @@
         }
       }
     },
+    "/api/v2/superadmin/usuarios": {
+      "get": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Listar Usuarios Global",
+        "operationId": "listar_usuarios_global_api_v2_superadmin_usuarios_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Busca por email o nombre",
+              "title": "Q"
+            },
+            "description": "Busca por email o nombre"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuariosGlobalPaginadosOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}": {
+      "get": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Detalle Usuario Global",
+        "operationId": "detalle_usuario_global_api_v2_superadmin_usuarios__usuario_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioGlobalDetalleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/vincular": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Vincular Usuario Global",
+        "operationId": "vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}/desvincular/{tenant_id}": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Desvincular Usuario Global",
+        "operationId": "desvincular_usuario_global_api_v2_superadmin_usuarios__usuario_id__desvincular__tenant_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}/desactivar": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Desactivar Usuario Global",
+        "description": "Desactiva la cuenta completa: bloquea login, desvincula de todos los\ntenants (soft) y cancela sus reservas activas / solicitudes pendientes.\n\nReversible — no borra nada. `purgar` es el paso irreversible aparte.",
+        "operationId": "desactivar_usuario_global_api_v2_superadmin_usuarios__usuario_id__desactivar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}/purgar": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Purgar Usuario Global",
+        "description": "Anonimiza la cuenta (UPDATE, no DELETE) — ver decisión en HANDOFF.md:\nlas FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son\nRESTRICT y no se tocan, así que purgar no puede ser un DELETE FROM\nusuarios real sin romper esas tablas. Solo se permite si la cuenta lleva\n30+ días desactivada. Irreversible.",
+        "operationId": "purgar_usuario_global_api_v2_superadmin_usuarios__usuario_id__purgar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -3898,6 +4227,34 @@
         ],
         "title": "Body_register_auth_register_post"
       },
+      "Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "nombre",
+          "rol",
+          "tenant_id"
+        ],
+        "title": "Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"
+      },
       "CanalEnum": {
         "type": "string",
         "enum": [
@@ -4248,6 +4605,50 @@
         ],
         "title": "InscripcionSerieOut",
         "description": "Vista de una inscripción a serie."
+      },
+      "MembresiaGlobalOut": {
+        "properties": {
+          "ut_id": {
+            "type": "integer",
+            "title": "Ut Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "tenant_nombre": {
+            "type": "string",
+            "title": "Tenant Nombre"
+          },
+          "tenant_slug": {
+            "type": "string",
+            "title": "Tenant Slug"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "fecha_vinculacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Vinculacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ut_id",
+          "tenant_id",
+          "tenant_nombre",
+          "tenant_slug",
+          "rol",
+          "activo",
+          "fecha_vinculacion"
+        ],
+        "title": "MembresiaGlobalOut"
       },
       "MetodoPagoEnum": {
         "type": "string",
@@ -7427,6 +7828,204 @@
           "fecha_vinculacion"
         ],
         "title": "UsuarioAdminOut"
+      },
+      "UsuarioGlobalDetalleOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "desactivado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desactivado En"
+          },
+          "purgado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purgado En"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "total_tenants": {
+            "type": "integer",
+            "title": "Total Tenants",
+            "default": 0
+          },
+          "tenants": {
+            "items": {
+              "$ref": "#/components/schemas/MembresiaGlobalOut"
+            },
+            "type": "array",
+            "title": "Tenants",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "nombre",
+          "activo",
+          "creado_en"
+        ],
+        "title": "UsuarioGlobalDetalleOut"
+      },
+      "UsuarioGlobalOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "desactivado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desactivado En"
+          },
+          "purgado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purgado En"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "total_tenants": {
+            "type": "integer",
+            "title": "Total Tenants",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "nombre",
+          "activo",
+          "creado_en"
+        ],
+        "title": "UsuarioGlobalOut"
+      },
+      "UsuariosGlobalPaginadosOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsuarioGlobalOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "paginacion": {
+            "$ref": "#/components/schemas/PaginacionOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "paginacion"
+        ],
+        "title": "UsuariosGlobalPaginadosOut"
       },
       "ValidationError": {
         "properties": {

@@ -332,26 +332,35 @@ export default function MisReservas() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Mis reservas</h2>
-        <label className="flex cursor-pointer items-center gap-2">
-          <span className="text-sm text-gray-600">Ver historial</span>
+        <div className="flex items-center gap-4">
           <button
             type="button"
-            role="switch"
-            aria-checked={incluirPasadas}
-            onClick={toggleHistorial}
-            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-              incluirPasadas ? 'bg-blue-600' : 'bg-gray-200'
-            }`}
+            onClick={() => navigate('/mis-series')}
+            className="text-sm text-blue-600 hover:underline"
           >
-            <span
-              className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                incluirPasadas ? 'translate-x-4' : 'translate-x-0'
-              }`}
-            />
+            Mis series
           </button>
-        </label>
+          <label className="flex cursor-pointer items-center gap-2">
+            <span className="text-sm text-gray-600">Ver historial</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={incluirPasadas}
+              onClick={toggleHistorial}
+              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                incluirPasadas ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  incluirPasadas ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </label>
+        </div>
       </div>
 
       {sinReservas && (

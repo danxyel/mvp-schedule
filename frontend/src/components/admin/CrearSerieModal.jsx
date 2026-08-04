@@ -19,12 +19,6 @@ const DIAS_SEMANA = [
   { value: 6, label: 'Domingo' },
 ]
 
-const METODOS_PAGO = [
-  { value: 'online', label: 'Online' },
-  { value: 'local', label: 'Local (efectivo/transferencia)' },
-  { value: 'registro', label: 'Registro' },
-]
-
 function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
@@ -60,19 +54,9 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     cobro_por_sesion_habilitado: true,
     cobro_por_paquete_habilitado: false,
     precio_paquete: '',
-    modalidad_cobro: 'sesion',
-    metodo_pago: 'local',
   })
 
   const modalidadesValidas = form.cobro_por_sesion_habilitado || form.cobro_por_paquete_habilitado
-
-  useEffect(() => {
-    if (form.cobro_por_sesion_habilitado && !form.cobro_por_paquete_habilitado) {
-      setForm(prev => ({ ...prev, modalidad_cobro: 'sesion' }))
-    } else if (!form.cobro_por_sesion_habilitado && form.cobro_por_paquete_habilitado) {
-      setForm(prev => ({ ...prev, modalidad_cobro: 'paquete' }))
-    }
-  }, [form.cobro_por_sesion_habilitado, form.cobro_por_paquete_habilitado])
 
   useEffect(() => {
     const cargarAsesores = async () => {
@@ -136,11 +120,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     if (esDesdeSolicitud) {
       endpoint = '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie'
       params = { path: { tenant_slug: tenantSlug, solicitud_id: solicitud.id } }
-      body = {
-        ...basePayload,
-        modalidad_cobro: form.modalidad_cobro,
-        metodo_pago: form.metodo_pago,
-      }
+      body = basePayload
     } else {
       endpoint = '/api/v2/{tenant_slug}/admin/series'
       params = { path: { tenant_slug: tenantSlug } }
@@ -168,7 +148,7 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
     }
 
     const mensajeExito = esDesdeSolicitud
-      ? `Serie creada exitosamente: ${data.num_reservas_creadas_total ?? data.num_reservas_creadas} reservas creadas`
+      ? 'Serie creada — se invitó al cliente a elegir su modalidad de pago'
       : 'Patrón de serie creado exitosamente'
     setExito(mensajeExito)
     setTimeout(() => {
@@ -361,45 +341,11 @@ export default function CrearSerieModal({ servicio, solicitud = null, onClose, o
           </div>
         )}
 
-        {/* Campos solo para confirmación desde solicitud */}
         {esDesdeSolicitud && (
-          <>
-            {/* Selector de modalidad elegida */}
-            {form.cobro_por_sesion_habilitado && form.cobro_por_paquete_habilitado && (
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Modalidad elegida <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={form.modalidad_cobro}
-                  onChange={handleChange('modalidad_cobro')}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                >
-                  <option value="sesion">Por sesión</option>
-                  <option value="paquete">Por paquete</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500">
-                  Informada por las notas del cliente o por otro canal
-                </p>
-              </div>
-            )}
-
-            {/* Método de pago */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Método de pago <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={form.metodo_pago}
-                onChange={handleChange('metodo_pago')}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              >
-                {METODOS_PAGO.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-          </>
+          <p className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+            Al confirmar, se invita al cliente de la solicitud a esta serie — elegirá su modalidad
+            de pago desde su propio portal.
+          </p>
         )}
 
         {/* Botones */}

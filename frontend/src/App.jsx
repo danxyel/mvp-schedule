@@ -7,6 +7,7 @@ import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
 import FlujReserva from './components/FlujReserva'
 import MisReservas from './components/MisReservas'
+import MisSeries from './components/MisSeries'
 import DetalleReserva from './components/DetalleReserva'
 import DetalleReservaPublica from './components/DetalleReservaPublica'
 import PanelAdmin from './components/admin/PanelAdmin'
@@ -41,15 +42,24 @@ function App() {
           } 
         />
         
-        <Route 
-          path="/mis-reservas/:folio" 
+        <Route
+          path="/mis-reservas/:folio"
           element={
             <ProtectedRoute allowedRoles={['cliente']}>
               <DetalleReserva />
             </ProtectedRoute>
-          } 
+          }
         />
-        
+
+        <Route
+          path="/mis-series"
+          element={
+            <ProtectedRoute allowedRoles={['cliente']}>
+              <MisSeries />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/admin"
           element={

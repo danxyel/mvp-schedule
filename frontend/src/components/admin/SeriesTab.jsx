@@ -30,6 +30,18 @@ const MODALIDAD_LABEL = {
   paquete: 'Por paquete',
 }
 
+const ESTADO_INSCRIPCION_LABEL = {
+  invitada: 'Invitación pendiente',
+  confirmada: 'Confirmada',
+  cancelada: 'Invitación cancelada',
+}
+
+const ESTADO_INSCRIPCION_BADGE = {
+  invitada: 'border-yellow-200 bg-yellow-100 text-yellow-700',
+  confirmada: 'border-green-200 bg-green-100 text-green-700',
+  cancelada: 'border-gray-200 bg-gray-100 text-gray-600',
+}
+
 const ESTADO_PAGO_LABEL = {
   pendiente: 'Pago pendiente',
   parcial: 'Pago parcial',
@@ -69,6 +81,7 @@ export default function SeriesTab({ tenantSlug, token }) {
   const [pagoLoading, setPagoLoading] = useState(false)
   const [pagoError, setPagoError] = useState(null)
   const [pagoExito, setPagoExito] = useState(null)
+  const [cancelandoId, setCancelandoId] = useState(null)
 
   const fetchSeries = useCallback(async () => {
     setLoading(true)
@@ -169,6 +182,30 @@ export default function SeriesTab({ tenantSlug, token }) {
     }, 2000)
   }
 
+  const cancelarInvitacion = async (ins) => {
+    setCancelandoId(ins.id)
+    const { error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/cancelar',
+      {
+        params: {
+          path: {
+            tenant_slug: tenantSlug,
+            serie_id: ins.serie_id,
+            inscripcion_id: ins.id,
+          },
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    )
+    setCancelandoId(null)
+    if (fetchErr) {
+      setError(errorMensaje(fetchErr))
+      return
+    }
+    fetchSeries()
+    if (detalleSerie) abrirDetalle(detalleSerie)
+  }
+
   if (loading) {
     return (
       <div className="animate-pulse space-y-3">
@@ -258,7 +295,7 @@ export default function SeriesTab({ tenantSlug, token }) {
                       onClick={() => setInscribirSerie(s)}
                       className="rounded-lg border border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
                     >
-                      Inscribir
+                      Invitar
                     </button>
                     <button
                       type="button"
@@ -349,7 +386,7 @@ export default function SeriesTab({ tenantSlug, token }) {
                   }}
                   className="rounded-lg border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
                 >
-                  Inscribir cliente
+                  Invitar cliente
                 </button>
               </div>
 
@@ -365,32 +402,57 @@ export default function SeriesTab({ tenantSlug, token }) {
                       <div>
                         <p className="text-sm font-medium text-gray-900">{ins.nombre_cliente}</p>
                         <p className="text-xs text-gray-500">{ins.email_cliente}</p>
-                        <p className="mt-1 text-xs text-gray-600">
-                          {MODALIDAD_LABEL[ins.modalidad_cobro]}{" "}
-                          {ins.modalidad_cobro === 'paquete' && detalleSerie.precio_paquete && (
-                            <span>- ${detalleSerie.precio_paquete}</span>
-                          )}
-                          {" "}· {ins.num_reservas_creadas} reservas
-                          {ins.num_reservas_omitidas > 0 && (
-                            <span className="text-orange-600"> ({ins.num_reservas_omitidas} omitidas)</span>
-                          )}
-                        </p>
+                        {ins.estado === 'confirmada' ? (
+                          <p className="mt-1 text-xs text-gray-600">
+                            {MODALIDAD_LABEL[ins.modalidad_cobro]}{" "}
+                            {ins.modalidad_cobro === 'paquete' && detalleSerie.precio_paquete && (
+                              <span>- ${detalleSerie.precio_paquete}</span>
+                            )}
+                            {" "}· {ins.num_reservas_creadas} reservas
+                            {ins.num_reservas_omitidas > 0 && (
+                              <span className="text-orange-600"> ({ins.num_reservas_omitidas} omitidas)</span>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Todavía no elige modalidad — esperando que confirme desde su portal.
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span
                           className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                            ESTADO_PAGO_BADGE[ins.estado_pago] || 'border-gray-200 bg-gray-100 text-gray-600'
+                            ESTADO_INSCRIPCION_BADGE[ins.estado] || 'border-gray-200 bg-gray-100 text-gray-600'
                           }`}
                         >
-                          {ESTADO_PAGO_LABEL[ins.estado_pago] || ins.estado_pago}
+                          {ESTADO_INSCRIPCION_LABEL[ins.estado] || ins.estado}
                         </span>
-                        {ins.modalidad_cobro === 'paquete' && ins.estado_pago !== 'completo' && ins.estado_pago !== 'exento' && (
+                        {ins.estado === 'confirmada' && (
+                          <span
+                            className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                              ESTADO_PAGO_BADGE[ins.estado_pago] || 'border-gray-200 bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {ESTADO_PAGO_LABEL[ins.estado_pago] || ins.estado_pago}
+                          </span>
+                        )}
+                        {ins.estado === 'confirmada' && ins.modalidad_cobro === 'paquete' && ins.estado_pago !== 'completo' && ins.estado_pago !== 'exento' && (
                           <button
                             type="button"
                             onClick={() => abrirPago(ins)}
                             className="rounded-lg border border-green-300 px-2.5 py-1 text-xs font-medium text-green-700 transition hover:bg-green-50"
                           >
                             Registrar pago
+                          </button>
+                        )}
+                        {ins.estado === 'invitada' && (
+                          <button
+                            type="button"
+                            disabled={cancelandoId === ins.id}
+                            onClick={() => cancelarInvitacion(ins)}
+                            className="rounded-lg border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {cancelandoId === ins.id ? 'Cancelando...' : 'Cancelar invitación'}
                           </button>
                         )}
                       </div>

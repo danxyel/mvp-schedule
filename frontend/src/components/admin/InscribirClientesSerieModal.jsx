@@ -2,12 +2,6 @@ import { useState, useEffect } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 
-const METODOS_PAGO = [
-  { value: 'local', label: 'Local (efectivo/transferencia)' },
-  { value: 'registro', label: 'Registro' },
-  { value: 'online', label: 'Online' },
-]
-
 function errorMensaje(err) {
   return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
 }
@@ -15,7 +9,6 @@ function errorMensaje(err) {
 export default function InscribirClientesSerieModal({ serie, onClose, onCreado }) {
   const [clientes, setClientes] = useState([])
   const [clientesSeleccionados, setClientesSeleccionados] = useState([])
-  const [configs, setConfigs] = useState({})
   const [loading, setLoading] = useState(false)
   const [cargandoClientes, setCargandoClientes] = useState(true)
   const [errorGlobal, setErrorGlobal] = useState(null)
@@ -52,48 +45,9 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
     })
   }
 
-  const actualizarConfig = (usuarioId, campo, valor) => {
-    setConfigs(prev => ({
-      ...prev,
-      [usuarioId]: {
-        ...prev[usuarioId],
-        [campo]: valor,
-      },
-    }))
-  }
-
-  const getConfig = (usuarioId) => {
-    const defaultModalidad = serie.cobro_por_sesion_habilitado ? 'sesion' : 'paquete'
-    return configs[usuarioId] ?? {
-      modalidad_cobro: defaultModalidad,
-      metodo_pago: 'local',
-    }
-  }
-
-  const validar = () => {
-    for (const usuarioId of clientesSeleccionados) {
-      const cfg = getConfig(usuarioId)
-      const cliente = clientes.find(c => c.usuario_id === usuarioId)
-      const nombre = cliente?.nombre ?? `Cliente ${usuarioId}`
-
-      if (cfg.modalidad_cobro === 'paquete' && !serie.cobro_por_paquete_habilitado) {
-        return `${nombre}: modalidad 'paquete' no está habilitada para esta serie`
-      }
-      if (cfg.modalidad_cobro === 'sesion' && !serie.cobro_por_sesion_habilitado) {
-        return `${nombre}: modalidad 'sesión' no está habilitada para esta serie`
-      }
-    }
-    return null
-  }
-
   const handleSubmit = async () => {
     if (clientesSeleccionados.length === 0) {
       setErrorGlobal('Selecciona al menos un cliente')
-      return
-    }
-    const validacion = validar()
-    if (validacion) {
-      setErrorGlobal(validacion)
       return
     }
 
@@ -107,10 +61,9 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
     const nuevosResultados = []
 
     for (const usuarioId of clientesSeleccionados) {
-      const cfg = getConfig(usuarioId)
       const cliente = clientes.find(c => c.usuario_id === usuarioId)
 
-      const { data, error: fetchErr } = await client.POST(
+      const { error: fetchErr } = await client.POST(
         '/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones',
         {
           params: {
@@ -121,8 +74,6 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
           },
           body: {
             cliente_usuario_id: usuarioId,
-            modalidad_cobro: cfg.modalidad_cobro,
-            metodo_pago: cfg.metodo_pago,
           },
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -139,8 +90,6 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
           usuarioId,
           nombre: cliente?.nombre,
           exito: true,
-          reservasCreadas: data.num_reservas_creadas ?? 0,
-          reservasOmitidas: data.num_reservas_omitidas ?? 0,
         })
       }
       setResultados([...nuevosResultados])
@@ -161,21 +110,20 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
 
   if (cargandoClientes) {
     return (
-      <Modal title="Inscribir clientes a serie" onClose={onClose} maxWidth="max-w-2xl">
+      <Modal title="Invitar clientes a serie" onClose={onClose} maxWidth="max-w-2xl">
         <div className="py-6 text-center text-sm text-gray-500">Cargando clientes...</div>
       </Modal>
     )
   }
 
   return (
-    <Modal title={`Inscribir clientes a serie #${serie.id}`} onClose={onClose} maxWidth="max-w-3xl">
+    <Modal title={`Invitar clientes a serie #${serie.id}`} onClose={onClose} maxWidth="max-w-2xl">
       <div className="space-y-4">
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
           <p className="text-sm font-medium text-blue-900">{serie.servicio_nombre}</p>
           <p className="text-xs text-blue-700">
-            Modalidades habilitadas:{" "}
-            {serie.cobro_por_sesion_habilitado && 'Por sesión '}
-            {serie.cobro_por_paquete_habilitado && 'Por paquete'}
+            Cada cliente elegirá su modalidad de cobro y método de pago desde su propio portal
+            ("Mis series") al aceptar la invitación.
           </p>
         </div>
 
@@ -188,9 +136,9 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
         {/* Lista de clientes */}
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-700">
-            Clientes <span className="text-red-500">*</span>
+            Clientes a invitar <span className="text-red-500">*</span>
           </label>
-          <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
+          <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
             {clientes.length === 0 ? (
               <p className="p-2 text-sm text-gray-500">No hay clientes en este tenant.</p>
             ) : (
@@ -210,49 +158,6 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
           </div>
         </div>
 
-        {/* Configuración por cliente */}
-        {clientesSeleccionados.length > 0 && (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-gray-700">Configuración por cliente</p>
-            {clientesSeleccionados.map(usuarioId => {
-              const cliente = clientes.find(c => c.usuario_id === usuarioId)
-              const cfg = getConfig(usuarioId)
-              return (
-                <div key={usuarioId} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="mb-2 text-sm font-medium text-gray-900">{cliente?.nombre}</p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-600">Modalidad</label>
-                      <select
-                        value={cfg.modalidad_cobro}
-                        onChange={(e) => actualizarConfig(usuarioId, 'modalidad_cobro', e.target.value)}
-                        disabled={loading}
-                        className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-                      >
-                        {serie.cobro_por_sesion_habilitado && <option value="sesion">Por sesión</option>}
-                        {serie.cobro_por_paquete_habilitado && <option value="paquete">Por paquete</option>}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-600">Método de pago</label>
-                      <select
-                        value={cfg.metodo_pago}
-                        onChange={(e) => actualizarConfig(usuarioId, 'metodo_pago', e.target.value)}
-                        disabled={loading}
-                        className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-                      >
-                        {METODOS_PAGO.map(m => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
         {/* Resultados */}
         {resultados.length > 0 && (
           <div className="space-y-2">
@@ -266,9 +171,7 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
                 }`}
               >
                 <span className="font-medium">{r.nombre ?? `Cliente ${r.usuarioId}`}:</span>{" "}
-                {r.exito
-                  ? `${r.reservasCreadas} reservas creadas${r.reservasOmitidas > 0 ? ` (${r.reservasOmitidas} omitidas)` : ''}`
-                  : r.error}
+                {r.exito ? 'Invitación enviada' : r.error}
               </div>
             ))}
           </div>
@@ -290,7 +193,7 @@ export default function InscribirClientesSerieModal({ serie, onClose, onCreado }
             disabled={loading || clientesSeleccionados.length === 0}
             className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? 'Inscribiendo...' : 'Inscribir clientes'}
+            {loading ? 'Invitando...' : 'Invitar clientes'}
           </button>
         </div>
       </div>

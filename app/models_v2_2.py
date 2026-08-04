@@ -279,6 +279,8 @@ class Usuario(Base):
     activo: Mapped[bool] = mapped_column(default=True)
     desactivado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     purgado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    acceso_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    acceso_token_expira_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

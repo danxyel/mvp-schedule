@@ -34,8 +34,13 @@ DECISIONES YA TOMADAS (no las reabras):
   existe en `validar_modalidad_cobro()`, pero aplicado en el momento de
   crear la serie, no de inscribir).
 - `InscripcionSerieCreate` (schema de inscribir cliente) **pierde** el
-  campo `precio_paquete` — el payload de inscripción solo trae
-  `cliente_usuario_id`, `modalidad_cobro`, `metodo_pago`.
+  campo `precio_paquete`. **NO toques nada más de este schema ni de
+  `InscribirClientesSerieModal.jsx` más allá de quitar `precio_paquete`** —
+  quién elige `modalidad_cobro`/`metodo_pago` (admin vs. cliente) está
+  siendo rediseñado en `PROMPT_I_invitacion_cliente_elige.md`, que se corre
+  DESPUÉS de este. Si ese prompt ya está en tus manos, salta directo a él
+  para esta parte en vez de implementar aquí un intermedio que se va a
+  descartar.
 - `validar_modalidad_cobro()` se usa en dos momentos distintos ahora y el
   origen de `precio_paquete` cambia según cuál: al crear/editar la serie,
   viene del payload de creación de la serie; al inscribir a un cliente, ya
@@ -59,12 +64,10 @@ DECISIONES YA TOMADAS (no las reabras):
     normal de "Crear Serie" como en el de "Confirmar solicitud como
     serie". El payload del camino normal (`POST /admin/series`) hoy NO
     manda `precio_paquete` en absoluto — agrégalo.
-  - `InscribirClientesSerieModal.jsx`: quita el input de precio por
-    cliente y su validación (`if (!cfg.precio_paquete...)`). El admin solo
-    elige modalidad + método de pago por cliente; el precio ya viene fijo
-    de la serie y se puede mostrar de solo lectura si quieres (no es
-    obligatorio, pero ayuda a que el admin vea qué le va a cobrar a cada
-    quien antes de confirmar).
+  - `InscribirClientesSerieModal.jsx`: por ahora, SOLO quita el input de
+    precio por cliente y su validación (`if (!cfg.precio_paquete...)`). No
+    rediseñes el resto de este modal (qué elige el admin vs. el cliente)
+    — eso es `PROMPT_I_invitacion_cliente_elige.md`.
   - `SeriesTab.jsx`: hoy muestra `ins.precio_paquete` por cada inscripción
     — cámbialo para mostrar el precio de la serie (uniforme), no por
     inscripción individual.

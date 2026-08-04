@@ -1,91 +1,118 @@
 Antes de nada, lee HANDOFF.md (fila "PROMPT_G — propuesta técnica de opencode
 aprobada tras 5 correcciones") y este archivo completo.
 
+**REEMPLAZA la versión anterior de este archivo.** El diagnóstico original
+("hardcodear metodo_pago=LOCAL") estaba incompleto — el problema real es más
+profundo. No apliques el fix viejo si ya lo empezaste; el de abajo lo cubre
+completo.
+
 BUG encontrado en la revisión de PROMPT_G (commits `682f385`, `74aa04b`,
 `5164437`) — corregir solo esto, no tocar nada más de lo ya implementado.
 
-## El problema
+## El problema real
 
 `_generar_reservas_de_inscripcion()` (`app/services_v2_2.py`, ~línea 1350)
-reutiliza `crear_reserva()` para crear cada sesión del paquete, pasándole el
-`metodo_pago` que eligió el cliente sin modificar:
+crea cada sesión del paquete/serie reutilizando `crear_reserva()` tal cual.
+Dentro de `crear_reserva()` (líneas 922-943), la decisión de `estado` /
+`estado_pago` / `hold_expira_en` se calcula así:
 
 ```python
-reserva_payload = ReservaCreate(
-    servicio_id=serie.servicio_id,
-    fecha_hora_inicio=fecha_hora,
-    asesor_id=serie.asesor_id,
-    metodo_pago=MetodoPago(metodo_pago.value),   # <- aquí el bug
-    canal=Canal.ADMIN,
-)
-```
+metodo = payload.metodo_pago.value if payload.metodo_pago else (...)
+precio = servicio.precio or Decimal("0.00")          # <- precio POR SESIÓN
+requiere_pago = servicio.pago_requerido and precio > 0
 
-Cuando `metodo_pago == ONLINE`, `crear_reserva()` entra a su rama existente:
-
-```python
+if servicio.requiere_confirmacion:
+    estado, estado_pago, hold_expira = PENDIENTE, PENDIENTE, None
+elif not requiere_pago:
+    estado, estado_pago, hold_expira = CONFIRMADA, EXENTO, None
 elif metodo == MetodoPago.ONLINE.value:
-    estado = EstadoReserva.EN_ESPERA
-    estado_pago = EstadoPagoReserva.PENDIENTE
-    hold_expira = utcnow() + timedelta(minutes=tenant.hold_minutos)  # default 15 min
+    estado, estado_pago, hold_expira = EN_ESPERA, PENDIENTE, (ahora + hold_minutos)
+else:
+    estado, estado_pago, hold_expira = CONFIRMADA, PENDIENTE, None
 ```
 
-Esa rama es correcta para el flujo normal de reservar-y-pagar-de-inmediato,
-pero **no** para el paquete: la decisión ya tomada (ver HANDOFF, fila
-"El pago de paquete... se dispara desde Mis Series... con un botón 'Pagar
-ahora' — decisión deliberada para no mezclar 'elegir modalidad' con 'pagar'
-en una misma transacción") es que el cliente puede tardar horas o días en
-pagar el paquete después de confirmar la invitación.
+Esa decisión usa **`servicio.precio`** — el precio por sesión suelta — pero
+`_generar_reservas_de_inscripcion()` recién **después** de llamar a
+`crear_reserva()` calcula el precio real de cada reserva del paquete
+(`precio_por_reserva = servicio.precio_paquete / len(fechas)`) y lo asigna a
+`reserva.precio_final`. Es decir: **la rama que decide si hay hold, si queda
+pendiente o si queda exenta corre con el precio equivocado** — nunca mira
+`servicio.precio_paquete`.
 
-El job que ya existe, `limpiar_holds_expirados()`, cancela automáticamente
-cualquier reserva `EN_ESPERA` cuyo `hold_expira_en` venció. Con el bug
-actual: el cliente confirma la invitación eligiendo paquete + online, se
-crean N reservas `EN_ESPERA` con hold de 15 minutos, y si no entra a pagar
-en esos 15 minutos (lo normal, dado que el diseño asume que puede tardar),
-**todas se cancelan solas**. `InscripcionSerie.estado` se queda en
-`CONFIRMADA` para siempre (no hay forma de revertirlo — `cancelar_invitacion_serie()`
-solo aplica a estado `INVITADA`), y el botón "Pagar paquete" en `MisSeries.jsx`
-queda apuntando a reservas que ya no existen.
+Consecuencia concreta, y por qué el resultado observado varía según el
+servicio: si ese servicio tiene `servicio.precio` (por sesión) en 0/null
+porque solo vende por paquete, `requiere_pago` da `False` y **toda reserva
+de paquete queda `EXENTO`** sin importar el precio del paquete — el cliente
+nunca paga nada y el sistema nunca se lo pide. Si en cambio `servicio.precio`
+sí tiene un valor (porque el mismo servicio también admite "por sesión"), la
+rama que se dispara depende del `metodo` elegido: con `online` cae en
+`EN_ESPERA` + hold de `tenant.hold_minutos` (15 min default) — y el job que
+ya existe, `limpiar_holds_expirados()`, cancela esas reservas solas si el
+cliente no paga en esos 15 minutos, aunque el diseño ya acordado (ver
+HANDOFF, fila del pago de paquete) asume que puede tardar horas o días.
+`InscripcionSerie.estado` se queda en `CONFIRMADA` para siempre en ese caso
+(no hay forma de revertirlo, `cancelar_invitacion_serie()` solo aplica a
+`INVITADA`), y el botón "Pagar paquete" en `MisSeries.jsx` termina apuntando
+a reservas que ya no existen.
 
-Este bug **no afecta** el pago de reserva suelta (`POST /reservas/{folio}/checkout`)
-— esa reserva ya nace `CONFIRMADA` antes de que exista cualquier intento de
-pago, nunca pasa por `EN_ESPERA`. Es exclusivo del camino de paquete.
+En resumen: el resultado hoy es **no determinístico respecto al precio real
+del paquete** — puede ser exento sin querer, o puede tener un hold que se
+autocancela sin querer. Ninguno de los dos es el comportamiento correcto.
+
+Esto **no afecta** el pago de reserva suelta (`POST /reservas/{folio}/checkout`)
+— esa reserva usa `servicio.precio` correctamente porque sí es una reserva
+individual real, no generada en lote desde una invitación.
 
 ## El fix
 
-En `_generar_reservas_de_inscripcion()`, la llamada interna a `crear_reserva()`
-debe pasar siempre `metodo_pago=MetodoPago.LOCAL`, **sin importar** qué
-`metodo_pago` haya elegido el cliente en la inscripción. Confirmado: `metodo_pago`
-no se persiste en `Reserva` (el modelo solo tiene `metodo_pago_usado`, que se
-llena hasta que el pago se confirma de verdad) — hardcodear `LOCAL` aquí no
-pierde ningún dato, solo evita que `crear_reserva()` entre a la rama de hold.
+Dentro del loop de `_generar_reservas_de_inscripcion()`, **después** de que
+`crear_reserva()` regresa y **después** de calcular `precio_por_reserva`
+(o el precio de sesión si la modalidad es `sesion`, no `paquete`),
+sobreescribe explícitamente el estado de pago de la reserva en vez de
+confiar en lo que decidió `crear_reserva()` con el precio equivocado:
 
-Con `LOCAL`, `crear_reserva()` cae en su rama `else` normal
-(`estado = CONFIRMADA`, `estado_pago = PENDIENTE`, sin hold) — exactamente
-el comportamiento que ya funciona hoy quando el cliente elige pagar el
-paquete localmente, y el que necesitamos también cuando elige pagar online
-(la diferencia entre LOCAL y ONLINE para un paquete ya no está en cómo se
-crean las reservas — está solo en qué botón/flujo de pago usa el cliente
-después, vía el checkout de MercadoPago o el registro manual de staff).
+```python
+precio_real = precio_por_reserva if inscripcion.modalidad_cobro == ModalidadCobro.PAQUETE else servicio.precio
 
-No cambiar nada más: el `metodo_pago` real que eligió el cliente sigue
-disponible en `InscripcionSerie` (o donde ya se esté guardando) para que
-`MisSeries.jsx` sepa si debe mostrar el botón "Pagar paquete" — no depende
-de esta llamada interna.
+reserva.estado = EstadoReserva.CONFIRMADA
+reserva.estado_pago = (
+    EstadoPagoReserva.EXENTO
+    if (not servicio.pago_requerido or not precio_real or precio_real <= 0)
+    else EstadoPagoReserva.PENDIENTE
+)
+reserva.hold_expira_en = None
+```
+
+Aplica igual para modalidad `sesion` y `paquete` — ninguna reserva generada
+desde una invitación de serie ya confirmada debería nacer `EN_ESPERA` con
+hold (el cliente ya no está "reservando ahora", ya confirmó su lugar en la
+serie; pagar es un paso aparte, después) ni depender del precio por-sesión
+del servicio para decidir si está exenta cuando la modalidad es paquete.
+
+No toques la rama `if servicio.requiere_confirmacion` de `crear_reserva()`
+en sí — esta sobreescritura pasa fuera de esa función, después de que ya
+regresó, y solo aplica a las reservas generadas por esta función específica.
+No cambies nada del checkout de reserva suelta ni del webhook.
 
 ## Verificación esperada antes de dar por cerrado
 
-- Un cliente confirma invitación con `modalidad_cobro=paquete` +
-  `metodo_pago=online` → las N reservas creadas quedan `CONFIRMADA` +
-  `estado_pago=PENDIENTE`, `hold_expira_en=NULL` (no `EN_ESPERA`).
-- Esperar (o forzar) que corra `limpiar_holds_expirados()` — esas reservas
-  **no** deben cancelarse, porque no están en `EN_ESPERA`.
-- El botón "Pagar paquete" en Mis Series sigue funcionando igual que antes
-  de este fix (no cambia nada del lado de checkout/webhook).
-- El camino de reserva suelta (`POST /reservas/{folio}/checkout`) no se
-  toca y sigue funcionando igual.
+Probar con AL MENOS dos configuraciones de servicio distintas (para cubrir
+los dos síntomas encontrados, no solo uno):
 
-Un solo commit, mensaje descriptivo (ej. `fix(pagos): paquete online ya no
-crea reservas EN_ESPERA con hold, evita cancelacion automatica`). Si al
-revisar encuentras que el mismo problema aplica en algún otro lugar que
-también reutilice `crear_reserva()` para generar reservas en lote, señálalo
-antes de asumir que solo es este.
+1. Servicio con `precio` (por sesión) en 0/null y `precio_paquete` > 0,
+   `cobro_por_paquete_habilitado=True`: confirmar paquete con `metodo_pago`
+   cualquiera → reservas deben quedar `PENDIENTE`, no `EXENTO`.
+2. Servicio con `precio` > 0 (además del paquete): confirmar invitación con
+   `modalidad_cobro=paquete` + `metodo_pago=online` → reservas deben quedar
+   `CONFIRMADA` + `PENDIENTE` + `hold_expira_en=NULL` (nunca `EN_ESPERA`).
+3. Forzar (o esperar) que corra `limpiar_holds_expirados()` después del caso
+   2 — esas reservas no deben cancelarse.
+4. El botón "Pagar paquete" en Mis Series y el checkout de reserva suelta
+   siguen funcionando igual que antes de este fix.
+
+Un solo commit, mensaje descriptivo (ej. `fix(pagos): reservas de
+inscripcion de serie ya no heredan estado/hold del precio por-sesion`). Si
+al revisar encuentras que el mismo problema aplica en algún otro lugar que
+también reutilice `crear_reserva()` para generar reservas en lote con un
+precio distinto al de `servicio.precio`, señálalo antes de asumir que solo
+es este.

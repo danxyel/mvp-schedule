@@ -38,6 +38,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/activar-cuenta/validar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Validar Token Activacion
+         * @description Chequeo de solo lectura — no consume el token ni dice de quién es.
+         *
+         *     Permite que la pantalla de activación avise "enlace inválido o
+         *     vencido" antes de que el usuario llene el formulario de contraseña.
+         */
+        get: operations["validar_token_activacion_auth_activar_cuenta_validar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/activar-cuenta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activar Cuenta
+         * @description Activa una cuenta sin contraseña (invitado de reserva, vinculado por
+         *     admin/superadmin, inscrito en serie) usando el token de un solo uso
+         *     mandado por email. Global — no depende de tenant_slug: el token ya
+         *     identifica al usuario sin ambigüedad, y la respuesta reusa la misma
+         *     resolución de membresía que /auth/login (auto-login inmediato).
+         */
+        post: operations["activar_cuenta_auth_activar_cuenta_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/publicos": {
         parameters: {
             query?: never;
@@ -208,6 +255,31 @@ export interface paths {
         get: operations["consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/reclamar-cuenta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reclamar Cuenta
+         * @description Autoservicio: manda el correo de activación si el email pertenece a
+         *     un usuario vinculado activo a ESTE tenant y sin contraseña todavía.
+         *
+         *     Responde SIEMPRE el mismo mensaje genérico exista o no el email, esté o
+         *     no vinculado a este tenant, tenga o no ya contraseña — anti-enumeración.
+         *     Rate limited a 5/minuto por IP (mismo límite que /auth/login).
+         */
+        post: operations["reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1092,6 +1164,13 @@ export interface components {
              */
             creado_en: string;
         };
+        /** Body_activar_cuenta_auth_activar_cuenta_post */
+        Body_activar_cuenta_auth_activar_cuenta_post: {
+            /** Token */
+            token: string;
+            /** Password */
+            password: string;
+        };
         /** Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post */
         Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post: {
             /** Servicio Id */
@@ -1153,6 +1232,11 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post */
+        Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post: {
+            /** Email */
+            email: string;
         };
         /** Body_register_auth_register_post */
         Body_register_auth_register_post: {
@@ -2607,6 +2691,70 @@ export interface operations {
             };
         };
     };
+    validar_token_activacion_auth_activar_cuenta_validar_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activar_cuenta_auth_activar_cuenta_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_activar_cuenta_auth_activar_cuenta_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_tenants_publicos_tenants_publicos_get: {
         parameters: {
             query?: never;
@@ -2903,6 +3051,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReservaPublicaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
                 };
             };
             /** @description Validation Error */

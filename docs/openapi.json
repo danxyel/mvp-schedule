@@ -84,6 +84,87 @@
         }
       }
     },
+    "/auth/activar-cuenta/validar": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Validar Token Activacion",
+        "description": "Chequeo de solo lectura — no consume el token ni dice de quién es.\n\nPermite que la pantalla de activación avise \"enlace inválido o\nvencido\" antes de que el usuario llene el formulario de contraseña.",
+        "operationId": "validar_token_activacion_auth_activar_cuenta_validar_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/activar-cuenta": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Activar Cuenta",
+        "description": "Activa una cuenta sin contraseña (invitado de reserva, vinculado por\nadmin/superadmin, inscrito en serie) usando el token de un solo uso\nmandado por email. Global — no depende de tenant_slug: el token ya\nidentifica al usuario sin ambigüedad, y la respuesta reusa la misma\nresolución de membresía que /auth/login (auto-login inmediato).",
+        "operationId": "activar_cuenta_auth_activar_cuenta_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_activar_cuenta_auth_activar_cuenta_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tenants/publicos": {
       "get": {
         "tags": [
@@ -641,6 +722,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReservaPublicaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/reclamar-cuenta": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Reclamar Cuenta",
+        "description": "Autoservicio: manda el correo de activación si el email pertenece a\nun usuario vinculado activo a ESTE tenant y sin contraseña todavía.\n\nResponde SIEMPRE el mismo mensaje genérico exista o no el email, esté o\nno vinculado a este tenant, tenga o no ya contraseña — anti-enumeración.\nRate limited a 5/minuto por IP (mismo límite que /auth/login).",
+        "operationId": "reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post",
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
                 }
               }
             }
@@ -4036,6 +4170,25 @@
         ],
         "title": "BloqueoOut"
       },
+      "Body_activar_cuenta_auth_activar_cuenta_post": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "Body_activar_cuenta_auth_activar_cuenta_post"
+      },
       "Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post": {
         "properties": {
           "servicio_id": {
@@ -4189,6 +4342,19 @@
           "password"
         ],
         "title": "Body_login_auth_login_post"
+      },
+      "Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"
       },
       "Body_register_auth_register_post": {
         "properties": {

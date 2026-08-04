@@ -105,6 +105,7 @@ from app.schemas_v2_2 import TenantPublicOut
 from app.database import get_db
 from sqlalchemy.orm import Session
 import bcrypt
+import app.services_v2_2 as svc
 
 _ROL_RANK = {"cliente": 0, "asesor": 1, "admin": 2, "superadmin": 3}
 
@@ -188,20 +189,13 @@ def register(
     existente = db.query(Usuario).filter_by(email=email_norm).first()
 
     if existente is not None:
-        # Caso especial: un admin ya invitó a este email (POST /admin/usuarios/invitar).
-        # Ese usuario existe como placeholder (es_invitado=True, sin password_hash) y
-        # hoy no tenía ninguna forma de activarse — este es el fix.
-        if existente.es_invitado and not existente.password_hash:
-            existente.password_hash = hash_pw
-            existente.nombre = nombre_norm
-            if telefono:
-                existente.telefono = telefono
-            existente.es_invitado = False
-            db.commit()
-            db.refresh(existente)
-            usuario = existente
-        else:
-            raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
+        # Antes había un caso especial aquí para que un email invitado
+        # (es_invitado=True, sin password_hash) "completara su registro"
+        # mandando cualquier password nueva por este endpoint — sin probar
+        # que fuera dueño del correo. Ahora que existe activación verificada
+        # por token (POST /auth/activar-cuenta), ese hueco se cierra: un
+        # email existente siempre es 409, sin excepción.
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese email")
     else:
         usuario = Usuario(
             email=email_norm,
@@ -222,6 +216,57 @@ def register(
     rol, tenant_slug, tenant_nombre = _resolver_membresia(db, usuario.id)
     return {
         "token": token,
+        "usuario_id": usuario.id,
+        "nombre": usuario.nombre,
+        "rol": rol,
+        "tenant_slug": tenant_slug,
+        "tenant_nombre": tenant_nombre,
+    }
+
+
+@app.get("/auth/activar-cuenta/validar", tags=["Auth"])
+@limiter.limit("10/minute")
+def validar_token_activacion(request: Request, token: str, db: Session = Depends(get_db)):
+    """Chequeo de solo lectura — no consume el token ni dice de quién es.
+
+    Permite que la pantalla de activación avise "enlace inválido o
+    vencido" antes de que el usuario llene el formulario de contraseña.
+    """
+    usuario = svc.buscar_usuario_por_token_acceso(db, token)
+    return {"valido": usuario is not None}
+
+
+@app.post("/auth/activar-cuenta", tags=["Auth"])
+@limiter.limit("10/minute")
+def activar_cuenta(
+    request: Request,
+    token: str = Body(...),
+    password: str = Body(..., min_length=8),
+    db: Session = Depends(get_db),
+):
+    """Activa una cuenta sin contraseña (invitado de reserva, vinculado por
+    admin/superadmin, inscrito en serie) usando el token de un solo uso
+    mandado por email. Global — no depende de tenant_slug: el token ya
+    identifica al usuario sin ambigüedad, y la respuesta reusa la misma
+    resolución de membresía que /auth/login (auto-login inmediato).
+    """
+    from fastapi import HTTPException, status
+
+    usuario = svc.buscar_usuario_por_token_acceso(db, token)
+    if usuario is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El enlace no es válido o ya expiró")
+
+    usuario.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    usuario.email_verificado = True
+    usuario.es_invitado = False
+    svc.limpiar_token_acceso(usuario)
+    db.commit()
+    db.refresh(usuario)
+
+    token_jwt = crear_token(usuario.id)
+    rol, tenant_slug, tenant_nombre = _resolver_membresia(db, usuario.id)
+    return {
+        "token": token_jwt,
         "usuario_id": usuario.id,
         "nombre": usuario.nombre,
         "rol": rol,

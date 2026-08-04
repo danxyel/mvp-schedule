@@ -5,8 +5,10 @@ v2.2.1: hash determinista, buffers en disponibilidad, respuestas_formulario,
 """
 
 import hashlib
+import hmac
 import html
 import re
+import secrets
 import uuid
 import random
 import string
@@ -162,6 +164,57 @@ def registrar_bitacora(
         ip_address=ip,
         user_agent=user_agent,
     ))
+
+
+# ============================================================
+# TOKEN DE ACCESO — genérico, un solo uso
+# Hoy solo lo usa activación de cuenta; el nombre no dice "activacion" a
+# propósito para poder reusarlo el día que exista "olvidé mi contraseña".
+# ============================================================
+def generar_token_acceso(usuario: Usuario, horas_expira: int = 48) -> str:
+    """Genera un token de un solo uso y lo asocia al usuario (solo el hash se persiste).
+
+    Devuelve el valor en claro — es responsabilidad del caller mandarlo por
+    email antes de que la sesión termine; no se puede recuperar después.
+    """
+    token = secrets.token_urlsafe(32)
+    usuario.acceso_token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    usuario.acceso_token_expira_en = utcnow() + timedelta(hours=horas_expira)
+    return token
+
+
+def validar_token_acceso(usuario: Optional[Usuario], token: str) -> bool:
+    if usuario is None or not usuario.acceso_token_hash or not usuario.acceso_token_expira_en:
+        return False
+    if usuario.acceso_token_expira_en < utcnow():
+        return False
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(usuario.acceso_token_hash, token_hash)
+
+
+def limpiar_token_acceso(usuario: Usuario) -> None:
+    usuario.acceso_token_hash = None
+    usuario.acceso_token_expira_en = None
+
+
+def buscar_usuario_por_token_acceso(db: Session, token: str) -> Optional[Usuario]:
+    """Busca entre los usuarios con token vigente cuál corresponde a este token.
+
+    No hay forma de indexar por el token en claro (solo se guarda el hash),
+    así que se filtra primero por expiración (barato, indexable a futuro) y
+    se compara el hash en memoria — el universo de usuarios con un token de
+    acceso vigente en un momento dado es pequeño.
+    """
+    candidatos = db.execute(
+        select(Usuario).where(
+            Usuario.acceso_token_hash.is_not(None),
+            Usuario.acceso_token_expira_en > utcnow(),
+        )
+    ).scalars().all()
+    for usuario in candidatos:
+        if validar_token_acceso(usuario, token):
+            return usuario
+    return None
 
 
 # ============================================================
@@ -734,6 +787,7 @@ def crear_reserva(
     usuario_actual: Optional[Usuario] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    generar_token_activacion: bool = True,
 ) -> Dict[str, Any]:
     tenant_id = tenant.id
 
@@ -766,6 +820,10 @@ def crear_reserva(
             db, payload.email_invitado, payload.nombre_invitado, payload.telefono_invitado
         )
     _vincular_a_tenant(db, usuario.id, tenant_id)
+
+    acceso_token_plano = None
+    if generar_token_activacion and usuario.password_hash is None:
+        acceso_token_plano = generar_token_acceso(usuario)
 
     _lock_franja(db, tenant_id, servicio.id, inicio)
 
@@ -930,6 +988,7 @@ def crear_reserva(
         "usuario": usuario,
         "sesion_creada": sesion_creada,
         "tareas_post_commit": tareas,
+        "acceso_token_plano": acceso_token_plano,
         "mensaje": (
             "Reserva pendiente de confirmación" if estado == EstadoReserva.PENDIENTE
             else "Reserva confirmada" if estado == EstadoReserva.CONFIRMADA
@@ -1155,11 +1214,17 @@ def inscribir_cliente_en_serie(
     registrado_por: Optional[Usuario] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
-) -> InscripcionSerie:
+) -> Dict[str, Any]:
     """Inscribe un cliente a una serie existente y genera sus N reservas.
 
-    Reutiliza crear_reserva() para cada fecha. Si una fecha falla, se salta
-    y continúa (éxito parcial reportado).
+    Reutiliza crear_reserva() para cada fecha (con generar_token_activacion=
+    False: si el cliente no tiene contraseña, el token de activación se
+    genera UNA vez aquí, después del loop, no una vez por sesión creada).
+    Si una fecha falla, se salta y continúa (éxito parcial reportado).
+
+    Devuelve {"inscripcion", "cliente", "acceso_token_plano"} — el caller
+    (router) manda el correo de activación post-commit si el token no es
+    None.
     """
     from datetime import datetime as dt
     from app.schemas_v2_2 import ReservaCreate
@@ -1251,7 +1316,10 @@ def inscribir_cliente_en_serie(
                 canal=Canal.ADMIN,
             )
 
-            resultado = crear_reserva(db, tenant, reserva_payload, cliente, ip=ip, user_agent=user_agent)
+            resultado = crear_reserva(
+                db, tenant, reserva_payload, cliente, ip=ip, user_agent=user_agent,
+                generar_token_activacion=False,
+            )
             reserva = resultado["reserva"]
 
             reserva.serie_id = serie.id
@@ -1298,7 +1366,11 @@ def inscribir_cliente_en_serie(
         ip=ip, user_agent=user_agent,
     )
 
-    return inscripcion
+    acceso_token_plano = None
+    if cliente.password_hash is None:
+        acceso_token_plano = generar_token_acceso(cliente)
+
+    return {"inscripcion": inscripcion, "cliente": cliente, "acceso_token_plano": acceso_token_plano}
 
 
 def confirmar_solicitud_como_serie(
@@ -1309,11 +1381,15 @@ def confirmar_solicitud_como_serie(
     staff: UsuarioTenant,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
-) -> SerieReserva:
+) -> Dict[str, Any]:
     """Convierte una SolicitudReserva pendiente en una SerieReserva.
 
     La fecha de inicio, servicio y cliente se toman de la solicitud.
     El staff define el patrón y la modalidad de cobro del único cliente.
+
+    Devuelve {"serie", "cliente", "acceso_token_plano"} — reexporta el
+    token de activación de inscribir_cliente_en_serie() para que el caller
+    mande el correo post-commit si aplica.
     """
     solicitud = db.execute(
         select(SolicitudReserva)
@@ -1379,7 +1455,7 @@ def confirmar_solicitud_como_serie(
         metodo_pago=payload.metodo_pago,
     )
 
-    inscribir_cliente_en_serie(
+    resultado_inscripcion = inscribir_cliente_en_serie(
         db, tenant, serie.id, inscripcion_payload,
         registrado_por=staff.usuario,
         ip=ip, user_agent=user_agent,
@@ -1403,7 +1479,11 @@ def confirmar_solicitud_como_serie(
         ip=ip, user_agent=user_agent,
     )
 
-    return serie
+    return {
+        "serie": serie,
+        "cliente": resultado_inscripcion["cliente"],
+        "acceso_token_plano": resultado_inscripcion["acceso_token_plano"],
+    }
 
 
 # ============================================================
@@ -1616,25 +1696,111 @@ def _asesor_email(asesor: Optional[UsuarioTenant]) -> Optional[str]:
     return (asesor.usuario.nombre if asesor.usuario else None) or f"Asesor #{asesor.id}"
 
 
-def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optional[Usuario], sesion: Sesion) -> None:
-    """Envía la confirmación de reserva por SMTP.
+def _link_activacion(tenant: Tenant, acceso_token_plano: str) -> str:
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return f"{base}/t/{tenant.slug}/activar?token={acceso_token_plano}"
+
+
+def _email_shell(tenant: Tenant, cuerpo_interior_html: str) -> str:
+    """Envuelve el cuerpo de un correo transaccional con la identidad del
+    tenant (logo si tiene, si no su nombre) y su `color_primario` en la
+    barra superior, en vez de un azul fijo genérico. Todos los correos
+    salientes del tenant pasan por aquí.
+    """
+    color = tenant.color_primario or "#1e3a5f"
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+    if tenant.logo_url:
+        header_html = (
+            f'<img src="{html.escape(tenant.logo_url)}" alt="{tenant_nombre_html}" '
+            f'style="max-height:36px;max-width:220px;display:block;border:0;">'
+        )
+    else:
+        header_html = (
+            f'<h1 style="margin:0;color:#ffffff;font-size:18px;font-family:Arial,sans-serif;">'
+            f'{tenant_nombre_html}</h1>'
+        )
+    return f"""\
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;">
+  <tr>
+    <td style="padding:24px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr>
+          <td style="background-color:{color};padding:20px 24px;">
+            {header_html}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px;font-family:Arial,sans-serif;">
+            {cuerpo_interior_html}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>"""
+
+
+def _enviar_smtp(tenant: Tenant, destinatario_email: str, asunto: str, texto_plano: str, cuerpo_html: str) -> None:
+    """Manda un correo transaccional por el SMTP del tenant.
 
     La config vive en `tenant.smtp_config` (EncryptedJSON):
       { "host", "port", "user", "password", "from_email", "from_name",
         "tls" (bool, default True), "ssl" (bool, default False),
         "console" (bool, imprime en vez de enviar) }
-    Si no hay host, la confirmación se omite (log) y nunca se lanza excepción:
-    el email es un efecto externo que no debe romper el flujo de reserva.
+    Si no hay host, se omite (log) y nunca se lanza excepción: el email es
+    un efecto externo que no debe romper la operación que lo disparó.
     """
     cfg = _smtp_cfg(tenant)
     host = cfg.get("host")
     if not host:
-        log.info(
-            "SMTP no configurado para tenant '%s' — confirmación omitida (folio %s)",
-            tenant.slug, reserva.folio,
-        )
+        log.info("SMTP no configurado para tenant '%s' — correo omitido (%s)", tenant.slug, asunto)
         return
 
+    if cfg.get("console") or os.environ.get("SMTP_CONSOLE", "").lower() == "1":
+        log.info("EMAIL (console) → %s | asunto: %s", destinatario_email, asunto)
+        log.info("Contenido: %s", texto_plano.replace("\n", " | "))
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = asunto
+    msg["From"] = f'{cfg.get("from_name") or tenant.nombre} <{cfg.get("from_email")}>'
+    msg["To"] = destinatario_email
+    msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
+    msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
+
+    port = int(cfg.get("port") or (465 if cfg.get("ssl") else 587))
+    user = cfg.get("user")
+    password = cfg.get("password")
+    from_email = cfg.get("from_email")
+
+    if cfg.get("ssl"):
+        server = smtplib.SMTP_SSL(host, port, timeout=15)
+    else:
+        server = smtplib.SMTP(host, port, timeout=15)
+        if cfg.get("tls", True):
+            server.starttls()
+    try:
+        if user:
+            server.login(user, password or "")
+        server.sendmail(from_email, [destinatario_email], msg.as_string())
+    finally:
+        server.quit()
+    log.info("Correo enviado a %s (%s)", destinatario_email, asunto)
+
+
+def enviar_email_confirmacion(
+    tenant: Tenant,
+    reserva: Reserva,
+    usuario: Optional[Usuario],
+    sesion: Sesion,
+    acceso_token_plano: Optional[str] = None,
+) -> None:
+    """Envía la confirmación de reserva por SMTP, con el branding del tenant.
+
+    Si `acceso_token_plano` viene (el usuario que reservó es invitado nuevo,
+    sin contraseña), agrega un bloque de activación de cuenta dentro de este
+    mismo correo — nunca se manda un segundo correo aparte para eso.
+    """
     if usuario is None or not usuario.email:
         log.info("Sin destinatario para la confirmación (folio %s)", reserva.folio)
         return
@@ -1646,10 +1812,9 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
     fin = _fecha_email(sesion.fecha_hora_fin, sesion.timezone)
 
     # Escapar todo lo que puede venir de un campo editable por el usuario
-    # (nombre de cliente, servicio, tenant, sede, asesor) antes de meterlo
-    # en el HTML del correo — si no, un nombre tipo "<img src=x onerror=...>"
-    # se interpreta como markup dentro del email.
-    tenant_nombre_html = html.escape(tenant.nombre or "")
+    # (nombre de cliente, servicio, sede, asesor) antes de meterlo en el
+    # HTML del correo — si no, un nombre tipo "<img src=x onerror=...>" se
+    # interpreta como markup dentro del email.
     usuario_nombre_html = html.escape(usuario.nombre or "")
     servicio_nombre_html = html.escape(servicio.nombre or "")
     asesor_html = html.escape(asesor) if asesor else None
@@ -1680,20 +1845,26 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
             f'<td style="padding:6px 0;text-align:right;color:#111827;">{sede_nombre_html}</td></tr>'
         )
 
-    cuerpo_html = f"""\
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;">
-  <tr>
-    <td style="padding:24px 16px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background-color:#ffffff;border-radius:12px;overflow:hidden;">
-        <tr>
-          <td style="background-color:#1e3a5f;padding:20px 24px;">
-            <h1 style="margin:0;color:#ffffff;font-size:18px;font-family:Arial,sans-serif;">
-              {tenant_nombre_html} — Reserva confirmada
-            </h1>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:24px;font-family:Arial,sans-serif;">
+    activacion_html = ""
+    activacion_texto = ""
+    if acceso_token_plano:
+        link_activacion = _link_activacion(tenant, acceso_token_plano)
+        link_html = html.escape(link_activacion)
+        activacion_html = f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;background-color:#eff6ff;border-radius:8px;">
+              <tr><td style="padding:16px;">
+                <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#111827;">Crea tu contraseña</p>
+                <p style="margin:0 0 12px;font-size:13px;color:#4b5563;">
+                  Así puedes ver y administrar tus reservas la próxima vez sin volver a dar tus datos.
+                </p>
+                <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+                  Crear contraseña
+                </a>
+              </td></tr>
+            </table>"""
+        activacion_texto = f"\n\nCrea tu contraseña para administrar tus reservas: {link_activacion}"
+
+    cuerpo_interior = f"""\
             <p style="margin:0 0 16px;font-size:15px;color:#111827;">
               Hola {usuario_nombre_html}, tu reserva está confirmada:
             </p>
@@ -1714,15 +1885,12 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
                   <td style="padding:6px 0;text-align:right;color:#111827;">{reserva.codigo_confirmacion}</td></tr>
             </table>
             {meet_html}
+            {activacion_html}
             <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
               Si necesitas cambiar o cancelar esta reserva, contacta a tu proveedor.
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>"""
+            </p>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
 
     texto_plano = (
         f"{tenant.nombre} — Reserva confirmada\n\n"
@@ -1734,38 +1902,47 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
         + (f"\nTotal: {reserva.precio_final:.2f} {reserva.moneda}" if reserva.precio_final is not None else "")
         + f"\nFolio: {reserva.folio}\nCódigo: {reserva.codigo_confirmacion}"
         + (f"\n\nEnlace de la sesión: {sesion.meet_url}" if sesion.meet_url else "")
+        + activacion_texto
     )
 
-    if cfg.get("console") or os.environ.get("SMTP_CONSOLE", "").lower() == "1":
-        log.info("EMAIL (console) → %s | asunto: Confirmación de reserva — %s", usuario.email, servicio.nombre)
-        log.info("Contenido: %s", texto_plano.replace("\n", " | "))
+    _enviar_smtp(tenant, usuario.email, f"Confirmación de reserva — {servicio.nombre}", texto_plano, cuerpo_html)
+
+
+def enviar_email_activacion(tenant: Tenant, usuario: Usuario, acceso_token_plano: str) -> None:
+    """Correo standalone de activación de cuenta — vincular a tenant e
+    inscripción a serie disparan este. La reserva de un invitado nuevo NO
+    usa esta función: ese caso va integrado en enviar_email_confirmacion().
+    """
+    if not usuario.email:
+        log.info("Sin destinatario para el correo de activación (usuario %s)", usuario.id)
         return
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Confirmación de reserva — {servicio.nombre}"
-    msg["From"] = f'{cfg.get("from_name") or tenant.nombre} <{cfg.get("from_email")}>'
-    msg["To"] = usuario.email
-    msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
-    msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
+    usuario_nombre_html = html.escape(usuario.nombre or "")
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+    link = _link_activacion(tenant, acceso_token_plano)
+    link_html = html.escape(link)
 
-    port = int(cfg.get("port") or (465 if cfg.get("ssl") else 587))
-    user = cfg.get("user")
-    password = cfg.get("password")
-    from_email = cfg.get("from_email")
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {usuario_nombre_html}, {tenant_nombre_html} te dio acceso a tu cuenta.
+            </p>
+            <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">
+              Crea tu contraseña para entrar y administrar tus reservas.
+            </p>
+            <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              Crear contraseña
+            </a>
+            <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
+              Este enlace expira en 48 horas. Si no esperabas este correo, ignóralo.
+            </p>"""
 
-    if cfg.get("ssl"):
-        server = smtplib.SMTP_SSL(host, port, timeout=15)
-    else:
-        server = smtplib.SMTP(host, port, timeout=15)
-        if cfg.get("tls", True):
-            server.starttls()
-    try:
-        if user:
-            server.login(user, password or "")
-        server.sendmail(from_email, [usuario.email], msg.as_string())
-    finally:
-        server.quit()
-    log.info("Confirmación enviada a %s (folio %s)", usuario.email, reserva.folio)
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} te dio acceso a tu cuenta.\n\n"
+        f"Hola {usuario.nombre}, crea tu contraseña para entrar y administrar tus reservas:\n"
+        f"{link}\n\nEste enlace expira en 48 horas. Si no esperabas este correo, ignóralo."
+    )
+    _enviar_smtp(tenant, usuario.email, f"{tenant.nombre} — Activa tu cuenta", texto_plano, cuerpo_html)
 
 
 def generar_mapa_url(sede: Optional[Sede]) -> Optional[str]:

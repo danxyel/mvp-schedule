@@ -6,7 +6,7 @@ v2.2.1: webhook Stripe, check-in, completar sesión, excepciones específicas.
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import bcrypt
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
@@ -473,7 +473,10 @@ def crear_nueva_reserva(
 
     if tareas["enviar_confirmacion"]:
         try:
-            svc.enviar_email_confirmacion(tenant, reserva, resultado["usuario"], sesion)
+            svc.enviar_email_confirmacion(
+                tenant, reserva, resultado["usuario"], sesion,
+                acceso_token_plano=resultado.get("acceso_token_plano"),
+            )
         except Exception:
             log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
 
@@ -631,6 +634,44 @@ def consultar_reserva_publica(
         moneda=r.moneda,
         creado_en=r.creado_en,
     )
+
+
+@router.post("/reclamar-cuenta", response_model=OperacionOut)
+@limiter.limit("5/minute")
+def reclamar_cuenta(
+    request: Request,
+    email: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    """Autoservicio: manda el correo de activación si el email pertenece a
+    un usuario vinculado activo a ESTE tenant y sin contraseña todavía.
+
+    Responde SIEMPRE el mismo mensaje genérico exista o no el email, esté o
+    no vinculado a este tenant, tenga o no ya contraseña — anti-enumeración.
+    Rate limited a 5/minuto por IP (mismo límite que /auth/login).
+    """
+    mensaje = "Si el correo pertenece a una cuenta pendiente de activar en este tenant, te enviamos un enlace."
+
+    email_norm = email.strip().lower()
+    usuario = db.execute(select(Usuario).where(Usuario.email == email_norm)).scalar_one_or_none()
+    if usuario is not None and usuario.password_hash is None:
+        vinculado = db.execute(
+            select(UsuarioTenant).where(
+                UsuarioTenant.tenant_id == tenant.id,
+                UsuarioTenant.usuario_id == usuario.id,
+                UsuarioTenant.activo.is_(True),
+            )
+        ).scalar_one_or_none()
+        if vinculado is not None:
+            acceso_token_plano = svc.generar_token_acceso(usuario)
+            db.commit()
+            try:
+                svc.enviar_email_activacion(tenant, usuario, acceso_token_plano)
+            except Exception:
+                log.exception("Fallo al enviar correo de reclamo de cuenta (usuario %s)", usuario.id)
+
+    return OperacionOut(ok=True, mensaje=mensaje)
 
 
 @router.get("/mis-reservas", response_model=List[ReservaOut])
@@ -965,6 +1006,15 @@ def asignar_asesor_reserva(
         },
     )
 
+    # El email de confirmación recién se manda aquí (no al crear la reserva
+    # pendiente), así que el token de activación se genera fresco en este
+    # momento en vez de reusar el que crear_reserva() pudo haber dejado sin
+    # usar — evita que expire por el tiempo que la reserva estuvo pendiente.
+    cliente = db.get(Usuario, reserva.creado_por_usuario_id)
+    acceso_token_plano = None
+    if cliente is not None and cliente.password_hash is None:
+        acceso_token_plano = svc.generar_token_acceso(cliente)
+
     try:
         db.commit()
     except SQLAlchemyError:
@@ -979,7 +1029,9 @@ def asignar_asesor_reserva(
 
     # Efectos externos DESPUÉS del commit: no rompen la respuesta si fallan.
     try:
-        svc.enviar_email_confirmacion(tenant, reserva, reserva.creado_por, sesion)
+        svc.enviar_email_confirmacion(
+            tenant, reserva, reserva.creado_por, sesion, acceso_token_plano=acceso_token_plano
+        )
     except Exception:
         log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
 
@@ -1164,7 +1216,7 @@ def confirmar_solicitud_como_serie_admin(
     ua = request.headers.get("user-agent")
 
     try:
-        serie = svc.confirmar_solicitud_como_serie(
+        resultado = svc.confirmar_solicitud_como_serie(
             db, tenant, solicitud_id, payload, staff, ip=ip, user_agent=ua
         )
         db.commit()
@@ -1186,7 +1238,15 @@ def confirmar_solicitud_como_serie_admin(
         db.rollback()
         raise
 
+    serie = resultado["serie"]
     db.refresh(serie)
+
+    if resultado["acceso_token_plano"]:
+        try:
+            svc.enviar_email_activacion(tenant, resultado["cliente"], resultado["acceso_token_plano"])
+        except Exception:
+            log.exception("Fallo al enviar correo de activación para usuario %s", resultado["cliente"].id)
+
     return _serie_admin_out(db, serie)
 
 
@@ -1291,7 +1351,7 @@ def inscribir_cliente_en_serie_admin(
     ua = request.headers.get("user-agent")
 
     try:
-        inscripcion = svc.inscribir_cliente_en_serie(
+        resultado = svc.inscribir_cliente_en_serie(
             db, tenant, serie_id, payload,
             registrado_por=staff.usuario,
             ip=ip, user_agent=ua,
@@ -1312,7 +1372,15 @@ def inscribir_cliente_en_serie_admin(
         log.exception("Error DB al inscribir cliente en serie %s", serie_id)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
 
+    inscripcion = resultado["inscripcion"]
     db.refresh(inscripcion)
+
+    if resultado["acceso_token_plano"]:
+        try:
+            svc.enviar_email_activacion(tenant, resultado["cliente"], resultado["acceso_token_plano"])
+        except Exception:
+            log.exception("Fallo al enviar correo de activación para usuario %s", resultado["cliente"].id)
+
     return _inscripcion_admin_out(db, inscripcion)
 
 
@@ -1756,12 +1824,17 @@ def _vincular_usuario_a_tenant(
     rol: str,
     actor_usuario_id: int,
     password: Optional[str] = None,
-) -> UsuarioTenant:
+) -> Tuple[UsuarioTenant, Optional[str]]:
     """Busca por email; si existe lo vincula sin duplicar, si no existe lo crea.
 
     Compartido por `POST /admin/usuarios/invitar` (tenant del contexto) y
     `POST /superadmin/usuarios/vincular` (tenant explícito en el body) — no
     hace commit, el caller decide la transacción.
+
+    Devuelve `(ut, acceso_token_plano)`: si el usuario queda sin contraseña
+    después de esta operación, genera su token de activación (el caller
+    manda el correo post-commit); si ya tenía contraseña, el segundo valor
+    es `None` y no se manda nada.
     """
     if rol not in _ROLES_VINCULABLES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Rol inválido")
@@ -1811,7 +1884,12 @@ def _vincular_usuario_a_tenant(
         usuario_id=actor_usuario_id,
         detalles={"email": email_norm, "rol": rol, "password_set": bool(password_hash)},
     )
-    return ut
+
+    acceso_token_plano = None
+    if usuario.password_hash is None:
+        acceso_token_plano = svc.generar_token_acceso(usuario)
+
+    return ut, acceso_token_plano
 
 
 @router.post("/admin/usuarios/invitar", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
@@ -1824,7 +1902,9 @@ def invitar_usuario(
     tenant: Tenant = Depends(get_current_tenant),
     staff: UsuarioTenant = Depends(requiere_admin),
 ):
-    ut = _vincular_usuario_a_tenant(db, tenant.id, email, nombre, rol, staff.usuario_id, password=password)
+    ut, acceso_token_plano = _vincular_usuario_a_tenant(
+        db, tenant.id, email, nombre, rol, staff.usuario_id, password=password
+    )
 
     try:
         db.commit()
@@ -1833,6 +1913,13 @@ def invitar_usuario(
         raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
 
     ut = _usuario_tenant_admin(db, tenant.id, ut.id)
+
+    if acceso_token_plano:
+        try:
+            svc.enviar_email_activacion(tenant, ut.usuario, acceso_token_plano)
+        except Exception:
+            log.exception("Fallo al enviar correo de activación para usuario %s", ut.usuario_id)
+
     return _usuario_admin_out(ut)
 
 
@@ -2783,7 +2870,7 @@ def vincular_usuario_global(
     if tenant is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant no encontrado")
 
-    ut = _vincular_usuario_a_tenant(db, tenant_id, email, nombre, rol, actor.usuario_id)
+    ut, acceso_token_plano = _vincular_usuario_a_tenant(db, tenant_id, email, nombre, rol, actor.usuario_id)
 
     try:
         db.commit()
@@ -2792,6 +2879,13 @@ def vincular_usuario_global(
         raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
 
     ut = _usuario_tenant_admin(db, tenant_id, ut.id)
+
+    if acceso_token_plano:
+        try:
+            svc.enviar_email_activacion(tenant, ut.usuario, acceso_token_plano)
+        except Exception:
+            log.exception("Fallo al enviar correo de activación para usuario %s", ut.usuario_id)
+
     return _usuario_admin_out(ut)
 
 

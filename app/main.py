@@ -280,6 +280,41 @@ def activar_cuenta(
     }
 
 
+@app.post("/auth/recuperar-password", tags=["Auth"])
+@limiter.limit("5/minute")
+def recuperar_password(
+    request: Request,
+    email: EmailStr = Body(..., embed=True),
+    db: Session = Depends(get_db),
+):
+    """Autoservicio: manda un enlace para restablecer contraseña si el
+    correo pertenece a una cuenta activa que YA tiene contraseña.
+
+    Responde SIEMPRE el mismo mensaje genérico, exista o no la cuenta,
+    tenga o no ya password, esté o no activa — anti-enumeración.
+    """
+    mensaje = "Si el correo pertenece a una cuenta, te enviamos un enlace para restablecer tu contraseña."
+
+    email_norm = email.strip().lower()
+    usuario = db.query(Usuario).filter_by(email=email_norm).first()
+    if usuario is not None and usuario.password_hash is not None and usuario.activo:
+        membresia = db.query(UsuarioTenant).filter(
+            UsuarioTenant.usuario_id == usuario.id,
+            UsuarioTenant.activo.is_(True),
+        ).first()
+        if membresia is not None:
+            tenant = db.get(Tenant, membresia.tenant_id)
+            if tenant is not None:
+                acceso_token_plano = svc.generar_token_acceso(usuario, horas_expira=2)
+                db.commit()
+                try:
+                    svc.enviar_email_recuperacion(tenant, usuario, acceso_token_plano)
+                except Exception:
+                    log.exception("Fallo al enviar correo de recuperación (usuario %s)", usuario.id)
+
+    return {"ok": True, "mensaje": mensaje}
+
+
 @app.get("/tenants/publicos", response_model=List[TenantPublicOut], tags=["Tenants"])
 def listar_tenants_publicos(db: Session = Depends(get_db)):
     tenants = db.query(Tenant).filter(Tenant.activo == True).order_by(Tenant.nombre).all()

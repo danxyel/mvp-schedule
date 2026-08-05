@@ -2582,6 +2582,45 @@ def enviar_email_activacion(tenant: Tenant, usuario: Usuario, acceso_token_plano
     _enviar_smtp(tenant, usuario.email, f"{tenant.nombre} — Activa tu cuenta", texto_plano, cuerpo_html)
 
 
+def _link_recuperacion(acceso_token_plano: str) -> str:
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return f"{base}/recuperar-password/confirmar?token={acceso_token_plano}"
+
+
+def enviar_email_recuperacion(tenant: Tenant, usuario: Usuario, acceso_token_plano: str) -> None:
+    """Correo de restablecer contraseña — token de 2h, NO el mismo copy
+    que enviar_email_activacion() (esa dice "crea tu contraseña", esta
+    dice "restablece tu contraseña", para no confundir a alguien que ya
+    tenía cuenta y solo la olvidó)."""
+    if not usuario.email:
+        log.info("Sin destinatario para el correo de recuperación (usuario %s)", usuario.id)
+        return
+
+    usuario_nombre_html = html.escape(usuario.nombre or "")
+    link = _link_recuperacion(acceso_token_plano)
+    link_html = html.escape(link)
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {usuario_nombre_html}, recibimos una solicitud para restablecer tu contraseña.
+            </p>
+            <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">
+              Si no fuiste tú, ignora este correo — tu contraseña actual sigue funcionando.
+              Este enlace vence en 2 horas.
+            </p>
+            <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              Restablecer contraseña
+            </a>"""
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+
+    texto_plano = (
+        f"Hola {usuario.nombre}, recibimos una solicitud para restablecer tu contraseña.\n\n"
+        f"Si no fuiste tú, ignora este correo.\n\n"
+        f"Restablece tu contraseña (vence en 2 horas): {link}"
+    )
+    _enviar_smtp(tenant, usuario.email, "Restablece tu contraseña", texto_plano, cuerpo_html)
+
+
 def _link_mis_series(tenant: Tenant) -> str:
     base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
     return f"{base}/mis-series"

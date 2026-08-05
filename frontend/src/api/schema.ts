@@ -85,6 +85,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/recuperar-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recuperar Password
+         * @description Autoservicio: manda un enlace para restablecer contraseña si el
+         *     correo pertenece a una cuenta activa que YA tiene contraseña.
+         *
+         *     Responde SIEMPRE el mismo mensaje genérico, exista o no la cuenta,
+         *     tenga o no ya password, esté o no activa — anti-enumeración.
+         */
+        post: operations["recuperar_password_auth_recuperar_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/publicos": {
         parameters: {
             query?: never;
@@ -1511,6 +1535,14 @@ export interface components {
         /** Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post */
         Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post: {
             /** Email */
+            email: string;
+        };
+        /** Body_recuperar_password_auth_recuperar_password_post */
+        Body_recuperar_password_auth_recuperar_password_post: {
+            /**
+             * Email
+             * Format: email
+             */
             email: string;
         };
         /** Body_register_auth_register_post */
@@ -3217,6 +3249,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["Body_activar_cuenta_auth_activar_cuenta_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recuperar_password_auth_recuperar_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_recuperar_password_auth_recuperar_password_post"];
             };
         };
         responses: {

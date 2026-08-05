@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import HorarioServicio from './HorarioServicio'
+import { errorMensaje } from '../../utils/errores'
 const TIPO_BADGE = {
   individual: 'border-blue-200 bg-blue-100 text-blue-700',
   grupal: 'border-purple-200 bg-purple-100 text-purple-700',
@@ -34,6 +35,34 @@ const ESTADO_BADGE = {
 const ESTADO_LABEL = {
   true: 'Activo',
   false: 'Inactivo',
+}
+
+const SESION_BADGE = {
+  abierta: 'bg-green-100 text-green-700 border-green-200',
+  confirmada: 'bg-blue-100 text-blue-700 border-blue-200',
+  llena: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  cancelada: 'bg-red-100 text-red-700 border-red-200',
+  completada: 'bg-gray-100 text-gray-600 border-gray-200',
+}
+
+const SESION_LABEL = {
+  abierta: 'Abierta',
+  confirmada: 'Confirmada',
+  llena: 'Llena',
+  cancelada: 'Cancelada',
+  completada: 'Completada',
+}
+
+function formatFechaHora(utcString, timezone) {
+  return new Intl.DateTimeFormat('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: timezone,
+  }).format(new Date(utcString))
 }
 
 function normalizarServicio(s) {
@@ -116,6 +145,12 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
   const [editarLoading, setEditarLoading] = useState(false)
   const [editarError, setEditarError] = useState(null)
   const [horarioDe, setHorarioDe] = useState(null)
+  const [sesionesDe, setSesionesDe] = useState(null)
+  const [sesionesItems, setSesionesItems] = useState([])
+  const [sesionesTotal, setSesionesTotal] = useState(0)
+  const [sesionesOffset, setSesionesOffset] = useState(0)
+  const [sesionesLoading, setSesionesLoading] = useState(false)
+  const [sesionesError, setSesionesError] = useState(null)
   const [franjasNuevas, setFranjasNuevas] = useState([])
   const [form, setForm] = useState(FORM_VACIO)
   const [exitoServicio, setExitoServicio] = useState(null)
@@ -442,6 +477,50 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
     setServicios((prev) => prev.map((x) => (x.id === data.detalle.id ? { ...x, activo: false } : x)))
   }
 
+  const cargarSesiones = useCallback(
+    async (servicio, offset = 0) => {
+      setSesionesLoading(true)
+      setSesionesError(null)
+      const { data, error: fetchErr } = await client.GET(
+        '/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/sesiones',
+        {
+          params: {
+            path: { tenant_slug: tenantSlug, servicio_id: servicio.id },
+            query: { limit: 20, offset },
+          },
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      setSesionesLoading(false)
+      if (fetchErr) {
+        setSesionesError(errorMensaje(fetchErr))
+        return
+      }
+      setSesionesDe(servicio)
+      setSesionesItems(data?.items ?? [])
+      setSesionesTotal(data?.paginacion?.total ?? 0)
+      setSesionesOffset(offset)
+    },
+    [tenantSlug, token],
+  )
+
+  const abrirSesiones = (s) => {
+    setSesionesItems([])
+    setSesionesTotal(0)
+    setSesionesOffset(0)
+    setSesionesError(null)
+    setSesionesDe(s)
+    cargarSesiones(s, 0)
+  }
+
+  const cerrarSesiones = () => {
+    setSesionesDe(null)
+    setSesionesItems([])
+    setSesionesTotal(0)
+    setSesionesOffset(0)
+    setSesionesError(null)
+  }
+
   function FilaServicio({ s }) {
     try {
       return (
@@ -489,6 +568,15 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
                   className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
                 >
                   Horario
+                </button>
+              )}
+              {s.tipo_agenda !== 'individual' && (
+                <button
+                  type="button"
+                  onClick={() => abrirSesiones(s)}
+                  className="rounded-lg border border-purple-200 px-2.5 py-1 text-xs font-medium text-purple-700 transition hover:bg-purple-50"
+                >
+                  Ver sesiones
                 </button>
               )}
               {s.tipo_agenda === 'recurrente' && (
@@ -1283,6 +1371,90 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
           token={token}
           onClose={() => setHorarioDe(null)}
         />
+      )}
+
+      {sesionesDe && (
+        <Modal
+          title={`Sesiones: ${sesionesDe.nombre}`}
+          onClose={cerrarSesiones}
+          maxWidth="max-w-3xl"
+        >
+          {sesionesLoading && (
+            <div className="animate-pulse space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-9 rounded bg-gray-100" />
+              ))}
+            </div>
+          )}
+
+          {sesionesError && (
+            <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {sesionesError}
+            </p>
+          )}
+
+          {!sesionesLoading && !sesionesError && (
+            <div className="max-h-[60vh] overflow-x-auto overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+                    <th className="px-3 py-2 font-medium">Fecha/Hora</th>
+                    <th className="px-3 py-2 font-medium">Asesor</th>
+                    <th className="px-3 py-2 font-medium">Estado</th>
+                    <th className="px-3 py-2 font-medium">Inscritos/Cupo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sesionesItems.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                        {formatFechaHora(s.fecha_hora_inicio, s.timezone)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">{s.asesor?.nombre ?? '—'}</td>
+                      <td className="px-3 py-2">
+                        <Badge value={s.estado} map={SESION_BADGE} labelMap={SESION_LABEL} />
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {sesionesDe.tipo_agenda === 'individual' ? '1:1' : `${s.inscritos ?? 0}/${s.cupo_maximo ?? 0}`}
+                      </td>
+                    </tr>
+                  ))}
+                  {sesionesItems.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500">
+                        No hay sesiones registradas para este servicio.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {sesionesTotal > 0 && (
+            <div className="mt-4 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                disabled={sesionesOffset === 0 || sesionesLoading}
+                onClick={() => cargarSesiones(sesionesDe, Math.max(0, sesionesOffset - 20))}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                &larr; Anterior
+              </button>
+              <span className="text-sm text-gray-500">
+                {sesionesOffset + 1}&ndash;{sesionesOffset + sesionesItems.length} de {sesionesTotal}
+              </span>
+              <button
+                type="button"
+                disabled={sesionesOffset + sesionesItems.length >= sesionesTotal || sesionesLoading}
+                onClick={() => cargarSesiones(sesionesDe, sesionesOffset + 20)}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Siguiente &rarr;
+              </button>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   )

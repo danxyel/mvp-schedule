@@ -1937,6 +1937,57 @@ def desactivar_servicio_admin(
     return OperacionOut(ok=True, mensaje="Servicio desactivado", detalle={"id": servicio_id})
 
 
+@router.get("/admin/servicios/{servicio_id}/sesiones", response_model=SesionesPaginadasOut)
+def listar_sesiones_por_servicio_admin(
+    servicio_id: int = Path(..., gt=0),
+    estado: Optional[str] = Query(None),
+    desde: Optional[datetime] = Query(None),
+    hasta: Optional[datetime] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    servicio = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+
+    cond = [Sesion.tenant_id == tenant.id, Sesion.servicio_id == servicio_id]
+    if estado:
+        try:
+            cond.append(Sesion.estado == EstadoSesion(estado))
+        except ValueError:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Estado de sesión inválido: {estado}",
+            )
+    if desde:
+        cond.append(Sesion.fecha_hora_inicio >= exigir_aware(desde, "desde"))
+    if hasta:
+        cond.append(Sesion.fecha_hora_inicio <= exigir_aware(hasta, "hasta"))
+
+    total = db.execute(select(func.count(Sesion.id)).where(*cond)).scalar_one()
+
+    sesiones = db.execute(
+        select(Sesion)
+        .options(
+            joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+            joinedload(Sesion.sede),
+        )
+        .where(*cond)
+        .order_by(Sesion.fecha_hora_inicio)
+        .limit(limit).offset(offset)
+    ).scalars().unique().all()
+
+    return SesionesPaginadasOut(
+        items=[_sesion_list_out(s) for s in sesiones],
+        paginacion=PaginacionOut(total=total, limit=limit, offset=offset),
+    )
+
+
 # ============================================================
 # GESTIÓN DE USUARIOS DEL TENANT
 # ============================================================

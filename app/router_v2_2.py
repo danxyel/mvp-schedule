@@ -577,7 +577,9 @@ def crear_nueva_reserva(
 
     if tareas["sincronizar_calendario"]:
         try:
-            svc.sincronizar_calendario(tenant, sesion)
+            meet_url = svc.sincronizar_calendario(tenant, sesion)
+            if meet_url:
+                sesion.meet_url = meet_url
         except Exception:
             log.exception("Fallo al sincronizar calendario para sesión %s", sesion.id)
 
@@ -653,7 +655,7 @@ async def webhook_stripe(
         monto = Decimal(str(session.get("amount_total", 0))) / 100
         if folio:
             try:
-                svc.confirmar_pago_por_folio(db, folio, monto=monto, metodo="stripe")
+                reserva = svc.confirmar_pago_por_folio(db, folio, monto=monto, metodo="stripe")
                 db.commit()
             except ReservaError as e:
                 db.rollback()
@@ -663,6 +665,21 @@ async def webhook_stripe(
                 db.rollback()
                 log.exception("Error DB en webhook Stripe folio=%s", folio)
                 raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error DB")
+
+            try:
+                sesion = reserva.sesion
+                if (
+                    sesion
+                    and reserva.estado == EstadoReserva.CONFIRMADA
+                    and reserva.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+                    and reserva.servicio.modalidad.value in ("virtual", "hibrida")
+                ):
+                    meet_url = svc.sincronizar_calendario(reserva.tenant, sesion)
+                    if meet_url:
+                        sesion.meet_url = meet_url
+                    svc.enviar_email_acceso_meet(reserva.tenant, reserva, reserva.creado_por, sesion)
+            except Exception:
+                log.exception("Fallo post-proceso Meet tras pago Stripe folio=%s", folio)
 
     return {"ok": True}
 
@@ -1184,6 +1201,25 @@ def registrar_pago_local(
     )
 
     db.commit()
+    db.refresh(r)
+    sesion = r.sesion
+    if (
+        sesion
+        and r.estado == EstadoReserva.CONFIRMADA
+        and r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+        and r.servicio.modalidad.value in ("virtual", "hibrida")
+    ):
+        try:
+            meet_url = svc.sincronizar_calendario(tenant, sesion)
+            if meet_url:
+                sesion.meet_url = meet_url
+        except Exception:
+            log.exception("Fallo al sincronizar calendario tras pago local %s", folio)
+        try:
+            svc.enviar_email_acceso_meet(tenant, r, r.creado_por, sesion)
+        except Exception:
+            log.exception("Fallo al enviar acceso Meet tras pago local %s", folio)
+
     return OperacionOut(
         ok=True,
         mensaje="Pago registrado",
@@ -1315,17 +1351,19 @@ def asignar_asesor_reserva(
             log.exception("Fallo al iniciar checkout para folio %s", reserva.folio)
 
     try:
+        meet_url = svc.sincronizar_calendario(tenant, sesion)
+        if meet_url:
+            sesion.meet_url = meet_url
+    except Exception:
+        log.exception("Fallo al sincronizar calendario para sesión %s", sesion.id)
+
+    try:
         svc.enviar_email_confirmacion(
             tenant, reserva, reserva.creado_por, sesion,
             acceso_token_plano=acceso_token_plano, checkout_url=checkout_url,
         )
     except Exception:
         log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
-
-    try:
-        svc.sincronizar_calendario(tenant, sesion)
-    except Exception:
-        log.exception("Fallo al sincronizar calendario para sesión %s", sesion.id)
 
     return OperacionOut(
         ok=True,
@@ -1850,6 +1888,26 @@ def registrar_pago_inscripcion_local(
         db.rollback()
         log.exception("Error DB al registrar pago de inscripción %s", inscripcion_id)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    for reserva in pendientes:
+        db.refresh(reserva)
+        sesion = reserva.sesion
+        if (
+            sesion
+            and reserva.estado == EstadoReserva.CONFIRMADA
+            and reserva.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+            and reserva.servicio.modalidad.value in ("virtual", "hibrida")
+        ):
+            try:
+                meet_url = svc.sincronizar_calendario(tenant, sesion)
+                if meet_url:
+                    sesion.meet_url = meet_url
+            except Exception:
+                log.exception("Fallo al sincronizar calendario tras pago inscripción %s", inscripcion_id)
+            try:
+                svc.enviar_email_acceso_meet(tenant, reserva, reserva.creado_por, sesion)
+            except Exception:
+                log.exception("Fallo al enviar acceso Meet tras pago inscripción %s", inscripcion_id)
 
     return OperacionOut(
         ok=True,

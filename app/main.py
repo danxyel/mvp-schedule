@@ -437,7 +437,7 @@ async def webhook_mercadopago(
         return {"ok": True}
 
     try:
-        svc.confirmar_pago_por_referencia(
+        resultado = svc.confirmar_pago_por_referencia(
             db,
             external_reference,
             Decimal(str(transaction_amount or 0)),
@@ -453,6 +453,40 @@ async def webhook_mercadopago(
         db.rollback()
         log.exception("Error DB en webhook MercadoPago ref=%s", external_reference)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno")
+
+    try:
+        if resultado["tipo"] == "reserva":
+            reserva = db.get(svc.Reserva, resultado["reserva_id"])
+            if reserva:
+                sesion = reserva.sesion
+                if (
+                    sesion
+                    and reserva.estado == svc.EstadoReserva.CONFIRMADA
+                    and reserva.estado_pago in (svc.EstadoPagoReserva.COMPLETADO, svc.EstadoPagoReserva.EXENTO)
+                    and reserva.servicio.modalidad.value in ("virtual", "hibrida")
+                ):
+                    meet_url = svc.sincronizar_calendario(tenant_encontrado, sesion)
+                    if meet_url:
+                        sesion.meet_url = meet_url
+                    svc.enviar_email_acceso_meet(tenant_encontrado, reserva, reserva.creado_por, sesion)
+        elif resultado["tipo"] == "inscripcion":
+            for rid in resultado.get("reservas_pagadas_ids", []):
+                reserva = db.get(svc.Reserva, rid)
+                if not reserva:
+                    continue
+                sesion = reserva.sesion
+                if (
+                    sesion
+                    and reserva.estado == svc.EstadoReserva.CONFIRMADA
+                    and reserva.estado_pago in (svc.EstadoPagoReserva.COMPLETADO, svc.EstadoPagoReserva.EXENTO)
+                    and reserva.servicio.modalidad.value in ("virtual", "hibrida")
+                ):
+                    meet_url = svc.sincronizar_calendario(tenant_encontrado, sesion)
+                    if meet_url:
+                        sesion.meet_url = meet_url
+                    svc.enviar_email_acceso_meet(tenant_encontrado, reserva, reserva.creado_por, sesion)
+    except Exception:
+        log.exception("Fallo post-proceso Meet tras pago MercadoPago ref=%s", external_reference)
 
     log.info("Webhook MercadoPago: pago confirmado ref=%s", external_reference)
     return {"ok": True}

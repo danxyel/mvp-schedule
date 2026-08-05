@@ -1014,7 +1014,11 @@ def crear_reserva(
     else:
         tareas = {
             "checkout": metodo == MetodoPago.ONLINE.value and requiere_pago,
-            "sincronizar_calendario": sesion_creada,
+            "sincronizar_calendario": (
+                sesion_creada
+                and reserva.estado == EstadoReserva.CONFIRMADA
+                and reserva.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+            ),
             "enviar_confirmacion": True,
         }
 
@@ -1903,8 +1907,99 @@ def limpiar_holds_expirados(db: Session, lote: int = 200) -> int:
 # INTEGRACIONES EXTERNAS — post-commit
 # ============================================================
 
+def _crear_espacio_meet(creds) -> dict:
+    """Crea un espacio de Google Meet y devuelve su resource name + URI."""
+    from googleapiclient.discovery import build
+
+    meet = build("meet", "v2", credentials=creds)
+    space = meet.spaces().create(
+        body={
+            "config": {
+                "accessType": "TRUSTED",
+                "entryPointAccess": "ALL",
+            },
+        }
+    ).execute()
+    return space
+
+
+def _crear_evento_calendario(creds, sesion: Sesion, servicio: Servicio, space: dict) -> None:
+    """Crea un evento en Calendar del buzón impersonado para que el Meet tenga
+    un título visible con asignatura, docente y fecha/hora.
+    """
+    from googleapiclient.discovery import build
+
+    asesor_nombre = sesion.asesor.usuario.nombre if sesion.asesor and sesion.asesor.usuario else "Sin asesor asignado"
+    fecha_legible = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+    titulo = f"{servicio.nombre} — {asesor_nombre} — {fecha_legible}"
+
+    try:
+        calendar = build("calendar", "v3", credentials=creds)
+        calendar.events().insert(
+            calendarId="primary",
+            conferenceDataVersion=1,
+            body={
+                "summary": titulo,
+                "start": {"dateTime": sesion.fecha_hora_inicio.isoformat(), "timeZone": sesion.timezone},
+                "end": {"dateTime": sesion.fecha_hora_fin.isoformat(), "timeZone": sesion.timezone},
+                "conferenceData": {
+                    "conferenceId": space.get("meetingCode"),
+                    "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+                    "entryPoints": [{
+                        "entryPointType": "video",
+                        "uri": space.get("meetingUri"),
+                        "label": (space.get("meetingUri") or "").replace("https://", ""),
+                    }],
+                },
+            },
+        ).execute()
+    except Exception:
+        log.exception("Fallo al crear evento de Calendar para sesión %s", sesion.id)
+
+
 def sincronizar_calendario(tenant: Tenant, sesion: Sesion) -> Optional[str]:
-    raise NotImplementedError("Integrar Google Calendar")
+    """Crea el espacio de Meet para una sesión virtual/híbrida, si el
+    tenant tiene Google Meet conectado y todavía no existe uno para esta
+    sesión. Es un no-op silencioso (regresa None) si el servicio no es
+    virtual/híbrido, si el tenant no tiene Google Meet conectado, o si
+    la sesión ya tiene un meet_space_name (grupal: el 2o, 3er... cliente
+    que llega no debe crear un Meet nuevo, reusa el existente).
+
+    El caller es responsable de solo invocar esta función cuando la
+    reserva que la disparó YA está CONFIRMADA y con estado_pago en
+    (COMPLETADO, EXENTO) — esta función no vuelve a validar eso, confía
+    en el caller.
+    """
+    servicio = sesion.servicio
+    if servicio is None or servicio.modalidad.value not in ("virtual", "hibrida"):
+        return None
+    if sesion.meet_space_name:
+        return sesion.meet_url
+
+    cfg = tenant.google_meet_config if isinstance(tenant.google_meet_config, dict) else {}
+    if not cfg.get("impersonar_email"):
+        return None
+
+    creds = _google_meet_credentials(tenant)
+    space = _crear_espacio_meet(creds)
+    _crear_evento_calendario(creds, sesion, servicio, space)
+
+    from app.database import get_db
+
+    db = next(get_db())
+    try:
+        s = db.get(Sesion, sesion.id)
+        if s.meet_space_name:
+            return s.meet_url
+        s.meet_url = space.get("meetingUri")
+        s.meet_space_name = space.get("name")
+        s.meet_generado_auto = True
+        db.commit()
+    except StaleDataError:
+        db.rollback()
+        log.warning("Sesión %s cambió al guardar el Meet generado — reintenta o repórtalo", sesion.id)
+        return None
+    return space.get("meetingUri")
 
 
 # ── MercadoPago ─────────────────────────────────────────────────────────────
@@ -2260,7 +2355,12 @@ def confirmar_pago_por_referencia(
             db, inscripcion.tenant_id, "inscripcion_serie", inscripcion.id, "pago_confirmado",
             detalles={"referencia": referencia, "monto": str(monto), "metodo": metodo, "reservas_pagadas": len(pendientes)},
         )
-        return {"tipo": "inscripcion", "inscripcion_id": inscripcion.id, "reservas_pagadas": len(pendientes)}
+        return {
+            "tipo": "inscripcion",
+            "inscripcion_id": inscripcion.id,
+            "reservas_pagadas": len(pendientes),
+            "reservas_pagadas_ids": [r.id for r in pendientes],
+        }
 
     raise ReservaError("Referencia de pago inválida", codigo="referencia_invalida")
 
@@ -2611,6 +2711,65 @@ def enviar_email_confirmacion(
         else f"Confirmación de reserva — {servicio.nombre}"
     )
     _enviar_smtp(tenant, usuario.email, asunto, texto_plano, cuerpo_html)
+
+
+def enviar_email_acceso_meet(
+    tenant: Tenant,
+    reserva: Reserva,
+    usuario: Optional[Usuario],
+    sesion: Sesion,
+) -> None:
+    """Reenvía el enlace de Google Meet al cliente. Úsalo cuando el
+    meet_url se genera o actualiza después de que el pago se completó
+    (por ejemplo, tras confirmar un pago online).
+    """
+    if usuario is None or not usuario.email:
+        log.info("Sin destinatario para correo de acceso Meet (folio %s)", reserva.folio)
+        return
+    if not sesion.meet_url:
+        log.info("Sin meet_url para enviar en correo (folio %s)", reserva.folio)
+        return
+    if reserva.servicio.modalidad.value not in ("virtual", "hibrida"):
+        return
+
+    usuario_nombre_html = html.escape(usuario.nombre or "")
+    servicio_nombre_html = html.escape(reserva.servicio.nombre or "")
+    meet_url_html = html.escape(sesion.meet_url)
+    fecha = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {usuario_nombre_html}, aquí está el enlace para tu sesión de {servicio_nombre_html}:
+            </p>
+            <p style="margin:0 0 4px;font-size:14px;color:#4b5563;">
+              <strong>Fecha:</strong> {fecha}
+            </p>
+            <p style="margin:0 0 16px;font-size:14px;color:#4b5563;">
+              <strong>Enlace:</strong>
+            </p>
+            <a href="{meet_url_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              Unirme a la sesión
+            </a>
+            <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
+              Folio: {reserva.folio}
+            </p>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} — Enlace para tu sesión\n\n"
+        f"Hola {usuario.nombre},\n\n"
+        f"Servicio: {reserva.servicio.nombre}\n"
+        f"Fecha: {fecha}\n"
+        f"Enlace: {sesion.meet_url}\n\n"
+        f"Folio: {reserva.folio}"
+    )
+    _enviar_smtp(
+        tenant,
+        usuario.email,
+        f"Enlace para tu sesión — {reserva.servicio.nombre}",
+        texto_plano,
+        cuerpo_html,
+    )
 
 
 def enviar_email_activacion(tenant: Tenant, usuario: Usuario, acceso_token_plano: str) -> None:

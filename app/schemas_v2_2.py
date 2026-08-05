@@ -912,6 +912,7 @@ class ServicioPublicOut(BaseModel):
     precio: Optional[Decimal] = None
     moneda: str
     imagen_url: Optional[str] = None
+    tiene_sesiones_abiertas: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 

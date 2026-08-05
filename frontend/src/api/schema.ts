@@ -160,6 +160,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/servicios/{servicio_id}/sesiones-abiertas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sesiones Abiertas Servicio */
+        get: operations["sesiones_abiertas_servicio_api_v2__tenant_slug__servicios__servicio_id__sesiones_abiertas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/servicios/{servicio_id}/disponibilidad": {
         parameters: {
             query?: never;
@@ -2410,6 +2427,11 @@ export interface components {
             moneda: string;
             /** Imagen Url */
             imagen_url?: string | null;
+            /**
+             * Tiene Sesiones Abiertas
+             * @default false
+             */
+            tiene_sesiones_abiertas: boolean;
         };
         /** SesionAdminOut */
         SesionAdminOut: {
@@ -3308,6 +3330,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServicioPublicOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sesiones_abiertas_servicio_api_v2__tenant_slug__servicios__servicio_id__sesiones_abiertas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SesionListOut"][];
                 };
             };
             /** @description Validation Error */

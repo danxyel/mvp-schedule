@@ -10,7 +10,7 @@ from typing import Optional, List, Tuple
 
 import bcrypt
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, exists
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm.exc import StaleDataError
@@ -266,19 +266,76 @@ def listar_servicios_publicos(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ):
-    servicios = db.execute(
-        select(Servicio).where(
+    existe_sesion_abierta = (
+        exists()
+        .where(
+            Sesion.servicio_id == Servicio.id,
+            Sesion.tenant_id == tenant.id,
+            Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
+            Sesion.inscritos < Sesion.cupo_maximo,
+            Sesion.fecha_hora_inicio > utcnow(),
+        )
+    )
+
+    filas = db.execute(
+        select(Servicio, existe_sesion_abierta.label("tiene_sesiones_abiertas"))
+        .where(
             Servicio.tenant_id == tenant.id,
             Servicio.activo.is_(True),
             Servicio.visible_web.is_(True),
         ).order_by(Servicio.nombre.asc()).limit(20)
-    ).scalars().all()
-    return servicios
+    ).all()
+
+    return [
+        ServicioPublicOut.model_validate(s, from_attributes=True).model_copy(
+            update={"tiene_sesiones_abiertas": bool(tiene)}
+        )
+        for s, tiene in filas
+    ]
 
 
 # ============================================================
 # DISPONIBILIDAD (público)
 # ============================================================
+@router.get("/servicios/{servicio_id}/sesiones-abiertas", response_model=List[SesionListOut])
+def sesiones_abiertas_servicio(
+    servicio_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    servicio = db.execute(
+        select(Servicio).where(
+            Servicio.tenant_id == tenant.id,
+            Servicio.id == servicio_id,
+            Servicio.activo.is_(True),
+            Servicio.visible_web.is_(True),
+        )
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+    if servicio.tipo_agenda != TipoAgenda.GRUPAL:
+        return []
+
+    sesiones = db.execute(
+        select(Sesion)
+        .options(
+            joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+            joinedload(Sesion.sede),
+        )
+        .where(
+            Sesion.tenant_id == tenant.id,
+            Sesion.servicio_id == servicio_id,
+            Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
+            Sesion.inscritos < Sesion.cupo_maximo,
+            Sesion.fecha_hora_inicio > utcnow(),
+        )
+        .order_by(Sesion.fecha_hora_inicio.asc())
+        .limit(50)
+    ).scalars().unique().all()
+
+    return [_sesion_list_out(s) for s in sesiones]
+
+
 @router.get("/servicios/{servicio_id}/disponibilidad", response_model=DisponibilidadDiaOut)
 def disponibilidad_por_dia(
     servicio_id: int = Path(..., gt=0),

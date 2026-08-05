@@ -1909,7 +1909,15 @@ def limpiar_holds_expirados(db: Session, lote: int = 200) -> int:
 # ============================================================
 
 def _crear_espacio_meet(creds) -> dict:
-    """Crea un espacio de Google Meet y devuelve su resource name + URI."""
+    """Crea un espacio de Google Meet y devuelve su resource name + URI.
+
+    Crítico: artifactConfig es lo que le pide a Google grabar y transcribir
+    automáticamente — sin esto el espacio se crea pero nadie graba nada,
+    y todo el resto del feature (job de contenido, correos, Drive) nunca
+    tendría nada que procesar. Confirmado en vivo con un script aislado
+    antes de escribir este prompt (ver HANDOFF) que el plan del tenant sí
+    acepta este body.
+    """
     from googleapiclient.discovery import build
 
     meet = build("meet", "v2", credentials=creds)
@@ -1918,6 +1926,10 @@ def _crear_espacio_meet(creds) -> dict:
             "config": {
                 "accessType": "TRUSTED",
                 "entryPointAccess": "ALL",
+                "artifactConfig": {
+                    "recordingConfig": {"autoRecordingGeneration": "ON"},
+                    "transcriptionConfig": {"autoTranscriptionGeneration": "ON"},
+                },
             },
         }
     ).execute()

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import GestionServicios from './GestionServicios'
@@ -173,13 +173,25 @@ function ReservasTab({ tenantSlug, token }) {
   const [pagoMonto, setPagoMonto] = useState('')
   const [pagoReferencia, setPagoReferencia] = useState('')
   const [pagoEnviando, setPagoEnviando] = useState(false)
+  const [qInput, setQInput] = useState('')
+  const [q, setQ] = useState('')
+  const debounceRef = useRef(null)
+
+  const onChangeQ = (valor) => {
+    setQInput(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setQ(valor.trim())
+      setOffset(0)
+    }, 400)
+  }
 
   const fetchReservas = useCallback(async () => {
     const query = {
-      fecha,
       limit: LIMIT_RESERVAS,
       offset,
       ...(estado !== 'todas' ? { estado } : {}),
+      ...(q ? { q } : { fecha }),
     }
     console.log('Fetching reservas del día...')
     const { data, error: fetchErr } = await client.GET(
@@ -197,7 +209,7 @@ function ReservasTab({ tenantSlug, token }) {
     setItems(data.items)
     setTotal(data.paginacion.total)
     setLoading(false)
-  }, [tenantSlug, token, fecha, estado, offset])
+  }, [tenantSlug, token, fecha, estado, offset, q])
 
   useEffect(() => {
     fetchReservas()
@@ -364,12 +376,13 @@ function ReservasTab({ tenantSlug, token }) {
           <span className="relative">
             <button
               type="button"
+              disabled={Boolean(q)}
               onClick={() => setPickerAbierto((v) => !v)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             >
               {fecha}
             </button>
-            {pickerAbierto && (
+            {pickerAbierto && !q && (
               <>
                 <div
                   className="fixed inset-0 z-40"
@@ -402,6 +415,13 @@ function ReservasTab({ tenantSlug, token }) {
             ))}
           </select>
         </label>
+        <input
+          type="text"
+          value={qInput}
+          onChange={(e) => onChangeQ(e.target.value)}
+          placeholder="Buscar por folio, código o cliente..."
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
+        />
       </div>
 
       {items.length > 0 && (
@@ -728,9 +748,22 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
   const [errores, setErrores] = useState({})
   const [exito, setExito] = useState(null)
   const [serieModal, setSerieModal] = useState(null)
+  const [qInput, setQInput] = useState('')
+  const [q, setQ] = useState('')
+  const debounceRef = useRef(null)
+
+  const onChangeQ = (valor) => {
+    setQInput(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setQ(valor.trim())
+    }, 400)
+  }
 
   const fetchSolicitudes = useCallback(async () => {
-    const query = estado !== 'todas' ? { estado } : {}
+    const query = {
+      ...(q ? { q } : (estado !== 'todas' ? { estado } : {})),
+    }
     const { data, error: fetchErr } = await client.GET(
       '/api/v2/{tenant_slug}/admin/solicitudes',
       {
@@ -745,7 +778,7 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
     }
     setItems(data ?? [])
     setLoading(false)
-  }, [tenantSlug, token, estado])
+  }, [tenantSlug, token, estado, q])
 
   useEffect(() => {
     fetchSolicitudes()
@@ -894,6 +927,13 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
             ))}
           </select>
         </label>
+        <input
+          type="text"
+          value={qInput}
+          onChange={(e) => onChangeQ(e.target.value)}
+          placeholder="Buscar por folio, código o cliente..."
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
+        />
       </div>
 
       {exito && (
@@ -999,7 +1039,9 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
             {items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
-                  No hay solicitudes en este filtro.
+                  {q
+                    ? 'No se encontró ninguna solicitud con ese folio, código o cliente.'
+                    : 'No hay solicitudes en este filtro.'}
                 </td>
               </tr>
             )}
@@ -1137,14 +1179,31 @@ function PendientesTab({ tenantSlug, token }) {
   const [reprogramar, setReprogramar] = useState(null)
   const [reprogramarLoading, setReprogramarLoading] = useState(false)
   const [reprogramarError, setReprogramarError] = useState(null)
+  const [qInput, setQInput] = useState('')
+  const [q, setQ] = useState('')
+  const debounceRef = useRef(null)
+
+  const onChangeQ = (valor) => {
+    setQInput(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setQ(valor.trim())
+      setOffset(0)
+    }, 400)
+  }
 
   const fetchPendientes = useCallback(async () => {
+    const query = {
+      limit: LIMIT_RESERVAS,
+      offset,
+      ...(q ? { q } : { estado: 'pendiente' }),
+    }
     const { data, error: fetchErr } = await client.GET(
       '/api/v2/{tenant_slug}/admin/reservas',
       {
         params: {
           path: { tenant_slug: tenantSlug },
-          query: { estado: 'pendiente', limit: LIMIT_RESERVAS, offset },
+          query,
         },
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -1157,7 +1216,7 @@ function PendientesTab({ tenantSlug, token }) {
     setItems(data.items)
     setTotal(data.paginacion.total)
     setLoading(false)
-  }, [tenantSlug, token, offset])
+  }, [tenantSlug, token, offset, q])
 
   useEffect(() => {
     fetchPendientes()
@@ -1292,6 +1351,16 @@ function PendientesTab({ tenantSlug, token }) {
 
   return (
     <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={qInput}
+          onChange={(e) => onChangeQ(e.target.value)}
+          placeholder="Buscar por folio, código o cliente..."
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
+        />
+      </div>
+
       {exito && (
         <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
           {exito.mensaje} — {exito.folio}
@@ -1381,7 +1450,9 @@ function PendientesTab({ tenantSlug, token }) {
             {items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
-                  No hay reservas pendientes de confirmación.
+                  {q
+                    ? 'No se encontró ninguna reserva con ese folio, código o cliente.'
+                    : 'No hay reservas pendientes de confirmación.'}
                 </td>
               </tr>
             )}

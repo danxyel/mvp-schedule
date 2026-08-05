@@ -1894,6 +1894,7 @@ def _mp_url_autorizacion(tenant_id: int) -> str:
         "response_type": "code",
         "redirect_uri": redirect_uri,
         "state": state,
+        "platform_id": "mp",
     }
     return f"{_MP_AUTH_URL}?" + "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
 

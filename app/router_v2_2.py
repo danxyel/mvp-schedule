@@ -3287,6 +3287,29 @@ def estado_google_meet(
     return _google_meet_estado_out(tenant)
 
 
+@router.post("/admin/google-meet/revisar-contenido", response_model=OperacionOut)
+def revisar_contenido_google_meet(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Dispara manualmente el mismo job que corre APScheduler cada 10 min
+    (organiza carpetas de Drive, renombra archivos, otorga permisos y manda
+    el correo de contenido para sesiones virtuales ya terminadas). Pensado
+    como botón de emergencia mientras el backend esté en un plan de Render
+    que se duerme por inactividad — mientras está dormido, el scheduler en
+    proceso tampoco corre, así que el contenido se queda sin procesar hasta
+    que algo despierta al servicio. Nota: procesa TODOS los tenants con
+    contenido pendiente, no solo este — es el mismo job global, expuesto
+    aquí nada más como forma de dispararlo a mano."""
+    procesadas = svc.revisar_contenido_sesiones_virtuales(db)
+    return OperacionOut(
+        ok=True,
+        mensaje=f"{procesadas} sesión(es) procesada(s)",
+        detalle={"procesadas": procesadas},
+    )
+
+
 @router.patch("/admin/tenant/metodo-pago-default", response_model=TenantAdminOut)
 def actualizar_metodo_pago_default(
     body: MetodoPagoDefaultIn,

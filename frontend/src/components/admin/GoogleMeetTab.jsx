@@ -10,6 +10,7 @@ export default function GoogleMeetTab({ tenantSlug, token }) {
   const [loading, setLoading] = useState(true)
   const [conectando, setConectando] = useState(false)
   const [desconectando, setDesconectando] = useState(false)
+  const [revisando, setRevisando] = useState(false)
   const [error, setError] = useState(null)
   const [exito, setExito] = useState(null)
 
@@ -85,6 +86,25 @@ export default function GoogleMeetTab({ tenantSlug, token }) {
     setEstado(data)
     setEmail('')
     setExito('Cuenta de Google Meet desconectada')
+  }
+
+  const revisarContenido = async () => {
+    setRevisando(true)
+    setError(null)
+    setExito(null)
+    const { data, error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/admin/google-meet/revisar-contenido',
+      {
+        params: { path: { tenant_slug: tenantSlug } },
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    )
+    setRevisando(false)
+    if (fetchErr) {
+      setError(errorMensaje(fetchErr))
+      return
+    }
+    setExito(data?.mensaje ?? 'Revisión completada')
   }
 
   if (loading) {
@@ -165,6 +185,27 @@ export default function GoogleMeetTab({ tenantSlug, token }) {
           </div>
         </form>
       </div>
+
+      {estado?.conectado && (
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h3 className="mb-2 text-lg font-semibold text-gray-900">Revisar contenido ahora</h3>
+          <p className="mb-4 text-sm text-gray-600">
+            El proceso normalmente corre solo cada 10 minutos. Si el backend
+            está en un plan que se duerme por inactividad, usa este botón
+            para forzar la revisión manualmente (organiza carpetas, renombra
+            archivos y manda el correo de contenido de sesiones ya
+            terminadas).
+          </p>
+          <button
+            type="button"
+            onClick={revisarContenido}
+            disabled={revisando}
+            className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {revisando ? 'Revisando...' : 'Revisar contenido ahora'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

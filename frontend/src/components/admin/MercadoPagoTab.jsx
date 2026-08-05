@@ -7,15 +7,21 @@ const METODOS = [
   { value: 'online', label: 'En línea (MercadoPago)' },
 ]
 
+const CAMPO = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500'
+
 export default function MercadoPagoTab({ tenantSlug, token }) {
   const [estado, setEstado] = useState(null)
   const [metodo, setMetodo] = useState('local')
   const [metodoInicial, setMetodoInicial] = useState('local')
+  const [accessToken, setAccessToken] = useState('')
+  const [mostrarToken, setMostrarToken] = useState(false)
+  const [publicKey, setPublicKey] = useState('')
   const [loading, setLoading] = useState(true)
-  const [guardando, setGuardando] = useState(false)
+  const [conectando, setConectando] = useState(false)
+  const [desconectando, setDesconectando] = useState(false)
+  const [guardandoMetodo, setGuardandoMetodo] = useState(false)
   const [error, setError] = useState(null)
   const [exito, setExito] = useState(null)
-  const [conectando, setConectando] = useState(false)
 
   const fetchEstado = useCallback(async () => {
     setLoading(true)
@@ -43,30 +49,72 @@ export default function MercadoPagoTab({ tenantSlug, token }) {
     fetchEstado()
   }, [fetchEstado])
 
-  const conectar = async () => {
+  const conectar = async (e) => {
+    e.preventDefault()
+    if (conectando || !accessToken.trim()) return
+
     setConectando(true)
     setError(null)
     setExito(null)
-    const { data, error: fetchErr } = await client.GET(
+    const { data, error: fetchErr } = await client.POST(
       '/api/v2/{tenant_slug}/admin/mercadopago/conectar',
+      {
+        params: { path: { tenant_slug: tenantSlug } },
+        headers: { Authorization: `Bearer ${token}` },
+        body: {
+          access_token: accessToken.trim(),
+          public_key: publicKey.trim() || undefined,
+        },
+      }
+    )
+    setConectando(false)
+    if (fetchErr) {
+      setError(errorMensaje(fetchErr))
+      return
+    }
+    setEstado(data)
+    const m = data?.metodo_pago_default ?? 'local'
+    setMetodo(m)
+    setMetodoInicial(m)
+    setAccessToken('')
+    setPublicKey('')
+    setExito('Cuenta de MercadoPago conectada')
+  }
+
+  const desconectar = async () => {
+    const mensaje =
+      '¿Desconectar la cuenta de MercadoPago de este tenant?\n\n' +
+      'Esto solo borra el token guardado en MVP Schedule; no lo revoca en MercadoPago. ' +
+      'Si quieres invalidar el acceso de verdad, regenera el token desde tu panel de MercadoPago.'
+    if (!window.confirm(mensaje)) return
+
+    setDesconectando(true)
+    setError(null)
+    setExito(null)
+    const { data, error: fetchErr } = await client.DELETE(
+      '/api/v2/{tenant_slug}/admin/mercadopago/desconectar',
       {
         params: { path: { tenant_slug: tenantSlug } },
         headers: { Authorization: `Bearer ${token}` },
       }
     )
-    setConectando(false)
-    if (fetchErr || !data?.url) {
-      setError(errorMensaje(fetchErr) || 'No se pudo generar el enlace de conexión')
+    setDesconectando(false)
+    if (fetchErr) {
+      setError(errorMensaje(fetchErr))
       return
     }
-    window.open(data.url, '_blank', 'noopener,noreferrer')
+    setEstado(data)
+    const m = data?.metodo_pago_default ?? 'local'
+    setMetodo(m)
+    setMetodoInicial(m)
+    setExito('Cuenta desconectada')
   }
 
   const guardarMetodo = async (e) => {
     e.preventDefault()
-    if (guardando || metodo === metodoInicial) return
+    if (guardandoMetodo || metodo === metodoInicial) return
 
-    setGuardando(true)
+    setGuardandoMetodo(true)
     setError(null)
     setExito(null)
     const { data, error: fetchErr } = await client.PATCH(
@@ -77,7 +125,7 @@ export default function MercadoPagoTab({ tenantSlug, token }) {
         body: { metodo_pago_default: metodo },
       }
     )
-    setGuardando(false)
+    setGuardandoMetodo(false)
     if (fetchErr) {
       setError(errorMensaje(fetchErr))
       return
@@ -107,6 +155,11 @@ export default function MercadoPagoTab({ tenantSlug, token }) {
           El dinero llega directamente al tenant; DANIEL Consultoría no cobra comisión por transacción.
         </p>
 
+        {exito && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+            {exito}
+          </div>
+        )}
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
@@ -130,23 +183,85 @@ export default function MercadoPagoTab({ tenantSlug, token }) {
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={conectar}
-            disabled={conectando}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {conectando ? 'Generando enlace...' : estado?.conectado ? 'Reconectar cuenta' : 'Conectar con MercadoPago'}
-          </button>
-          <button
-            type="button"
-            onClick={fetchEstado}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-          >
-            Actualizar estado
-          </button>
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="mb-2 font-medium">Para conectar tu cuenta:</p>
+          <ol className="list-decimal space-y-1 pl-5">
+            <li>Entra a tu cuenta de MercadoPago.</li>
+            <li>Ve a <strong>Tus integraciones</strong>.</li>
+            <li>Crea una aplicación si no tienes una, o usa la que ya exista.</li>
+            <li>Abre <strong>Credenciales de producción</strong>.</li>
+            <li>Copia el <strong>Access Token</strong> y pégalo aquí.</li>
+          </ol>
         </div>
+
+        <form onSubmit={conectar} className="space-y-4">
+          <div>
+            <label htmlFor="mp-access-token" className="mb-1 block text-sm font-medium text-gray-700">
+              Access Token <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                id="mp-access-token"
+                type={mostrarToken ? 'text' : 'password'}
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                placeholder={estado?.conectado ? '•••• (ya configurado, pega uno nuevo para reemplazarlo)' : 'TEST-... o APP_USR-...'}
+                className={`${CAMPO} pr-20`}
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarToken((prev) => !prev)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+              >
+                {mostrarToken ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Nunca se muestra después de guardarlo. Pegar uno nuevo lo reemplaza.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="mp-public-key" className="mb-1 block text-sm font-medium text-gray-700">
+              Public Key (opcional)
+            </label>
+            <input
+              id="mp-public-key"
+              type="text"
+              value={publicKey}
+              onChange={(e) => setPublicKey(e.target.value)}
+              placeholder="TEST-... o APP_USR-..."
+              className={CAMPO}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={conectando || !accessToken.trim()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {conectando ? 'Verificando...' : estado?.conectado ? 'Reconectar cuenta' : 'Conectar con MercadoPago'}
+            </button>
+            <button
+              type="button"
+              onClick={fetchEstado}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Actualizar estado
+            </button>
+            {estado?.conectado && (
+              <button
+                type="button"
+                onClick={desconectar}
+                disabled={desconectando}
+                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {desconectando ? 'Desconectando...' : 'Desconectar'}
+              </button>
+            )}
+          </div>
+        </form>
       </div>
 
       <form
@@ -157,12 +272,6 @@ export default function MercadoPagoTab({ tenantSlug, token }) {
         <p className="mb-4 text-sm text-gray-600">
           Decide cómo se crean las reservas de los clientes por default. Para cobrar en línea, el tenant debe tener MercadoPago conectado.
         </p>
-
-        {exito && (
-          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-            {exito}
-          </div>
-        )}
 
         <div className="mb-4">
           <label htmlFor="metodo-pago-default" className="mb-1 block text-sm font-medium text-gray-700">
@@ -175,7 +284,7 @@ export default function MercadoPagoTab({ tenantSlug, token }) {
               setMetodo(e.target.value)
               setExito(null)
             }}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+            className={CAMPO}
           >
             {METODOS.map((m) => (
               <option key={m.value} value={m.value} disabled={m.value === 'online' && onlineDeshabilitado}>
@@ -203,17 +312,17 @@ export default function MercadoPagoTab({ tenantSlug, token }) {
               setExito(null)
               setError(null)
             }}
-            disabled={guardando || metodo === metodoInicial}
+            disabled={guardandoMetodo || metodo === metodoInicial}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancelar
           </button>
           <button
             type="submit"
-            disabled={guardando || metodo === metodoInicial}
+            disabled={guardandoMetodo || metodo === metodoInicial}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {guardando ? 'Guardando...' : 'Guardar cambios'}
+            {guardandoMetodo ? 'Guardando...' : 'Guardar cambios'}
           </button>
         </div>
       </form>

@@ -458,8 +458,6 @@ export default function FlujReserva() {
             {checkout?.url && (
               <a
                 href={checkout.url}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="mb-2 block w-full rounded-lg bg-yellow-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-yellow-700"
               >
                 Ir a pagar

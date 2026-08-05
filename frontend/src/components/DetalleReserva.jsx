@@ -181,7 +181,7 @@ export default function DetalleReserva() {
       setPagarError(errorMensaje(fetchErr) || 'No se pudo iniciar el pago')
       return
     }
-    window.open(data.url, '_blank', 'noopener,noreferrer')
+    window.location.href = data.url
   }
 
   const cerrarModal = () => {

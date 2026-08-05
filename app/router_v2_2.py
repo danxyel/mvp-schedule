@@ -32,7 +32,7 @@ from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaPublicaOut, ReservaCreateResponse, ReagendarSesionIn,
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
-    PaginacionOut, CheckoutUrlOut, MercadoPagoEstadoOut, OperacionOut, AsesorPublicOut, SedeOut,
+    PaginacionOut, CheckoutUrlOut, MercadoPagoEstadoOut, MercadoPagoConectarIn, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
     SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn, SolicitudRechazarIn, CanalEnum,
@@ -161,6 +161,7 @@ _CODIGO_HTTP = {
     "inscripcion_no_encontrada": status.HTTP_404_NOT_FOUND,
     "inscripcion_no_pendiente": status.HTTP_409_CONFLICT,
     "pago_en_linea_no_disponible": status.HTTP_409_CONFLICT,
+    "mp_token_invalido": status.HTTP_400_BAD_REQUEST,
 }
 
 
@@ -2805,23 +2806,7 @@ def completar_sesion_endpoint(
 # ============================================================
 # MERCADOPAGO — ADMIN
 # ============================================================
-@router.get("/admin/mercadopago/conectar")
-def conectar_mercadopago(
-    tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
-):
-    """Genera la URL de autorización OAuth para que el dueño del tenant
-    conecte su cuenta de MercadoPago."""
-    url = svc._mp_url_autorizacion(tenant.id)
-    return {"url": url}
-
-
-@router.get("/admin/mercadopago/estado", response_model=MercadoPagoEstadoOut)
-def estado_mercadopago(
-    tenant: Tenant = Depends(get_current_tenant),
-    _: UsuarioTenant = Depends(requiere_admin),
-):
-    """Devuelve si el tenant tiene conectada una cuenta de MercadoPago."""
+def _mercadopago_estado_out(tenant: Tenant) -> dict:
     cfg = tenant.pago_config if isinstance(tenant.pago_config, dict) else {}
     return {
         "conectado": bool(cfg.get("access_token")),
@@ -2833,6 +2818,52 @@ def estado_mercadopago(
             else (tenant.metodo_pago_default or "local")
         ),
     }
+
+
+@router.post("/admin/mercadopago/conectar", response_model=MercadoPagoEstadoOut)
+def conectar_mercadopago(
+    body: MercadoPagoConectarIn,
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Conecta la cuenta de MercadoPago del tenant usando un Access Token
+    pegado directamente por el admin."""
+    try:
+        svc.conectar_mercadopago_token(
+            tenant,
+            db,
+            access_token=body.access_token,
+            public_key=body.public_key,
+        )
+    except svc.ReservaError as e:
+        raise _http_de(e)
+    db.commit()
+    db.refresh(tenant)
+    return _mercadopago_estado_out(tenant)
+
+
+@router.delete("/admin/mercadopago/desconectar", response_model=MercadoPagoEstadoOut)
+def desconectar_mercadopago(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Desconecta la cuenta de MercadoPago del tenant. No revoca el token en
+    el lado de MercadoPago; el admin debe regenerarlo desde su panel."""
+    svc.desconectar_mercadopago(tenant, db)
+    db.commit()
+    db.refresh(tenant)
+    return _mercadopago_estado_out(tenant)
+
+
+@router.get("/admin/mercadopago/estado", response_model=MercadoPagoEstadoOut)
+def estado_mercadopago(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Devuelve si el tenant tiene conectada una cuenta de MercadoPago."""
+    return _mercadopago_estado_out(tenant)
 
 
 @router.patch("/admin/tenant/metodo-pago-default", response_model=TenantAdminOut)

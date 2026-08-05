@@ -11,7 +11,7 @@ OpenAPI disponible en:
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+
 from decimal import Decimal
 from typing import Optional, List
 from dotenv import load_dotenv
@@ -306,37 +306,6 @@ def mercadopago_redirect(
     return RedirectResponse(redirect_url)
 
 
-@app.get("/api/v2/mercadopago/callback", tags=["Pagos"])
-def mercadopago_callback(
-    code: str,
-    state: str,
-    db: Session = Depends(get_db),
-):
-    """Callback OAuth de MercadoPago. Valida el state firmado, intercambia
-    el code por tokens y guarda la configuración en el tenant."""
-    tenant_id = svc.validar_mp_state(state)
-    tenant = db.get(Tenant, tenant_id)
-    if tenant is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant no encontrado")
-
-    data = svc._mp_intercambiar_code(code)
-    access_token = data.get("access_token")
-    refresh_token = data.get("refresh_token")
-    if not access_token or not refresh_token:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "MercadoPago no entregó los tokens esperados")
-
-    tenant.pago_config = {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "mp_user_id": data.get("user_id"),
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=180)).isoformat(),
-    }
-    db.commit()
-
-    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
-    return RedirectResponse(f"{base}/t/{tenant.slug}/admin?mp=conectado")
-
-
 @app.post("/api/v2/webhooks/mercadopago", status_code=status.HTTP_200_OK, tags=["Pagos"])
 async def webhook_mercadopago(
     request: Request,
@@ -397,22 +366,13 @@ async def webhook_mercadopago(
             tenant_encontrado = t
             break
         if r.status_code == 401:
-            # Token vencido; intentar refrescar y reintentar una vez.
-            if svc._mp_refrescar_tokens(t, db):
-                cfg = t.pago_config if isinstance(t.pago_config, dict) else {}
-                access_token = cfg.get("access_token")
-                try:
-                    r = httpx.get(
-                        f"https://api.mercadopago.com/v1/payments/{payment_id}",
-                        headers={"Authorization": f"Bearer {access_token}"},
-                        timeout=30,
-                    )
-                except Exception:
-                    continue
-                if r.status_code == 200:
-                    payment_data = r.json()
-                    tenant_encontrado = t
-                    break
+            # Token inválido o rotado desde el panel de MercadoPago; el admin
+            # debe reconectar. No hay refresh posible con token manual.
+            log.warning(
+                "Token de MercadoPago inválido para tenant %s (posible rotación); reconexión requerida",
+                t.id,
+            )
+            continue
 
     if payment_data is None or tenant_encontrado is None:
         log.warning("Webhook MercadoPago: no se pudo obtener el pago %s", payment_id)

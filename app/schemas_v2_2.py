@@ -416,6 +416,11 @@ class MercadoPagoEstadoOut(BaseModel):
     metodo_pago_default: str = "local"
 
 
+class MercadoPagoConectarIn(BaseModel):
+    access_token: str = Field(..., min_length=10)
+    public_key: Optional[str] = None
+
+
 class ReservaCreateResponse(BaseModel):
     """Respuesta del POST /reservas.
 

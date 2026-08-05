@@ -378,6 +378,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/mis-solicitudes/{solicitud_id}/alternativas/{alternativa_id}/aceptar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aceptar Alternativa Solicitud Endpoint */
+        post: operations["aceptar_alternativa_solicitud_endpoint_api_v2__tenant_slug__mis_solicitudes__solicitud_id__alternativas__alternativa_id__aceptar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/mis-series": {
         parameters: {
             query?: never;
@@ -1092,7 +1109,8 @@ export interface paths {
         /**
          * Checkout Reserva
          * @description Cliente logueado: genera una preferencia de MercadoPago para una
-         *     reserva confirmada con pago pendiente (auto-compra post-asignación).
+         *     reserva confirmada o en espera de pago con pago pendiente (auto-compra
+         *     post-asignación, o reintento del link de pago original).
          */
         post: operations["checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post"];
         delete?: never;
@@ -2538,6 +2556,47 @@ export interface components {
             motivo_no_disponible?: string | null;
         };
         /**
+         * SolicitudAceptarAlternativaOut
+         * @description El cliente aceptó una fecha alternativa; la reserva ya fue creada.
+         */
+        SolicitudAceptarAlternativaOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+            estado: components["schemas"]["EstadoSolicitudEnum"];
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Motivo Rechazo */
+            motivo_rechazo?: string | null;
+            /** Reserva Id */
+            reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Folio Reserva */
+            folio_reserva?: string | null;
+            /** Sesion Id */
+            sesion_id?: number | null;
+        };
+        /**
          * SolicitudAdminOut
          * @description Vista del staff: agrega datos del cliente y de resolución.
          */
@@ -2564,6 +2623,10 @@ export interface components {
             motivo_rechazo?: string | null;
             /** Reserva Id */
             reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
             /**
              * Creado En
              * Format: date-time
@@ -2581,6 +2644,16 @@ export interface components {
             resuelto_en?: string | null;
             /** Serie Id */
             serie_id?: number | null;
+        };
+        /** SolicitudAlternativaOut */
+        SolicitudAlternativaOut: {
+            /** Id */
+            id: number;
+            /**
+             * Fecha Hora
+             * Format: date-time
+             */
+            fecha_hora: string;
         };
         /**
          * SolicitudConfirmarOut
@@ -2610,6 +2683,10 @@ export interface components {
             motivo_rechazo?: string | null;
             /** Reserva Id */
             reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
             /**
              * Creado En
              * Format: date-time
@@ -2710,6 +2787,10 @@ export interface components {
             motivo_rechazo?: string | null;
             /** Reserva Id */
             reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
             /**
              * Creado En
              * Format: date-time
@@ -2723,6 +2804,8 @@ export interface components {
         SolicitudRechazarIn: {
             /** Motivo */
             motivo?: string | null;
+            /** Alternativas */
+            alternativas?: string[] | null;
         };
         /** TenantAdminOut */
         TenantAdminOut: {
@@ -3605,6 +3688,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SolicitudOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    aceptar_alternativa_solicitud_endpoint_api_v2__tenant_slug__mis_solicitudes__solicitud_id__alternativas__alternativa_id__aceptar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                alternativa_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudAceptarAlternativaOut"];
                 };
             };
             /** @description Validation Error */

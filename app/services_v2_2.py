@@ -34,7 +34,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sede, Servicio, Sesion, Reserva,
-    SolicitudReserva, EstadoSolicitud,
+    SolicitudReserva, SolicitudAlternativa, EstadoSolicitud,
     SerieReserva, InscripcionSerie, ModalidadCobro, EstadoSerie, EstadoInscripcion,
     HorarioDisponibilidad, HorarioBloqueo, Bitacora, AsesorServicio,
     CampoFormulario, RespuestaFormulario,
@@ -44,7 +44,7 @@ from app.models_v2_2 import (
 )
 from app.schemas_v2_2 import (
     ReservaCreate, SolicitudCreate, SerieReservaCreate, InscripcionSerieCreate,
-    ConfirmarInscripcionIn, ModalidadCobroEnum, MetodoPagoEnum,
+    ConfirmarInscripcionIn, ModalidadCobroEnum, MetodoPagoEnum, CanalEnum,
     SolicitudConfirmarSerieIn, validar_modalidad_cobro, CheckoutUrlOut,
 )
 
@@ -876,7 +876,11 @@ def crear_reserva(
             asesor_id=payload.asesor_id, bloquear=True,
         )
         if sesion is None:
-            if servicio.tipo_agenda == TipoAgenda.GRUPAL and not servicio.creacion_por_alumno:
+            if (
+                servicio.tipo_agenda == TipoAgenda.GRUPAL
+                and not servicio.creacion_por_alumno
+                and not servicio.requiere_confirmacion
+            ):
                 raise ReservaError(
                     "No hay sesiones programadas en ese horario",
                     codigo="sin_sesion_disponible",
@@ -1093,6 +1097,73 @@ def crear_solicitud_reserva(
         ip=ip, user_agent=user_agent,
     )
     return solicitud
+
+
+def aceptar_alternativa_solicitud(
+    db: Session,
+    tenant: Tenant,
+    solicitud: SolicitudReserva,
+    alternativa: SolicitudAlternativa,
+    cliente: Usuario,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Dict[str, Any]:
+    """El cliente acepta una fecha alternativa ofrecida por el staff.
+
+    La solicitud debe estar en estado RECHAZADA, la alternativa debe
+    pertenecer a ella, y no debe haberse aceptado otra antes. Crea la
+    reserva real con la misma lógica que confirmar_solicitud_admin.
+    """
+    tenant_id = tenant.id
+
+    if solicitud.estado != EstadoSolicitud.RECHAZADA:
+        raise ReservaError("La solicitud no está rechazada", codigo="solicitud_no_rechazada")
+    if alternativa.solicitud_id != solicitud.id:
+        raise ReservaError("La alternativa no pertenece a la solicitud", codigo="alternativa_invalida")
+    if solicitud.alternativa_aceptada_id is not None:
+        raise ReservaError("Ya se aceptó una alternativa para esta solicitud", codigo="alternativa_ya_resuelta")
+
+    servicio = db.get(Servicio, solicitud.servicio_id)
+    if servicio is None or not servicio.activo:
+        raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
+
+    payload = ReservaCreate(
+        servicio_id=solicitud.servicio_id,
+        fecha_hora_inicio=alternativa.fecha_hora,
+        sesion_id=None,
+        asesor_id=None,
+        sede_id=None,
+        notas_cliente=solicitud.notas_cliente,
+        canal=CanalEnum.WEB,
+    )
+    resultado = crear_reserva(
+        db, tenant, payload, usuario_actual=cliente, ip=ip, user_agent=user_agent,
+        generar_token_activacion=False,
+    )
+    reserva = resultado["reserva"]
+    sesion = resultado["sesion"]
+
+    solicitud.estado = EstadoSolicitud.ACEPTADA
+    solicitud.reserva_id = reserva.id
+    solicitud.alternativa_aceptada_id = alternativa.id
+    solicitud.resuelto_en = utcnow()
+
+    registrar_bitacora(
+        db, tenant_id, "solicitud_reserva", solicitud.id, "solicitud_reserva_alternativa_aceptada",
+        usuario_id=cliente.id,
+        detalles={
+            "alternativa_id": alternativa.id,
+            "reserva_id": reserva.id,
+            "folio": reserva.folio,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+
+    return {
+        "solicitud": solicitud,
+        "reserva": reserva,
+        "sesion": sesion,
+    }
 
 
 # ============================================================

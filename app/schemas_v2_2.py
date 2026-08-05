@@ -480,6 +480,12 @@ class SolicitudCreate(BaseModel):
         return v
 
 
+class SolicitudAlternativaOut(BaseModel):
+    id: int
+    fecha_hora: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SolicitudOut(BaseModel):
     """Vista del cliente: sin datos de resolución internos."""
     id: int
@@ -492,6 +498,8 @@ class SolicitudOut(BaseModel):
     asesor_id: Optional[int] = None
     motivo_rechazo: Optional[str] = None
     reserva_id: Optional[int] = None
+    alternativas: List[SolicitudAlternativaOut] = Field(default_factory=list)
+    alternativa_aceptada_id: Optional[int] = None
     creado_en: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -537,7 +545,25 @@ class SolicitudConfirmarSerieIn(BaseModel):
 class SolicitudRechazarIn(BaseModel):
     """El staff rechaza una solicitud pendiente."""
     motivo: Optional[str] = Field(default=None, max_length=500)
+    alternativas: Optional[List[datetime]] = Field(default=None, max_length=10)
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("alternativas")
+    @classmethod
+    def _validar_alternativas(cls, v: Optional[List[datetime]]) -> Optional[List[datetime]]:
+        if not v:
+            return v
+        for i, dt in enumerate(v):
+            dt = exigir_aware(dt, f"alternativas[{i}]")
+            if dt <= datetime.now(dt_timezone.utc):
+                raise ValueError(f"La alternativa {i + 1} debe ser una fecha futura")
+        return v
+
+
+class SolicitudAceptarAlternativaOut(SolicitudOut):
+    """El cliente aceptó una fecha alternativa; la reserva ya fue creada."""
+    folio_reserva: Optional[str] = None
+    sesion_id: Optional[int] = None
 
 
 # ============================================================

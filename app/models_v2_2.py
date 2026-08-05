@@ -582,6 +582,9 @@ class SolicitudReserva(Base, TenantScopedMixin):
     motivo_rechazo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     reserva_id: Mapped[Optional[int]] = mapped_column(ForeignKey("reservas.id", ondelete="SET NULL"), nullable=True)
     serie_id: Mapped[Optional[int]] = mapped_column(ForeignKey("series_reservas.id", ondelete="SET NULL"), nullable=True)
+    alternativa_aceptada_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("solicitud_alternativas.id", ondelete="SET NULL"), nullable=True
+    )
     resuelto_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
     resuelto_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -589,6 +592,18 @@ class SolicitudReserva(Base, TenantScopedMixin):
     __table_args__ = (
         Index("idx_solicitudes_estado", "tenant_id", "estado"),
         Index("idx_solicitudes_cliente", "tenant_id", "cliente_usuario_id", "creado_en"),
+    )
+
+
+class SolicitudAlternativa(Base, TenantScopedMixin):
+    __tablename__ = "solicitud_alternativas"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    solicitud_id: Mapped[int] = mapped_column(ForeignKey("solicitudes_reserva.id", ondelete="CASCADE"))
+    fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        Index("idx_solicitud_alternativas_solicitud", "solicitud_id"),
     )
 
 

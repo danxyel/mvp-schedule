@@ -21,7 +21,7 @@ from app.dependencies import (
 )
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
-    SolicitudReserva, SerieReserva, InscripcionSerie, Bitacora,
+    SolicitudReserva, SolicitudAlternativa, SerieReserva, InscripcionSerie, Bitacora,
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
     EstadoSolicitud, EstadoSerie, ModalidadCobro, EstadoInscripcion, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
@@ -35,7 +35,8 @@ from app.schemas_v2_2 import (
     PaginacionOut, CheckoutUrlOut, MercadoPagoEstadoOut, MercadoPagoConectarIn, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
-    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn, SolicitudRechazarIn, CanalEnum,
+    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn,
+    SolicitudRechazarIn, SolicitudAlternativaOut, SolicitudAceptarAlternativaOut, CanalEnum,
     SerieReservaCreate, SerieReservaOut, InscripcionSerieCreate, InscripcionSerieOut,
     ConfirmarInscripcionIn, InscripcionSerieClienteOut,
     TenantCreate, TenantAdminOut, TenantUpdate, MetodoPagoDefaultIn,
@@ -204,6 +205,11 @@ def _sesion_list_out(s: Sesion) -> SesionListOut:
 
 def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
     servicio = db.get(Servicio, s.servicio_id)
+    alternativas = db.execute(
+        select(SolicitudAlternativa)
+        .where(SolicitudAlternativa.solicitud_id == s.id)
+        .order_by(SolicitudAlternativa.fecha_hora)
+    ).scalars().all()
     return SolicitudOut(
         id=s.id,
         servicio_id=s.servicio_id,
@@ -215,6 +221,8 @@ def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
         asesor_id=s.asesor_id,
         motivo_rechazo=s.motivo_rechazo,
         reserva_id=s.reserva_id,
+        alternativas=[SolicitudAlternativaOut.model_validate(a) for a in alternativas],
+        alternativa_aceptada_id=s.alternativa_aceptada_id,
         creado_en=s.creado_en,
     )
 
@@ -222,6 +230,11 @@ def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
 def _solicitud_admin_out(db: Session, s: SolicitudReserva) -> SolicitudAdminOut:
     servicio = db.get(Servicio, s.servicio_id)
     cliente = db.get(Usuario, s.cliente_usuario_id)
+    alternativas = db.execute(
+        select(SolicitudAlternativa)
+        .where(SolicitudAlternativa.solicitud_id == s.id)
+        .order_by(SolicitudAlternativa.fecha_hora)
+    ).scalars().all()
     return SolicitudAdminOut(
         id=s.id,
         servicio_id=s.servicio_id,
@@ -234,6 +247,8 @@ def _solicitud_admin_out(db: Session, s: SolicitudReserva) -> SolicitudAdminOut:
         motivo_rechazo=s.motivo_rechazo,
         reserva_id=s.reserva_id,
         serie_id=s.serie_id,
+        alternativas=[SolicitudAlternativaOut.model_validate(a) for a in alternativas],
+        alternativa_aceptada_id=s.alternativa_aceptada_id,
         creado_en=s.creado_en,
         cliente_usuario_id=s.cliente_usuario_id,
         nombre_cliente=cliente.nombre if cliente else None,
@@ -785,6 +800,82 @@ def listar_mis_solicitudes(
         ).order_by(SolicitudReserva.creado_en.desc())
     ).scalars().all()
     return [_solicitud_out(db, s) for s in filas]
+
+
+@router.post(
+    "/mis-solicitudes/{solicitud_id}/alternativas/{alternativa_id}/aceptar",
+    response_model=SolicitudAceptarAlternativaOut,
+)
+def aceptar_alternativa_solicitud_endpoint(
+    solicitud_id: int = Path(..., gt=0),
+    alternativa_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+            SolicitudReserva.cliente_usuario_id == usuario.id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if solicitud is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "solicitud_no_encontrada", "mensaje": "Solicitud no encontrada"},
+        )
+
+    alternativa = db.execute(
+        select(SolicitudAlternativa)
+        .where(
+            SolicitudAlternativa.solicitud_id == solicitud_id,
+            SolicitudAlternativa.id == alternativa_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if alternativa is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "alternativa_no_encontrada", "mensaje": "Alternativa no encontrada"},
+        )
+
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        resultado = svc.aceptar_alternativa_solicitud(
+            db, tenant, solicitud, alternativa, usuario, ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La alternativa cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error de base de datos al aceptar alternativa %s", alternativa_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    solicitud = resultado["solicitud"]
+    reserva = resultado["reserva"]
+    sesion = resultado["sesion"]
+    db.refresh(solicitud)
+    out = _solicitud_out(db, solicitud)
+    return SolicitudAceptarAlternativaOut(
+        **out.model_dump(),
+        folio_reserva=reserva.folio,
+        sesion_id=sesion.id,
+    )
 
 
 @router.get("/mis-series", response_model=List[InscripcionSerieClienteOut])
@@ -1352,11 +1443,23 @@ def rechazar_solicitud_admin(
     solicitud.resuelto_por_id = staff.usuario_id
     solicitud.resuelto_en = utcnow()
 
+    alternativas_creadas = 0
+    if payload.alternativas:
+        for fecha_hora in payload.alternativas:
+            alt = SolicitudAlternativa(
+                tenant_id=tenant.id,
+                solicitud_id=solicitud.id,
+                fecha_hora=svc._a_utc(fecha_hora),
+            )
+            db.add(alt)
+            alternativas_creadas += 1
+
     svc.registrar_bitacora(
         db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_rechazada",
         usuario_id=staff.usuario_id,
         detalles={
             "motivo_rechazo": payload.motivo,
+            "num_alternativas": alternativas_creadas,
         },
     )
 

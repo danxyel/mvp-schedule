@@ -837,6 +837,7 @@ class ServicioAdminIn(BaseModel):
     visible_web: bool = True
     requiere_confirmacion: bool = False
     permite_solicitudes: bool = False
+    encuesta_satisfaccion_formulario_id: Optional[int] = None
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -882,6 +883,7 @@ class ServicioAdminUpdate(BaseModel):
     visible_web: Optional[bool] = None
     requiere_confirmacion: Optional[bool] = None
     permite_solicitudes: Optional[bool] = None
+    encuesta_satisfaccion_formulario_id: Optional[int] = None
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -958,6 +960,7 @@ class ServicioAdminOut(BaseModel):
     precio_paquete: Optional[Decimal] = None
     requiere_confirmacion: bool = False
     permite_solicitudes: bool = False
+    encuesta_satisfaccion_formulario_id: Optional[int] = None
     visible_web: bool
     activo: bool
     creado_en: datetime

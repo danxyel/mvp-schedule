@@ -174,6 +174,11 @@ class TipoCampoFormulario(str, PyEnum):
     ARCHIVO = "archivo"; RATING = "rating"
 
 
+class TipoFormulario(str, PyEnum):
+    INTAKE = "intake"
+    SATISFACCION = "satisfaccion"
+
+
 ESTADOS_OCUPAN_CUPO = (
     EstadoReserva.PENDIENTE.value,
     EstadoReserva.EN_ESPERA.value,
@@ -407,6 +412,9 @@ class Servicio(Base, TenantScopedMixin):
     creacion_por_alumno: Mapped[bool] = mapped_column(default=False)
     formulario_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("formularios.id", ondelete="SET NULL"), nullable=True
+    )
+    encuesta_satisfaccion_formulario_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("formularios.id", ondelete="SET NULL"), nullable=True,
     )
     config_json: Mapped[dict] = mapped_column(JSON, default=dict)
     activo: Mapped[bool] = mapped_column(default=True)
@@ -767,6 +775,7 @@ class Formulario(Base, TenantScopedMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     servicio_id: Mapped[Optional[int]] = mapped_column(ForeignKey("servicios.id", ondelete="CASCADE"), nullable=True)
     nombre: Mapped[str] = mapped_column(String(255))
+    tipo: Mapped[TipoFormulario] = mapped_column(SQLEnum(TipoFormulario), default=TipoFormulario.INTAKE)
     activo: Mapped[bool] = mapped_column(default=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     tenant: Mapped["Tenant"] = relationship(back_populates="formularios")
@@ -783,6 +792,7 @@ class CampoFormulario(Base):
     placeholder: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     requerido: Mapped[bool] = mapped_column(default=False)
     opciones: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    grupo_matriz: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     validacion_regex: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     ayuda: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     activo: Mapped[bool] = mapped_column(default=True)
@@ -803,6 +813,21 @@ class RespuestaFormulario(Base):
     __table_args__ = (UniqueConstraint("reserva_id", "campo_id", name="uq_respuesta_campo"),)
     reserva: Mapped["Reserva"] = relationship(back_populates="respuestas_formulario")
     campo: Mapped["CampoFormulario"] = relationship(back_populates="respuestas")
+
+
+class EncuestaEnvio(Base, TenantScopedMixin):
+    __tablename__ = "encuesta_envios"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    formulario_id: Mapped[int] = mapped_column(ForeignKey("formularios.id", ondelete="CASCADE"))
+    reserva_id: Mapped[int] = mapped_column(ForeignKey("reservas.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    respondido_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    tenant: Mapped["Tenant"] = relationship()
+    formulario: Mapped["Formulario"] = relationship()
+    reserva: Mapped["Reserva"] = relationship()
 
 
 # ============================================================

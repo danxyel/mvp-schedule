@@ -373,6 +373,15 @@ export default function MisReservas() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Mis reservas</h2>
         <div className="flex items-center gap-4">
+          {tenantSlug && (
+            <button
+              type="button"
+              onClick={() => navigate(`/t/${tenantSlug}`)}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Agendar nueva sesión
+            </button>
+          )}
           <button
             type="button"
             onClick={() => navigate('/mis-series')}

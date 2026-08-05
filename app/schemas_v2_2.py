@@ -409,6 +409,13 @@ class CheckoutUrlOut(BaseModel):
     expira_en: Optional[datetime] = None
 
 
+class MercadoPagoEstadoOut(BaseModel):
+    conectado: bool
+    mp_user_id: Optional[str] = None
+    tenant_id: int
+    metodo_pago_default: str = "local"
+
+
 class ReservaCreateResponse(BaseModel):
     """Respuesta del POST /reservas.
 
@@ -691,6 +698,7 @@ class TenantAdminOut(BaseModel):
     # el formulario al reabrir el modal. `password` NUNCA sale por aquí.
     smtp_config: Optional[dict] = None
     pago_configurado: bool = False
+    metodo_pago_default: str = "local"
 
 
 class TenantUpdate(BaseModel):
@@ -706,6 +714,11 @@ class TenantUpdate(BaseModel):
     max_reservas_mes: Optional[int] = Field(None, ge=1)
     max_reservas_serie: Optional[int] = Field(None, ge=1, le=50)
     smtp_config: Optional[dict] = None
+    metodo_pago_default: Optional[str] = Field(None, pattern=r"^(online|local|registro)$")
+
+
+class MetodoPagoDefaultIn(BaseModel):
+    metodo_pago_default: str = Field(..., pattern=r"^(online|local|registro)$")
 
 
 # ============================================================

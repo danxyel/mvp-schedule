@@ -22,7 +22,7 @@ from app.dependencies import (
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
     SolicitudReserva, SerieReserva, InscripcionSerie, Bitacora,
-    RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
+    RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
     EstadoSolicitud, EstadoSerie, ModalidadCobro, EstadoInscripcion, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
     TipoBloqueo, utcnow,
@@ -32,13 +32,13 @@ from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaPublicaOut, ReservaCreateResponse, ReagendarSesionIn,
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
-    PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
+    PaginacionOut, CheckoutUrlOut, MercadoPagoEstadoOut, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
     SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn, SolicitudRechazarIn, CanalEnum,
     SerieReservaCreate, SerieReservaOut, InscripcionSerieCreate, InscripcionSerieOut,
     ConfirmarInscripcionIn, InscripcionSerieClienteOut,
-    TenantCreate, TenantAdminOut, TenantUpdate,
+    TenantCreate, TenantAdminOut, TenantUpdate, MetodoPagoDefaultIn,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
     UsuarioGlobalOut, UsuariosGlobalPaginadosOut, UsuarioGlobalDetalleOut, MembresiaGlobalOut,
@@ -2816,7 +2816,7 @@ def conectar_mercadopago(
     return {"url": url}
 
 
-@router.get("/admin/mercadopago/estado")
+@router.get("/admin/mercadopago/estado", response_model=MercadoPagoEstadoOut)
 def estado_mercadopago(
     tenant: Tenant = Depends(get_current_tenant),
     _: UsuarioTenant = Depends(requiere_admin),
@@ -2826,7 +2826,27 @@ def estado_mercadopago(
     return {
         "conectado": bool(cfg.get("access_token")),
         "mp_user_id": cfg.get("mp_user_id"),
+        "tenant_id": tenant.id,
+        "metodo_pago_default": (
+            tenant.metodo_pago_default.value
+            if hasattr(tenant.metodo_pago_default, "value")
+            else (tenant.metodo_pago_default or "local")
+        ),
     }
+
+
+@router.patch("/admin/tenant/metodo-pago-default", response_model=TenantAdminOut)
+def actualizar_metodo_pago_default(
+    body: MetodoPagoDefaultIn,
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Permite al admin del tenant cambiar el método de pago por default."""
+    tenant.metodo_pago_default = MetodoPago(body.metodo_pago_default)
+    db.commit()
+    db.refresh(tenant)
+    return _tenant_admin_out(tenant)
 
 
 @router.post("/reservas/{folio}/checkout", response_model=CheckoutUrlOut)
@@ -2931,6 +2951,11 @@ def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
         smtp_configurado=bool(smtp.get("host")),
         smtp_config=smtp_salida,
         pago_configurado=bool(pago.get("access_token")),
+        metodo_pago_default=(
+            t.metodo_pago_default.value
+            if hasattr(t.metodo_pago_default, "value")
+            else (t.metodo_pago_default or "local")
+        ),
     )
 
 
@@ -3023,6 +3048,9 @@ def actualizar_tenant(
 
     if "plan" in cambios:
         cambios["plan"] = PlanTenant(cambios["plan"])
+
+    if "metodo_pago_default" in cambios:
+        cambios["metodo_pago_default"] = MetodoPago(cambios["metodo_pago_default"])
 
     if "smtp_config" in cambios:
         # smtp_config es write-only desde el frontend (el password nunca se

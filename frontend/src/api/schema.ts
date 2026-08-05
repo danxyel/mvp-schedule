@@ -1043,6 +1043,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/tenant/metodo-pago-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Actualizar Metodo Pago Default
+         * @description Permite al admin del tenant cambiar el método de pago por default.
+         */
+        patch: operations["actualizar_metodo_pago_default_api_v2__tenant_slug__admin_tenant_metodo_pago_default_patch"];
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/reservas/{folio}/checkout": {
         parameters: {
             query?: never;
@@ -1704,6 +1724,25 @@ export interface components {
              * Format: date-time
              */
             fecha_vinculacion: string;
+        };
+        /** MercadoPagoEstadoOut */
+        MercadoPagoEstadoOut: {
+            /** Conectado */
+            conectado: boolean;
+            /** Mp User Id */
+            mp_user_id?: string | null;
+            /** Tenant Id */
+            tenant_id: number;
+            /**
+             * Metodo Pago Default
+             * @default local
+             */
+            metodo_pago_default: string;
+        };
+        /** MetodoPagoDefaultIn */
+        MetodoPagoDefaultIn: {
+            /** Metodo Pago Default */
+            metodo_pago_default: string;
         };
         /**
          * MetodoPagoEnum
@@ -2708,6 +2747,11 @@ export interface components {
              * @default false
              */
             pago_configurado: boolean;
+            /**
+             * Metodo Pago Default
+             * @default local
+             */
+            metodo_pago_default: string;
         };
         /** TenantCreate */
         TenantCreate: {
@@ -2795,6 +2839,8 @@ export interface components {
             max_reservas_serie?: number | null;
             /** Smtp Config */
             smtp_config?: Record<string, never> | null;
+            /** Metodo Pago Default */
+            metodo_pago_default?: string | null;
         };
         /**
          * TipoAgendaEnum
@@ -4989,7 +5035,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MercadoPagoEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_metodo_pago_default_api_v2__tenant_slug__admin_tenant_metodo_pago_default_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetodoPagoDefaultIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantAdminOut"];
                 };
             };
             /** @description Validation Error */

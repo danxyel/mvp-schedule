@@ -142,6 +142,12 @@ export default function Login() {
           </button>
         </form>
 
+        <div className="mt-2 text-center">
+          <Link to="/recuperar-password" className="text-sm text-blue-600 hover:underline">
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
+
         {tenantSlug && (
           <div className="mt-4 text-center">
             <Link to={`/t/${tenantSlug}/reclamar`} className="text-sm text-blue-600 hover:underline">

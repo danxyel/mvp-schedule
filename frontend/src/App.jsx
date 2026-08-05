@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './components/Login'
 import Reclamar from './components/Reclamar'
 import Activar from './components/Activar'
+import RecuperarPassword from './components/RecuperarPassword'
+import RestablecerPassword from './components/RestablecerPassword'
 import SeleccionServicio from './components/SeleccionServicio'
 import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
@@ -24,6 +26,8 @@ function App() {
       <Routes>
         {/* Rutas públicas */}
         <Route path="/login" element={<Login />} />
+        <Route path="/recuperar-password" element={<RecuperarPassword />} />
+        <Route path="/recuperar-password/confirmar" element={<RestablecerPassword />} />
 
         {/* Ruta pública: detalle de reserva por folio + código */}
         <Route path="/t/:tenantSlug/r/:folio" element={<DetalleReservaPublica />} />

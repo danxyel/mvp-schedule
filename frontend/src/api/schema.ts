@@ -770,6 +770,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/formularios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Formularios Admin */
+        get: operations["listar_formularios_admin_api_v2__tenant_slug__admin_formularios_get"];
+        put?: never;
+        /** Crear Formulario Admin */
+        post: operations["crear_formulario_admin_api_v2__tenant_slug__admin_formularios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtener Formulario Admin */
+        get: operations["obtener_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Actualizar Formulario Admin */
+        patch: operations["actualizar_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Crear Campos Formulario Admin */
+        post: operations["crear_campos_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Actualizar Campo Formulario Admin */
+        patch: operations["actualizar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}/desactivar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Desactivar Campo Formulario Admin */
+        patch: operations["desactivar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__desactivar_patch"];
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/usuarios": {
         parameters: {
             query?: never;
@@ -1173,6 +1260,32 @@ export interface paths {
         get: operations["estado_google_meet_api_v2__tenant_slug__admin_google_meet_estado_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/google-meet/revisar-contenido": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revisar Contenido Google Meet
+         * @description Dispara manualmente el mismo job que corre APScheduler cada 10 min
+         *     (organiza carpetas de Drive, renombra archivos, otorga permisos y manda
+         *     el correo de contenido para sesiones virtuales ya terminadas). Pensado
+         *     como botón de emergencia mientras el backend esté en un plan de Render
+         *     que se duerme por inactividad — mientras está dormido, el scheduler en
+         *     proceso tampoco corre, así que el contenido se queda sin procesar hasta
+         *     que algo despierta al servicio.
+         */
+        post: operations["revisar_contenido_google_meet_api_v2__tenant_slug__admin_google_meet_revisar_contenido_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1631,6 +1744,91 @@ export interface components {
             /** Tenant Id */
             tenant_id: number;
         };
+        /** CampoFormularioAdminIn */
+        CampoFormularioAdminIn: {
+            tipo: components["schemas"]["TipoCampoFormularioEnum"];
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /**
+             * Requerido
+             * @default false
+             */
+            requerido: boolean;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Validacion Regex */
+            validacion_regex?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /**
+             * Orden
+             * @default 0
+             */
+            orden: number;
+        };
+        /** CampoFormularioAdminOut */
+        CampoFormularioAdminOut: {
+            /** Id */
+            id: number;
+            /** Formulario Id */
+            formulario_id: number;
+            /** Tipo */
+            tipo: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Requerido */
+            requerido: boolean;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Validacion Regex */
+            validacion_regex?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /** Orden */
+            orden: number;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /** CampoFormularioAdminUpdate */
+        CampoFormularioAdminUpdate: {
+            tipo?: components["schemas"]["TipoCampoFormularioEnum"] | null;
+            /** Label */
+            label?: string | null;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Requerido */
+            requerido?: boolean | null;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Validacion Regex */
+            validacion_regex?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /** Orden */
+            orden?: number | null;
+            /** Activo */
+            activo?: boolean | null;
+        };
+        /** CampoFormularioBulkAdminIn */
+        CampoFormularioBulkAdminIn: {
+            /** Items */
+            items: components["schemas"]["CampoFormularioAdminIn"][];
+        };
         /**
          * CanalEnum
          * @enum {string}
@@ -1717,6 +1915,63 @@ export interface components {
          * @enum {string}
          */
         EstadoSolicitudEnum: "pendiente" | "aceptada" | "rechazada" | "cancelada";
+        /** FormularioAdminIn */
+        FormularioAdminIn: {
+            /** Nombre */
+            nombre: string;
+            /** @default satisfaccion */
+            tipo: components["schemas"]["TipoFormularioEnum"];
+        };
+        /** FormularioAdminOut */
+        FormularioAdminOut: {
+            /** Id */
+            id: number;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Nombre */
+            nombre: string;
+            /** Tipo */
+            tipo: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Campos
+             * @default []
+             */
+            campos: components["schemas"]["CampoFormularioAdminOut"][];
+        };
+        /** FormularioAdminUpdate */
+        FormularioAdminUpdate: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Activo */
+            activo?: boolean | null;
+        };
+        /** FormularioListAdminOut */
+        FormularioListAdminOut: {
+            /** Id */
+            id: number;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Nombre */
+            nombre: string;
+            /** Tipo */
+            tipo: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Num Campos */
+            num_campos: number;
+        };
         /** GoogleMeetConectarIn */
         GoogleMeetConectarIn: {
             /**
@@ -2399,6 +2654,8 @@ export interface components {
              * @default false
              */
             permite_solicitudes: boolean;
+            /** Encuesta Satisfaccion Formulario Id */
+            encuesta_satisfaccion_formulario_id?: number | null;
         };
         /** ServicioAdminOut */
         ServicioAdminOut: {
@@ -2456,6 +2713,8 @@ export interface components {
              * @default false
              */
             permite_solicitudes: boolean;
+            /** Encuesta Satisfaccion Formulario Id */
+            encuesta_satisfaccion_formulario_id?: number | null;
             /** Visible Web */
             visible_web: boolean;
             /** Activo */
@@ -2516,6 +2775,8 @@ export interface components {
             requiere_confirmacion?: boolean | null;
             /** Permite Solicitudes */
             permite_solicitudes?: boolean | null;
+            /** Encuesta Satisfaccion Formulario Id */
+            encuesta_satisfaccion_formulario_id?: number | null;
         };
         /** ServicioPublicOut */
         ServicioPublicOut: {
@@ -3109,6 +3370,16 @@ export interface components {
          * @enum {string}
          */
         TipoBloqueoEnum: "vacaciones" | "feriado" | "mantenimiento" | "personal" | "otro";
+        /**
+         * TipoCampoFormularioEnum
+         * @enum {string}
+         */
+        TipoCampoFormularioEnum: "texto" | "textarea" | "numero" | "email" | "telefono" | "fecha" | "select" | "multiselect" | "checkbox" | "radio" | "archivo" | "rating";
+        /**
+         * TipoFormularioEnum
+         * @enum {string}
+         */
+        TipoFormularioEnum: "intake" | "satisfaccion";
         /** UsuarioAdminOut */
         UsuarioAdminOut: {
             /** Id */
@@ -4679,6 +4950,251 @@ export interface operations {
             };
         };
     };
+    listar_formularios_admin_api_v2__tenant_slug__admin_formularios_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por tipo de formulario */
+                tipo?: components["schemas"]["TipoFormularioEnum"] | null;
+                /** @description Filtrar por estado activo */
+                activo?: boolean | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioListAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_formulario_admin_api_v2__tenant_slug__admin_formularios_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormularioAdminIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obtener_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormularioAdminUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_campos_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampoFormularioBulkAdminIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampoFormularioAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                campo_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampoFormularioAdminUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampoFormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desactivar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__desactivar_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                campo_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_usuarios_admin_api_v2__tenant_slug__admin_usuarios_get: {
         parameters: {
             query?: never;
@@ -5533,6 +6049,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GoogleMeetEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revisar_contenido_google_meet_api_v2__tenant_slug__admin_google_meet_revisar_contenido_post: {
+        parameters: {
+            query?: {
+                /** @description Si viene, fuerza el reprocesamiento de la sesión de ESE folio específico, sin importar si ya tiene contenido_enviado_en marcado o si fecha_hora_fin todavía no cumple el margen. Úsalo cuando una sesión se quedó a medias (ej. carpetas creadas pero correo nunca salió porque el proceso se interrumpió después de marcarla como ya procesada). */
+                folio?: string | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
                 };
             };
             /** @description Validation Error */

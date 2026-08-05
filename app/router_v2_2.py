@@ -25,7 +25,7 @@ from app.models_v2_2 import (
     RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
     EstadoSolicitud, EstadoSerie, ModalidadCobro, EstadoInscripcion, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
-    TipoBloqueo, utcnow,
+    TipoBloqueo, utcnow, Formulario, CampoFormulario, TipoFormulario,
 )
 from app.rate_limiter import limiter
 from app.schemas_v2_2 import (
@@ -45,6 +45,9 @@ from app.schemas_v2_2 import (
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
     UsuarioGlobalOut, UsuariosGlobalPaginadosOut, UsuarioGlobalDetalleOut, MembresiaGlobalOut,
     BloqueoCreate, BloqueoOut,
+    TipoFormularioEnum, FormularioAdminIn, FormularioAdminUpdate, FormularioAdminOut,
+    FormularioListAdminOut, CampoFormularioBulkAdminIn, CampoFormularioAdminUpdate,
+    CampoFormularioAdminOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -2095,6 +2098,24 @@ def _serie_admin_out(
     )
 
 
+def _validar_formulario_encuesta(db: Session, tenant_id: int, formulario_id: Optional[int]) -> None:
+    if formulario_id is None:
+        return
+    f = db.execute(
+        select(Formulario).where(
+            Formulario.id == formulario_id,
+            Formulario.tenant_id == tenant_id,
+            Formulario.tipo == TipoFormulario.SATISFACCION,
+            Formulario.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "La plantilla de encuesta no existe, no pertenece al tenant o no está activa",
+        )
+
+
 # ============================================================
 # ADMIN — GESTIÓN DE SERVICIOS
 # ============================================================
@@ -2148,7 +2169,9 @@ def crear_servicio_admin(
         precio_paquete=body.precio_paquete,
         visible_web=body.visible_web,
         requiere_confirmacion=body.requiere_confirmacion,
+        encuesta_satisfaccion_formulario_id=body.encuesta_satisfaccion_formulario_id,
     )
+    _validar_formulario_encuesta(db, tenant.id, body.encuesta_satisfaccion_formulario_id)
     db.add(s)
     try:
         db.commit()
@@ -2176,6 +2199,9 @@ def actualizar_servicio_admin(
     cambios = body.model_dump(exclude_unset=True)
     if not cambios:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se enviaron campos para actualizar")
+
+    if "encuesta_satisfaccion_formulario_id" in cambios:
+        _validar_formulario_encuesta(db, tenant.id, cambios["encuesta_satisfaccion_formulario_id"])
 
     if "tipo_agenda" in cambios:
         cambios["tipo_agenda"] = TipoAgenda(cambios["tipo_agenda"].value)
@@ -2299,6 +2325,233 @@ def listar_sesiones_por_servicio_admin(
         items=[_sesion_list_out(s) for s in sesiones],
         paginacion=PaginacionOut(total=total, limit=limit, offset=offset),
     )
+
+
+# ============================================================
+# ADMIN — GESTIÓN DE FORMULARIOS / ENCUESTAS
+# ============================================================
+@router.get("/admin/formularios", response_model=List[FormularioListAdminOut])
+def listar_formularios_admin(
+    tipo: Optional[TipoFormularioEnum] = Query(None, description="Filtrar por tipo de formulario"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    cond = [Formulario.tenant_id == tenant.id]
+    if tipo is not None:
+        cond.append(Formulario.tipo == tipo.value)
+    if activo is not None:
+        cond.append(Formulario.activo.is_(activo))
+
+    stmt = (
+        select(Formulario, func.count(CampoFormulario.id).label("num_campos"))
+        .outerjoin(CampoFormulario, CampoFormulario.formulario_id == Formulario.id)
+        .where(*cond)
+        .group_by(Formulario.id)
+        .order_by(Formulario.creado_en.desc())
+    )
+    result = db.execute(stmt).all()
+    out = []
+    for f, num_campos in result:
+        out.append(
+            FormularioListAdminOut(
+                id=f.id,
+                tenant_id=f.tenant_id,
+                nombre=f.nombre,
+                tipo=f.tipo.value,
+                activo=f.activo,
+                creado_en=f.creado_en,
+                num_campos=num_campos,
+            )
+        )
+    return out
+
+
+@router.post("/admin/formularios", response_model=FormularioAdminOut, status_code=status.HTTP_201_CREATED)
+def crear_formulario_admin(
+    body: FormularioAdminIn,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = Formulario(
+        tenant_id=tenant.id,
+        nombre=body.nombre,
+        tipo=body.tipo.value,
+    )
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return FormularioAdminOut(
+        id=f.id,
+        tenant_id=f.tenant_id,
+        nombre=f.nombre,
+        tipo=f.tipo.value,
+        activo=f.activo,
+        creado_en=f.creado_en,
+        campos=[],
+    )
+
+
+@router.get("/admin/formularios/{formulario_id}", response_model=FormularioAdminOut)
+def obtener_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario)
+        .where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+        .options(selectinload(Formulario.campos))
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+    return FormularioAdminOut.model_validate(f)
+
+
+@router.patch("/admin/formularios/{formulario_id}", response_model=FormularioAdminOut)
+def actualizar_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    body: FormularioAdminUpdate = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario)
+        .where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+        .options(selectinload(Formulario.campos))
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    cambios = body.model_dump(exclude_unset=True)
+    if not cambios:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se enviaron campos para actualizar")
+
+    for campo, valor in cambios.items():
+        setattr(f, campo, valor)
+
+    db.commit()
+    db.refresh(f)
+    return FormularioAdminOut.model_validate(f)
+
+
+@router.post(
+    "/admin/formularios/{formulario_id}/campos",
+    response_model=List[CampoFormularioAdminOut],
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_campos_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    body: CampoFormularioBulkAdminIn = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    max_orden = db.execute(
+        select(func.coalesce(func.max(CampoFormulario.orden), 0)).where(
+            CampoFormulario.formulario_id == formulario_id
+        )
+    ).scalar_one()
+
+    creados = []
+    for i, item in enumerate(body.items):
+        c = CampoFormulario(
+            formulario_id=formulario_id,
+            orden=item.orden if item.orden is not None else max_orden + i + 1,
+            tipo=item.tipo.value,
+            label=item.label,
+            placeholder=item.placeholder,
+            requerido=item.requerido,
+            opciones=item.opciones,
+            grupo_matriz=item.grupo_matriz,
+            validacion_regex=item.validacion_regex,
+            ayuda=item.ayuda,
+        )
+        db.add(c)
+        creados.append(c)
+    db.commit()
+    for c in creados:
+        db.refresh(c)
+    return [CampoFormularioAdminOut.model_validate(c) for c in creados]
+
+
+@router.patch(
+    "/admin/formularios/{formulario_id}/campos/{campo_id}",
+    response_model=CampoFormularioAdminOut,
+)
+def actualizar_campo_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    campo_id: int = Path(..., gt=0),
+    body: CampoFormularioAdminUpdate = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    c = db.execute(
+        select(CampoFormulario).where(
+            CampoFormulario.id == campo_id,
+            CampoFormulario.formulario_id == formulario_id,
+        )
+    ).scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Campo no encontrado")
+
+    cambios = body.model_dump(exclude_unset=True)
+    for campo, valor in cambios.items():
+        if isinstance(valor, Enum):
+            valor = valor.value
+        setattr(c, campo, valor)
+
+    db.commit()
+    db.refresh(c)
+    return CampoFormularioAdminOut.model_validate(c)
+
+
+@router.patch(
+    "/admin/formularios/{formulario_id}/campos/{campo_id}/desactivar",
+    response_model=OperacionOut,
+)
+def desactivar_campo_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    campo_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    c = db.execute(
+        select(CampoFormulario).where(
+            CampoFormulario.id == campo_id,
+            CampoFormulario.formulario_id == formulario_id,
+        )
+    ).scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Campo no encontrado")
+
+    c.activo = False
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Campo desactivado", detalle={"id": campo_id})
 
 
 # ============================================================

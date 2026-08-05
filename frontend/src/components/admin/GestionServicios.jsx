@@ -110,6 +110,8 @@ const FORM_VACIO = {
   permite_solicitudes: false,
   buffer_antes_min: 0,
   buffer_despues_min: 0,
+  encuesta_habilitada: false,
+  encuesta_satisfaccion_formulario_id: '',
 }
 
 function formatPrecio(precio, moneda) {
@@ -132,7 +134,7 @@ function Badge({ value, map, labelMap, color }) {
   )
 }
 
-export default function GestionServicios({ tenantSlug, token, onIrACrearSerie }) {
+export default function GestionServicios({ tenantSlug, token, onIrACrearSerie, onIrAEncuestas }) {
   const [servicios, setServicios] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -155,6 +157,7 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
   const [franjasNuevas, setFranjasNuevas] = useState([])
   const [form, setForm] = useState(FORM_VACIO)
   const [exitoServicio, setExitoServicio] = useState(null)
+  const [encuestas, setEncuestas] = useState([])
 
   const fetchServicios = useCallback(async () => {
     setLoading(true)
@@ -179,6 +182,25 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
     fetchServicios()
   }, [fetchServicios])
 
+  const fetchEncuestas = useCallback(async () => {
+    const { data, error: fetchErr } = await client.GET(
+      '/api/v2/{tenant_slug}/admin/formularios',
+      {
+        params: {
+          path: { tenant_slug: tenantSlug },
+          query: { tipo: 'satisfaccion', activo: true },
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    if (fetchErr) return
+    setEncuestas(data ?? [])
+  }, [tenantSlug, token])
+
+  useEffect(() => {
+    fetchEncuestas()
+  }, [fetchEncuestas])
+
   const reintentar = () => {
     setLoading(true)
     setError(null)
@@ -189,6 +211,7 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
     setForm({ ...FORM_VACIO })
     setFranjasNuevas([])
     setCrearError(null)
+    fetchEncuestas()
     setModalAbierto(true)
   }
 
@@ -213,9 +236,12 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
       permite_solicitudes: s.permite_solicitudes ?? false,
       buffer_antes_min: s.buffer_antes_min,
       buffer_despues_min: s.buffer_despues_min,
+      encuesta_habilitada: !!s.encuesta_satisfaccion_formulario_id,
+      encuesta_satisfaccion_formulario_id: s.encuesta_satisfaccion_formulario_id ?? '',
     })
     setEditarError(null)
     setEditando(s)
+    fetchEncuestas()
   }
 
   const setCampo = (campo, valor) => {
@@ -292,6 +318,10 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
       permite_solicitudes: form.permite_solicitudes,
       buffer_antes_min: Number(form.buffer_antes_min),
       buffer_despues_min: Number(form.buffer_despues_min),
+      encuesta_satisfaccion_formulario_id:
+        form.encuesta_habilitada && form.encuesta_satisfaccion_formulario_id
+          ? Number(form.encuesta_satisfaccion_formulario_id)
+          : null,
     }
 
     setCrearLoading(true)
@@ -409,6 +439,14 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
     }
     if (Number(form.buffer_despues_min) !== editando.buffer_despues_min) {
       cambios.buffer_despues_min = Number(form.buffer_despues_min)
+    }
+    const encuestaIdActual = editando.encuesta_satisfaccion_formulario_id ?? null
+    const encuestaIdNuevo =
+      form.encuesta_habilitada && form.encuesta_satisfaccion_formulario_id
+        ? Number(form.encuesta_satisfaccion_formulario_id)
+        : null
+    if (encuestaIdNuevo !== encuestaIdActual) {
+      cambios.encuesta_satisfaccion_formulario_id = encuestaIdNuevo
     }
 
     if (Object.keys(cambios).length === 0) {
@@ -931,6 +969,41 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
               </label>
             </div>
 
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-900">
+                <input
+                  type="checkbox"
+                  checked={form.encuesta_habilitada}
+                  onChange={(e) => setCampo('encuesta_habilitada', e.target.checked)}
+                  className="h-4 w-4 rounded border-blue-300 text-blue-600"
+                />
+                Enviar encuesta de satisfacción al terminar la sesión
+              </label>
+              {form.encuesta_habilitada && (
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <select
+                    value={form.encuesta_satisfaccion_formulario_id}
+                    onChange={(e) => setCampo('encuesta_satisfaccion_formulario_id', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-72"
+                  >
+                    <option value="">Selecciona una plantilla...</option>
+                    {encuestas.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={onIrAEncuestas}
+                    className="text-sm font-medium text-blue-700 transition hover:text-blue-900"
+                  >
+                    + Crear nueva plantilla
+                  </button>
+                </div>
+              )}
+            </div>
+
             {form.tipo_agenda === 'recurrente' && (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <p className="mb-2 text-xs font-medium text-gray-500">Modalidades de cobro para series</p>
@@ -1236,6 +1309,41 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
                 />
                 Permite proponer fecha alternativa
               </label>
+            </div>
+
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-900">
+                <input
+                  type="checkbox"
+                  checked={form.encuesta_habilitada}
+                  onChange={(e) => setCampo('encuesta_habilitada', e.target.checked)}
+                  className="h-4 w-4 rounded border-blue-300 text-blue-600"
+                />
+                Enviar encuesta de satisfacción al terminar la sesión
+              </label>
+              {form.encuesta_habilitada && (
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <select
+                    value={form.encuesta_satisfaccion_formulario_id}
+                    onChange={(e) => setCampo('encuesta_satisfaccion_formulario_id', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-72"
+                  >
+                    <option value="">Selecciona una plantilla...</option>
+                    {encuestas.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={onIrAEncuestas}
+                    className="text-sm font-medium text-blue-700 transition hover:text-blue-900"
+                  >
+                    + Crear nueva plantilla
+                  </button>
+                </div>
+              )}
             </div>
 
             {form.tipo_agenda === 'recurrente' && (

@@ -997,6 +997,112 @@ class TipoBloqueoEnum(str, Enum):
     OTRO = "otro"
 
 
+# ============================================================
+# FORMULARIOS (intake + satisfacción)
+# ============================================================
+class TipoFormularioEnum(str, Enum):
+    INTAKE = "intake"
+    SATISFACCION = "satisfaccion"
+
+
+class TipoCampoFormularioEnum(str, Enum):
+    TEXTO = "texto"
+    TEXTAREA = "textarea"
+    NUMERO = "numero"
+    EMAIL = "email"
+    TELEFONO = "telefono"
+    FECHA = "fecha"
+    SELECT = "select"
+    MULTISELECT = "multiselect"
+    CHECKBOX = "checkbox"
+    RADIO = "radio"
+    ARCHIVO = "archivo"
+    RATING = "rating"
+
+
+class CampoFormularioAdminIn(BaseModel):
+    tipo: TipoCampoFormularioEnum
+    label: str = Field(..., min_length=1, max_length=255)
+    placeholder: Optional[str] = Field(None, max_length=255)
+    requerido: bool = False
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = Field(None, max_length=255)
+    validacion_regex: Optional[str] = Field(None, max_length=255)
+    ayuda: Optional[str] = Field(None, max_length=1000)
+    orden: int = Field(0, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
+
+class CampoFormularioBulkAdminIn(BaseModel):
+    items: List[CampoFormularioAdminIn] = Field(..., min_length=1)
+    model_config = ConfigDict(extra="forbid")
+
+
+class CampoFormularioAdminUpdate(BaseModel):
+    tipo: Optional[TipoCampoFormularioEnum] = None
+    label: Optional[str] = Field(None, min_length=1, max_length=255)
+    placeholder: Optional[str] = Field(None, max_length=255)
+    requerido: Optional[bool] = None
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = Field(None, max_length=255)
+    validacion_regex: Optional[str] = Field(None, max_length=255)
+    ayuda: Optional[str] = Field(None, max_length=1000)
+    orden: Optional[int] = Field(None, ge=0)
+    activo: Optional[bool] = None
+    model_config = ConfigDict(extra="forbid")
+
+
+class CampoFormularioAdminOut(BaseModel):
+    id: int
+    formulario_id: int
+    tipo: str
+    label: str
+    placeholder: Optional[str] = None
+    requerido: bool
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = None
+    validacion_regex: Optional[str] = None
+    ayuda: Optional[str] = None
+    orden: int
+    activo: bool
+    creado_en: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FormularioAdminIn(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=255)
+    tipo: TipoFormularioEnum = TipoFormularioEnum.SATISFACCION
+    model_config = ConfigDict(extra="forbid")
+
+
+class FormularioAdminUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=255)
+    activo: Optional[bool] = None
+    model_config = ConfigDict(extra="forbid")
+
+
+class FormularioListAdminOut(BaseModel):
+    id: int
+    tenant_id: int
+    nombre: str
+    tipo: str
+    activo: bool
+    creado_en: datetime
+    num_campos: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FormularioAdminOut(BaseModel):
+    id: int
+    tenant_id: int
+    nombre: str
+    tipo: str
+    activo: bool
+    creado_en: datetime
+    campos: List[CampoFormularioAdminOut] = []
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BloqueoCreate(BaseModel):
     entidad_tipo: str = "asesor"
     entidad_id: Optional[int] = Field(None, gt=0)

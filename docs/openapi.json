@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MVP Schedule",
-    "description": "Sistema de agendamiento multitenant · v2.2",
+    "description": "Sistema de agendamiento multitenant \u00b7 v2.2",
     "version": "2.2.0"
   },
   "paths": {
@@ -90,7 +90,7 @@
           "Auth"
         ],
         "summary": "Validar Token Activacion",
-        "description": "Chequeo de solo lectura — no consume el token ni dice de quién es.\n\nPermite que la pantalla de activación avise \"enlace inválido o\nvencido\" antes de que el usuario llene el formulario de contraseña.",
+        "description": "Chequeo de solo lectura \u2014 no consume el token ni dice de qui\u00e9n es.\n\nPermite que la pantalla de activaci\u00f3n avise \"enlace inv\u00e1lido o\nvencido\" antes de que el usuario llene el formulario de contrase\u00f1a.",
         "operationId": "validar_token_activacion_auth_activar_cuenta_validar_get",
         "parameters": [
           {
@@ -131,7 +131,7 @@
           "Auth"
         ],
         "summary": "Activar Cuenta",
-        "description": "Activa una cuenta sin contraseña (invitado de reserva, vinculado por\nadmin/superadmin, inscrito en serie) usando el token de un solo uso\nmandado por email. Global — no depende de tenant_slug: el token ya\nidentifica al usuario sin ambigüedad, y la respuesta reusa la misma\nresolución de membresía que /auth/login (auto-login inmediato).",
+        "description": "Activa una cuenta sin contrase\u00f1a (invitado de reserva, vinculado por\nadmin/superadmin, inscrito en serie) usando el token de un solo uso\nmandado por email. Global \u2014 no depende de tenant_slug: el token ya\nidentifica al usuario sin ambig\u00fcedad, y la respuesta reusa la misma\nresoluci\u00f3n de membres\u00eda que /auth/login (auto-login inmediato).",
         "operationId": "activar_cuenta_auth_activar_cuenta_post",
         "requestBody": {
           "content": {
@@ -171,7 +171,7 @@
           "Auth"
         ],
         "summary": "Recuperar Password",
-        "description": "Autoservicio: manda un enlace para restablecer contraseña si el\ncorreo pertenece a una cuenta activa que YA tiene contraseña.\n\nResponde SIEMPRE el mismo mensaje genérico, exista o no la cuenta,\ntenga o no ya password, esté o no activa — anti-enumeración.",
+        "description": "Autoservicio: manda un enlace para restablecer contrase\u00f1a si el\ncorreo pertenece a una cuenta activa que YA tiene contrase\u00f1a.\n\nResponde SIEMPRE el mismo mensaje gen\u00e9rico, exista o no la cuenta,\ntenga o no ya password, est\u00e9 o no activa \u2014 anti-enumeraci\u00f3n.",
         "operationId": "recuperar_password_auth_recuperar_password_post",
         "requestBody": {
           "content": {
@@ -236,7 +236,7 @@
           "Pagos"
         ],
         "summary": "Mercadopago Redirect",
-        "description": "Redirige al frontend después de que el cliente vuelve de MercadoPago.",
+        "description": "Redirige al frontend despu\u00e9s de que el cliente vuelve de MercadoPago.",
         "operationId": "mercadopago_redirect_api_v2_mercadopago_redirect_get",
         "parameters": [
           {
@@ -287,7 +287,7 @@
           "Pagos"
         ],
         "summary": "Webhook Mercadopago",
-        "description": "Recibe notificaciones de MercadoPago. No confía en el payload:\nre-consulta el pago directo a la API de MP antes de marcar nada pagado.",
+        "description": "Recibe notificaciones de MercadoPago. No conf\u00eda en el payload:\nre-consulta el pago directo a la API de MP antes de marcar nada pagado.",
         "operationId": "webhook_mercadopago_api_v2_webhooks_mercadopago_post",
         "responses": {
           "200": {
@@ -847,7 +847,7 @@
           "Agenda v2.2"
         ],
         "summary": "Consultar Reserva Publica",
-        "description": "Consulta pública de reserva mediante folio + código de confirmación.\n\nNo requiere autenticación. Devuelve vista limitada (sin meet_url, notas, sede, asesor).\nRate limited a 10 requests/minuto por IP.",
+        "description": "Consulta p\u00fablica de reserva mediante folio + c\u00f3digo de confirmaci\u00f3n.\n\nNo requiere autenticaci\u00f3n. Devuelve vista limitada (sin meet_url, notas, sede, asesor).\nRate limited a 10 requests/minuto por IP.",
         "operationId": "consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get",
         "parameters": [
           {
@@ -912,7 +912,7 @@
           "Agenda v2.2"
         ],
         "summary": "Reclamar Cuenta",
-        "description": "Autoservicio: manda el correo de activación si el email pertenece a\nun usuario vinculado activo a ESTE tenant y sin contraseña todavía.\n\nResponde SIEMPRE el mismo mensaje genérico exista o no el email, esté o\nno vinculado a este tenant, tenga o no ya contraseña — anti-enumeración.\nRate limited a 5/minuto por IP (mismo límite que /auth/login).",
+        "description": "Autoservicio: manda el correo de activaci\u00f3n si el email pertenece a\nun usuario vinculado activo a ESTE tenant y sin contrase\u00f1a todav\u00eda.\n\nResponde SIEMPRE el mismo mensaje gen\u00e9rico exista o no el email, est\u00e9 o\nno vinculado a este tenant, tenga o no ya contrase\u00f1a \u2014 anti-enumeraci\u00f3n.\nRate limited a 5/minuto por IP (mismo l\u00edmite que /auth/login).",
         "operationId": "reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post",
         "parameters": [
           {
@@ -1275,7 +1275,7 @@
           "Agenda v2.2"
         ],
         "summary": "Confirmar Mi Inscripcion Serie",
-        "description": "El cliente elige modalidad_cobro/metodo_pago para una invitación\nsuya pendiente. Genera las N reservas y la pasa a CONFIRMADA.",
+        "description": "El cliente elige modalidad_cobro/metodo_pago para una invitaci\u00f3n\nsuya pendiente. Genera las N reservas y la pasa a CONFIRMADA.",
         "operationId": "confirmar_mi_inscripcion_serie_api_v2__tenant_slug__mis_series__inscripcion_id__confirmar_post",
         "security": [
           {
@@ -1373,10 +1373,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas)",
+              "description": "Filtra por fecha de la sesi\u00f3n. Default: hoy (omitir junto con estado para listar todas las fechas)",
               "title": "Fecha"
             },
-            "description": "Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas)"
+            "description": "Filtra por fecha de la sesi\u00f3n. Default: hoy (omitir junto con estado para listar todas las fechas)"
           },
           {
             "name": "estado",
@@ -1411,10 +1411,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Busca por folio, código de confirmación, nombre o email del cliente",
+              "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente",
               "title": "Q"
             },
-            "description": "Busca por folio, código de confirmación, nombre o email del cliente"
+            "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente"
           },
           {
             "name": "limit",
@@ -1671,10 +1671,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Busca por folio, código de confirmación, nombre o email del cliente",
+              "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente",
               "title": "Q"
             },
-            "description": "Busca por folio, código de confirmación, nombre o email del cliente"
+            "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente"
           }
         ],
         "responses": {
@@ -1903,7 +1903,7 @@
           "Agenda v2.2"
         ],
         "summary": "Crear Serie Admin",
-        "description": "Crea el patrón de horario de una serie recurrente.",
+        "description": "Crea el patr\u00f3n de horario de una serie recurrente.",
         "operationId": "crear_serie_admin_api_v2__tenant_slug__admin_series_post",
         "security": [
           {
@@ -2155,7 +2155,7 @@
           "Agenda v2.2"
         ],
         "summary": "Registrar Pago Inscripcion Local",
-        "description": "Registra el pago de un paquete para un cliente específico de una serie.",
+        "description": "Registra el pago de un paquete para un cliente espec\u00edfico de una serie.",
         "operationId": "registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post",
         "security": [
           {
@@ -2233,7 +2233,7 @@
           "Agenda v2.2"
         ],
         "summary": "Cancelar Invitacion Serie Admin",
-        "description": "Retira una invitación a serie que sigue pendiente (INVITADA).",
+        "description": "Retira una invitaci\u00f3n a serie que sigue pendiente (INVITADA).",
         "operationId": "cancelar_invitacion_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__cancelar_post",
         "security": [
           {
@@ -2711,6 +2711,485 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SesionesPaginadasOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Formularios Admin",
+        "operationId": "listar_formularios_admin_api_v2__tenant_slug__admin_formularios_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TipoFormularioEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por tipo de formulario",
+              "title": "Tipo"
+            },
+            "description": "Filtrar por tipo de formulario"
+          },
+          {
+            "name": "activo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por estado activo",
+              "title": "Activo"
+            },
+            "description": "Filtrar por estado activo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FormularioListAdminOut"
+                  },
+                  "title": "Response Listar Formularios Admin Api V2  Tenant Slug  Admin Formularios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Formulario Admin",
+        "operationId": "crear_formulario_admin_api_v2__tenant_slug__admin_formularios_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormularioAdminIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Obtener Formulario Admin",
+        "operationId": "obtener_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Actualizar Formulario Admin",
+        "operationId": "actualizar_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormularioAdminUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Campos Formulario Admin",
+        "operationId": "crear_campos_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampoFormularioBulkAdminIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampoFormularioAdminOut"
+                  },
+                  "title": "Response Crear Campos Formulario Admin Api V2  Tenant Slug  Admin Formularios  Formulario Id  Campos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}": {
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Actualizar Campo Formulario Admin",
+        "operationId": "actualizar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "campo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Campo Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampoFormularioAdminUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampoFormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}/desactivar": {
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Desactivar Campo Formulario Admin",
+        "operationId": "desactivar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__desactivar_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "campo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Campo Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
                 }
               }
             }
@@ -3218,7 +3697,7 @@
           "Agenda v2.2"
         ],
         "summary": "Crear Horario Servicio",
-        "description": "Define la franja general del servicio (ventana de propuesta del cliente).\n\nSolo aplica a servicios con requiere_confirmacion=True: el cliente\npropone un horario dentro de esta franja y el staff valida la\ndisponibilidad real del asesor al asignarlo. Para servicios con\nconfirmación automática NO aplica: su disponibilidad sale del horario\nde cada asesor vinculado. Se responde 422 si el servicio no es de\nconfirmación manual.",
+        "description": "Define la franja general del servicio (ventana de propuesta del cliente).\n\nSolo aplica a servicios con requiere_confirmacion=True: el cliente\npropone un horario dentro de esta franja y el staff valida la\ndisponibilidad real del asesor al asignarlo. Para servicios con\nconfirmaci\u00f3n autom\u00e1tica NO aplica: su disponibilidad sale del horario\nde cada asesor vinculado. Se responde 422 si el servicio no es de\nconfirmaci\u00f3n manual.",
         "operationId": "crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post",
         "security": [
           {
@@ -4130,7 +4609,7 @@
           "Agenda v2.2"
         ],
         "summary": "Conectar Google Meet",
-        "description": "Conecta el buzón de Google Meet del tenant vía service account + Domain-Wide Delegation.",
+        "description": "Conecta el buz\u00f3n de Google Meet del tenant v\u00eda service account + Domain-Wide Delegation.",
         "operationId": "conectar_google_meet_api_v2__tenant_slug__admin_google_meet_conectar_post",
         "security": [
           {
@@ -4188,7 +4667,7 @@
           "Agenda v2.2"
         ],
         "summary": "Desconectar Google Meet",
-        "description": "Desconecta la configuración de Google Meet del tenant. No revoca la\ndelegación de dominio del lado de Google.",
+        "description": "Desconecta la configuraci\u00f3n de Google Meet del tenant. No revoca la\ndelegaci\u00f3n de dominio del lado de Google.",
         "operationId": "desconectar_google_meet_api_v2__tenant_slug__admin_google_meet_desconectar_delete",
         "security": [
           {
@@ -4236,7 +4715,7 @@
           "Agenda v2.2"
         ],
         "summary": "Estado Google Meet",
-        "description": "Devuelve si el tenant tiene conectado un buzón de Google Meet.",
+        "description": "Devuelve si el tenant tiene conectado un buz\u00f3n de Google Meet.",
         "operationId": "estado_google_meet_api_v2__tenant_slug__admin_google_meet_estado_get",
         "security": [
           {
@@ -4278,13 +4757,79 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/google-meet/revisar-contenido": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Revisar Contenido Google Meet",
+        "description": "Dispara manualmente el mismo job que corre APScheduler cada 10 min\n(organiza carpetas de Drive, renombra archivos, otorga permisos y manda\nel correo de contenido para sesiones virtuales ya terminadas). Pensado\ncomo bot\u00f3n de emergencia mientras el backend est\u00e9 en un plan de Render\nque se duerme por inactividad \u2014 mientras est\u00e1 dormido, el scheduler en\nproceso tampoco corre, as\u00ed que el contenido se queda sin procesar hasta\nque algo despierta al servicio.",
+        "operationId": "revisar_contenido_google_meet_api_v2__tenant_slug__admin_google_meet_revisar_contenido_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "folio",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Si viene, fuerza el reprocesamiento de la sesi\u00f3n de ESE folio espec\u00edfico, sin importar si ya tiene contenido_enviado_en marcado o si fecha_hora_fin todav\u00eda no cumple el margen. \u00dasalo cuando una sesi\u00f3n se qued\u00f3 a medias (ej. carpetas creadas pero correo nunca sali\u00f3 porque el proceso se interrumpi\u00f3 despu\u00e9s de marcarla como ya procesada).",
+              "title": "Folio"
+            },
+            "description": "Si viene, fuerza el reprocesamiento de la sesi\u00f3n de ESE folio espec\u00edfico, sin importar si ya tiene contenido_enviado_en marcado o si fecha_hora_fin todav\u00eda no cumple el margen. \u00dasalo cuando una sesi\u00f3n se qued\u00f3 a medias (ej. carpetas creadas pero correo nunca sali\u00f3 porque el proceso se interrumpi\u00f3 despu\u00e9s de marcarla como ya procesada)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/tenant/metodo-pago-default": {
       "patch": {
         "tags": [
           "Agenda v2.2"
         ],
         "summary": "Actualizar Metodo Pago Default",
-        "description": "Permite al admin del tenant cambiar el método de pago por default.",
+        "description": "Permite al admin del tenant cambiar el m\u00e9todo de pago por default.",
         "operationId": "actualizar_metodo_pago_default_api_v2__tenant_slug__admin_tenant_metodo_pago_default_patch",
         "security": [
           {
@@ -4342,7 +4887,7 @@
           "Agenda v2.2"
         ],
         "summary": "Checkout Reserva",
-        "description": "Cliente logueado: genera una preferencia de MercadoPago para una\nreserva confirmada o en espera de pago con pago pendiente (auto-compra\npost-asignación, o reintento del link de pago original).",
+        "description": "Cliente logueado: genera una preferencia de MercadoPago para una\nreserva confirmada o en espera de pago con pago pendiente (auto-compra\npost-asignaci\u00f3n, o reintento del link de pago original).",
         "operationId": "checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post",
         "security": [
           {
@@ -4875,7 +5420,7 @@
           "Superadmin"
         ],
         "summary": "Desactivar Usuario Global",
-        "description": "Desactiva la cuenta completa: bloquea login, desvincula de todos los\ntenants (soft) y cancela sus reservas activas / solicitudes pendientes.\n\nReversible — no borra nada. `purgar` es el paso irreversible aparte.",
+        "description": "Desactiva la cuenta completa: bloquea login, desvincula de todos los\ntenants (soft) y cancela sus reservas activas / solicitudes pendientes.\n\nReversible \u2014 no borra nada. `purgar` es el paso irreversible aparte.",
         "operationId": "desactivar_usuario_global_api_v2_superadmin_usuarios__usuario_id__desactivar_post",
         "security": [
           {
@@ -4924,7 +5469,7 @@
           "Superadmin"
         ],
         "summary": "Purgar Usuario Global",
-        "description": "Anonimiza la cuenta (UPDATE, no DELETE) — ver decisión en HANDOFF.md:\nlas FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son\nRESTRICT y no se tocan, así que purgar no puede ser un DELETE FROM\nusuarios real sin romper esas tablas. Solo se permite si la cuenta lleva\n30+ días desactivada. Irreversible.",
+        "description": "Anonimiza la cuenta (UPDATE, no DELETE) \u2014 ver decisi\u00f3n en HANDOFF.md:\nlas FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son\nRESTRICT y no se tocan, as\u00ed que purgar no puede ser un DELETE FROM\nusuarios real sin romper esas tablas. Solo se permite si la cuenta lleva\n30+ d\u00edas desactivada. Irreversible.",
         "operationId": "purgar_usuario_global_api_v2_superadmin_usuarios__usuario_id__purgar_post",
         "security": [
           {
@@ -5048,7 +5593,7 @@
           "nombre"
         ],
         "title": "AsesorPublicOut",
-        "description": "Datos de asesor visibles al público. Sin email, sin comisión, sin metadata."
+        "description": "Datos de asesor visibles al p\u00fablico. Sin email, sin comisi\u00f3n, sin metadata."
       },
       "AsesorServicioOut": {
         "properties": {
@@ -5111,7 +5656,7 @@
             "type": "integer",
             "exclusiveMinimum": 0.0,
             "title": "Asesor Id",
-            "description": "UsuarioTenant (rol asesor/admin) a asignar a la sesión"
+            "description": "UsuarioTenant (rol asesor/admin) a asignar a la sesi\u00f3n"
           }
         },
         "additionalProperties": false,
@@ -5509,6 +6054,341 @@
         ],
         "title": "Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"
       },
+      "CampoFormularioAdminIn": {
+        "properties": {
+          "tipo": {
+            "$ref": "#/components/schemas/TipoCampoFormularioEnum"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "requerido": {
+            "type": "boolean",
+            "title": "Requerido",
+            "default": false
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "validacion_regex": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion Regex"
+          },
+          "ayuda": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ayuda"
+          },
+          "orden": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Orden",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipo",
+          "label"
+        ],
+        "title": "CampoFormularioAdminIn"
+      },
+      "CampoFormularioAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "formulario_id": {
+            "type": "integer",
+            "title": "Formulario Id"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "requerido": {
+            "type": "boolean",
+            "title": "Requerido"
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "validacion_regex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion Regex"
+          },
+          "ayuda": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ayuda"
+          },
+          "orden": {
+            "type": "integer",
+            "title": "Orden"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "formulario_id",
+          "tipo",
+          "label",
+          "requerido",
+          "orden",
+          "activo",
+          "creado_en"
+        ],
+        "title": "CampoFormularioAdminOut"
+      },
+      "CampoFormularioAdminUpdate": {
+        "properties": {
+          "tipo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipoCampoFormularioEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "requerido": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requerido"
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "validacion_regex": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion Regex"
+          },
+          "ayuda": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ayuda"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden"
+          },
+          "activo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CampoFormularioAdminUpdate"
+      },
+      "CampoFormularioBulkAdminIn": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CampoFormularioAdminIn"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CampoFormularioBulkAdminIn"
+      },
       "CanalEnum": {
         "type": "string",
         "enum": [
@@ -5584,7 +6464,7 @@
           "modalidad_cobro"
         ],
         "title": "ConfirmarInscripcionIn",
-        "description": "El cliente confirma su invitación: elige modalidad y método de pago."
+        "description": "El cliente confirma su invitaci\u00f3n: elige modalidad y m\u00e9todo de pago."
       },
       "DisponibilidadDiaOut": {
         "properties": {
@@ -5707,6 +6587,148 @@
           "cancelada"
         ],
         "title": "EstadoSolicitudEnum"
+      },
+      "FormularioAdminIn": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "tipo": {
+            "$ref": "#/components/schemas/TipoFormularioEnum",
+            "default": "satisfaccion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nombre"
+        ],
+        "title": "FormularioAdminIn"
+      },
+      "FormularioAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "campos": {
+            "items": {
+              "$ref": "#/components/schemas/CampoFormularioAdminOut"
+            },
+            "type": "array",
+            "title": "Campos",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "nombre",
+          "tipo",
+          "activo",
+          "creado_en"
+        ],
+        "title": "FormularioAdminOut"
+      },
+      "FormularioAdminUpdate": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "activo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FormularioAdminUpdate"
+      },
+      "FormularioListAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "num_campos": {
+            "type": "integer",
+            "title": "Num Campos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "nombre",
+          "tipo",
+          "activo",
+          "creado_en",
+          "num_campos"
+        ],
+        "title": "FormularioListAdminOut"
       },
       "GoogleMeetConectarIn": {
         "properties": {
@@ -5933,7 +6955,7 @@
           "creado_en"
         ],
         "title": "InscripcionSerieClienteOut",
-        "description": "Vista de una inscripción a serie para el cliente dueño (GET /mis-series).\n\nTrae lo que el cliente necesita para decidir cómo confirmar: el\nservicio, el patrón de horario, las modalidades habilitadas y sus\nprecios (sesión = servicio.precio, paquete = servicio.precio_paquete)."
+        "description": "Vista de una inscripci\u00f3n a serie para el cliente due\u00f1o (GET /mis-series).\n\nTrae lo que el cliente necesita para decidir c\u00f3mo confirmar: el\nservicio, el patr\u00f3n de horario, las modalidades habilitadas y sus\nprecios (sesi\u00f3n = servicio.precio, paquete = servicio.precio_paquete)."
       },
       "InscripcionSerieCreate": {
         "properties": {
@@ -5949,7 +6971,7 @@
           "cliente_usuario_id"
         ],
         "title": "InscripcionSerieCreate",
-        "description": "Invita a un cliente a una serie recurrente existente.\n\nYa no se captura modalidad de cobro ni método de pago aquí — eso lo\nelige el cliente desde su portal (POST /mis-series/{id}/confirmar).\nEsto solo crea la invitación (estado=invitada); no genera reservas."
+        "description": "Invita a un cliente a una serie recurrente existente.\n\nYa no se captura modalidad de cobro ni m\u00e9todo de pago aqu\u00ed \u2014 eso lo\nelige el cliente desde su portal (POST /mis-series/{id}/confirmar).\nEsto solo crea la invitaci\u00f3n (estado=invitada); no genera reservas."
       },
       "InscripcionSerieOut": {
         "properties": {
@@ -6044,7 +7066,7 @@
           "creado_en"
         ],
         "title": "InscripcionSerieOut",
-        "description": "Vista de una inscripción a serie (admin)."
+        "description": "Vista de una inscripci\u00f3n a serie (admin)."
       },
       "MembresiaGlobalOut": {
         "properties": {
@@ -6247,7 +7269,7 @@
             "type": "string",
             "pattern": "^(efectivo|transferencia)$",
             "title": "Metodo",
-            "description": "Método de cobro presencial del staff",
+            "description": "M\u00e9todo de cobro presencial del staff",
             "default": "efectivo"
           },
           "monto": {
@@ -6465,7 +7487,7 @@
               }
             ],
             "title": "Sesion Id",
-            "description": "ID de la sesión existente a la que el cliente eligió unirse. Si se omite, el sistema busca o crea una sesión."
+            "description": "ID de la sesi\u00f3n existente a la que el cliente eligi\u00f3 unirse. Si se omite, el sistema busca o crea una sesi\u00f3n."
           },
           "asesor_id": {
             "anyOf": [
@@ -6609,7 +7631,7 @@
           "sesion_creada": {
             "type": "boolean",
             "title": "Sesion Creada",
-            "description": "True si se creó una sesión nueva; False si el cliente se unió a una existente."
+            "description": "True si se cre\u00f3 una sesi\u00f3n nueva; False si el cliente se uni\u00f3 a una existente."
           },
           "activacion_url": {
             "anyOf": [
@@ -6631,7 +7653,7 @@
           "sesion_creada"
         ],
         "title": "ReservaCreateResponse",
-        "description": "Respuesta del POST /reservas.\n\nv2.1 devolvía `SesionOut`, un nombre que nunca se importó en el router: el\nendpoint lanzaba NameError DESPUÉS de haber creado la reserva y cobrado."
+        "description": "Respuesta del POST /reservas.\n\nv2.1 devolv\u00eda `SesionOut`, un nombre que nunca se import\u00f3 en el router: el\nendpoint lanzaba NameError DESPU\u00c9S de haber creado la reserva y cobrado."
       },
       "ReservaOut": {
         "properties": {
@@ -6905,7 +7927,7 @@
           "creado_en"
         ],
         "title": "ReservaPublicaOut",
-        "description": "Vista pública de reserva (solo lectura, sin datos sensibles).\n\nAccesible sin autenticación mediante folio + codigo_confirmacion.\nNo incluye: meet_url, notas_cliente, sede, asesor (privados)."
+        "description": "Vista p\u00fablica de reserva (solo lectura, sin datos sensibles).\n\nAccesible sin autenticaci\u00f3n mediante folio + codigo_confirmacion.\nNo incluye: meet_url, notas_cliente, sede, asesor (privados)."
       },
       "ReservaResumenAdminOut": {
         "properties": {
@@ -7118,7 +8140,7 @@
           "fecha_inicio"
         ],
         "title": "SerieReservaCreate",
-        "description": "Crear el patrón de horario de una serie recurrente.\n\nLas modalidades de cobro y el precio de paquete se heredan del servicio.\nLa inscripción de clientes es un paso posterior."
+        "description": "Crear el patr\u00f3n de horario de una serie recurrente.\n\nLas modalidades de cobro y el precio de paquete se heredan del servicio.\nLa inscripci\u00f3n de clientes es un paso posterior."
       },
       "SerieReservaOut": {
         "properties": {
@@ -7425,6 +8447,17 @@
             "type": "boolean",
             "title": "Permite Solicitudes",
             "default": false
+          },
+          "encuesta_satisfaccion_formulario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encuesta Satisfaccion Formulario Id"
           }
         },
         "additionalProperties": false,
@@ -7567,6 +8600,17 @@
             "type": "boolean",
             "title": "Permite Solicitudes",
             "default": false
+          },
+          "encuesta_satisfaccion_formulario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encuesta Satisfaccion Formulario Id"
           },
           "visible_web": {
             "type": "boolean",
@@ -7859,12 +8903,23 @@
               }
             ],
             "title": "Permite Solicitudes"
+          },
+          "encuesta_satisfaccion_formulario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encuesta Satisfaccion Formulario Id"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "ServicioAdminUpdate",
-        "description": "PATCH parcial. `activo` NO se edita aquí: se usa activar/desactivar."
+        "description": "PATCH parcial. `activo` NO se edita aqu\u00ed: se usa activar/desactivar."
       },
       "ServicioPublicOut": {
         "properties": {
@@ -8285,7 +9340,7 @@
           "lugares_disponibles"
         ],
         "title": "SesionDetailOut",
-        "description": "Detalle público de una sesión.\n\nELIMINADO respecto de v2.1: la lista `reservas` con folio y estado de cada\ninscrito, y `notas_internas`. El endpoint era anónimo y sesion_id es\nautoincremental, así que cualquiera podía iterar IDs, cosechar folios y\nconsultar el historial de pago ajeno. Para la vista completa existe\nSesionAdminOut, detrás de autenticación con rol."
+        "description": "Detalle p\u00fablico de una sesi\u00f3n.\n\nELIMINADO respecto de v2.1: la lista `reservas` con folio y estado de cada\ninscrito, y `notas_internas`. El endpoint era an\u00f3nimo y sesion_id es\nautoincremental, as\u00ed que cualquiera pod\u00eda iterar IDs, cosechar folios y\nconsultar el historial de pago ajeno. Para la vista completa existe\nSesionAdminOut, detr\u00e1s de autenticaci\u00f3n con rol."
       },
       "SesionListOut": {
         "properties": {
@@ -8583,7 +9638,7 @@
           "creado_en"
         ],
         "title": "SolicitudAceptarAlternativaOut",
-        "description": "El cliente aceptó una fecha alternativa; la reserva ya fue creada."
+        "description": "El cliente acept\u00f3 una fecha alternativa; la reserva ya fue creada."
       },
       "SolicitudAdminOut": {
         "properties": {
@@ -8757,7 +9812,7 @@
           "cliente_usuario_id"
         ],
         "title": "SolicitudAdminOut",
-        "description": "Vista del staff: agrega datos del cliente y de resolución."
+        "description": "Vista del staff: agrega datos del cliente y de resoluci\u00f3n."
       },
       "SolicitudAlternativaOut": {
         "properties": {
@@ -8972,7 +10027,7 @@
           "cliente_usuario_id"
         ],
         "title": "SolicitudConfirmarOut",
-        "description": "El staff confirmó la solicitud: la Reserva PENDIENTE ya existe y el\nstaff la termina de confirmar vía POST /admin/reservas/{id}/asignar-asesor."
+        "description": "El staff confirm\u00f3 la solicitud: la Reserva PENDIENTE ya existe y el\nstaff la termina de confirmar v\u00eda POST /admin/reservas/{id}/asignar-asesor."
       },
       "SolicitudConfirmarSerieIn": {
         "properties": {
@@ -9032,7 +10087,7 @@
           "hora_inicio"
         ],
         "title": "SolicitudConfirmarSerieIn",
-        "description": "Parámetros para convertir una solicitud en una serie recurrente.\n\nLa fecha de inicio, servicio y cliente se toman de la solicitud. El\nstaff define el patrón de recurrencia — las modalidades de cobro y el\nprecio de paquete se heredan del servicio. NO elige la modalidad ni el\nmétodo de pago del cliente: eso lo hace el cliente desde su portal\n(POST /mis-series/{id}/confirmar), igual que en el camino de inscribir\ndirectamente. Confirmar una solicitud como serie solo crea la serie +\nuna invitación (estado=invitada) para el cliente."
+        "description": "Par\u00e1metros para convertir una solicitud en una serie recurrente.\n\nLa fecha de inicio, servicio y cliente se toman de la solicitud. El\nstaff define el patr\u00f3n de recurrencia \u2014 las modalidades de cobro y el\nprecio de paquete se heredan del servicio. NO elige la modalidad ni el\nm\u00e9todo de pago del cliente: eso lo hace el cliente desde su portal\n(POST /mis-series/{id}/confirmar), igual que en el camino de inscribir\ndirectamente. Confirmar una solicitud como serie solo crea la serie +\nuna invitaci\u00f3n (estado=invitada) para el cliente."
       },
       "SolicitudCreate": {
         "properties": {
@@ -9066,7 +10121,7 @@
           "fecha_hora_propuesta"
         ],
         "title": "SolicitudCreate",
-        "description": "El cliente propone una fecha/hora libre para un servicio con\n`requiere_confirmacion=True`. No reserva nada todavía."
+        "description": "El cliente propone una fecha/hora libre para un servicio con\n`requiere_confirmacion=True`. No reserva nada todav\u00eda."
       },
       "SolicitudOut": {
         "properties": {
@@ -9179,7 +10234,7 @@
           "creado_en"
         ],
         "title": "SolicitudOut",
-        "description": "Vista del cliente: sin datos de resolución internos."
+        "description": "Vista del cliente: sin datos de resoluci\u00f3n internos."
       },
       "SolicitudRechazarIn": {
         "properties": {
@@ -9620,6 +10675,32 @@
           "otro"
         ],
         "title": "TipoBloqueoEnum"
+      },
+      "TipoCampoFormularioEnum": {
+        "type": "string",
+        "enum": [
+          "texto",
+          "textarea",
+          "numero",
+          "email",
+          "telefono",
+          "fecha",
+          "select",
+          "multiselect",
+          "checkbox",
+          "radio",
+          "archivo",
+          "rating"
+        ],
+        "title": "TipoCampoFormularioEnum"
+      },
+      "TipoFormularioEnum": {
+        "type": "string",
+        "enum": [
+          "intake",
+          "satisfaccion"
+        ],
+        "title": "TipoFormularioEnum"
       },
       "UsuarioAdminOut": {
         "properties": {

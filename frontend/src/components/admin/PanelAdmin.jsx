@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
+import GestionEncuestas from './GestionEncuestas'
 import SeriesTab from './SeriesTab'
 import CrearSerieModal from './CrearSerieModal'
 import MercadoPagoTab from './MercadoPagoTab'
@@ -1686,6 +1687,9 @@ export default function PanelAdmin() {
           <TabButton active={tab === 'meet'} onClick={() => cambiarTab('meet')}>
             Meet
           </TabButton>
+          <TabButton active={tab === 'encuestas'} onClick={() => cambiarTab('encuestas')}>
+            Encuestas
+          </TabButton>
         </TabGroup>
       </div>
 
@@ -1703,11 +1707,13 @@ export default function PanelAdmin() {
           onLimpiarServicioInicial={() => setNuevoServicio(null)}
         />
       ) : tab === 'servicios' ? (
-        <GestionServicios tenantSlug={tenantSlug} token={token} onIrACrearSerie={irACrearSerie} />
-      ) : tab === 'pagos' ? (
+        <GestionServicios tenantSlug={tenantSlug} token={token} onIrACrearSerie={irACrearSerie} onIrAEncuestas={() => cambiarTab('encuestas')} />
+      ) : tab === 'encuestas' ? (
         <MercadoPagoTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'meet' ? (
         <GoogleMeetTab tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'encuestas' ? (
+        <GestionEncuestas tenantSlug={tenantSlug} token={token} />
       ) : (
         <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}

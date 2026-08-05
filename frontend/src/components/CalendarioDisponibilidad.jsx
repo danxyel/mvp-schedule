@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
 import { getLocalOffset } from '../utils/fechas'
 import SelectorFecha from './common/SelectorFecha'
@@ -142,9 +142,19 @@ export default function CalendarioDisponibilidad() {
           </h2>
 
           {data && data.slots.length === 0 && (
-            <p className="py-8 text-center text-gray-500">
-              No hay horarios disponibles para este d&iacute;a.
-            </p>
+            <div className="py-8 text-center">
+              <p className="mb-3 text-gray-500">
+                No hay horarios disponibles para este d&iacute;a.
+              </p>
+              {data.requiere_confirmacion && (
+                <Link
+                  to={`/t/${tenantSlug}/solicitar/${servicioId}`}
+                  className="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  Proponer otra fecha
+                </Link>
+              )}
+            </div>
           )}
 
           <div className="grid gap-3">
@@ -206,6 +216,17 @@ export default function CalendarioDisponibilidad() {
               )
             })}
           </div>
+
+          {data?.requiere_confirmacion && data.slots.length > 0 && (
+            <div className="mt-4 text-center">
+              <Link
+                to={`/t/${tenantSlug}/solicitar/${servicioId}`}
+                className="text-sm text-blue-600 underline transition hover:text-blue-800"
+              >
+                ¿Ninguno de estos horarios te funciona? Proponer otra fecha
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

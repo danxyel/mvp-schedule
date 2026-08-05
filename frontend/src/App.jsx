@@ -6,7 +6,9 @@ import SeleccionServicio from './components/SeleccionServicio'
 import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
 import FlujReserva from './components/FlujReserva'
+import SolicitarFecha from './components/SolicitarFecha'
 import MisReservas from './components/MisReservas'
+import MisSolicitudes from './components/MisSolicitudes'
 import MisSeries from './components/MisSeries'
 import DetalleReserva from './components/DetalleReserva'
 import DetalleReservaPublica from './components/DetalleReservaPublica'
@@ -31,7 +33,15 @@ function App() {
         <Route path="/t/:tenantSlug/reservar/:servicioId" element={<FlujReserva />} />
         <Route path="/t/:tenantSlug/reclamar" element={<Reclamar />} />
         <Route path="/t/:tenantSlug/activar" element={<Activar />} />
-        
+        <Route
+          path="/t/:tenantSlug/solicitar/:servicioId"
+          element={
+            <ProtectedRoute allowedRoles={['cliente']}>
+              <SolicitarFecha />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Rutas protegidas */}
         <Route 
           path="/mis-reservas" 
@@ -56,6 +66,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['cliente']}>
               <MisSeries />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/mis-solicitudes"
+          element={
+            <ProtectedRoute allowedRoles={['cliente']}>
+              <MisSolicitudes />
             </ProtectedRoute>
           }
         />

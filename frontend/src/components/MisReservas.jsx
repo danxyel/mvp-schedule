@@ -384,6 +384,13 @@ export default function MisReservas() {
           )}
           <button
             type="button"
+            onClick={() => navigate('/mis-solicitudes')}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Mis solicitudes
+          </button>
+          <button
+            type="button"
             onClick={() => navigate('/mis-series')}
             className="text-sm text-blue-600 hover:underline"
           >

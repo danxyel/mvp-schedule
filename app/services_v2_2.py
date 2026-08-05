@@ -2928,12 +2928,13 @@ def _obtener_o_crear_carpeta_serie(
     if serie.drive_folder_id:
         return serie.drive_folder_id
     servicio = serie.servicio
-    asesor = db.execute(
-        select(Usuario).join(UsuarioTenant).where(UsuarioTenant.id == serie.asesor_id)
-    ).scalar_one_or_none() if serie.asesor_id else None
-    asesor_nombre = asesor.nombre if asesor else "Sin asesor"
+    asesor_nombre = (
+        serie.asesor.usuario.nombre
+        if serie.asesor and serie.asesor.usuario
+        else "Sin asesor"
+    )
     fecha_inicio = datetime.combine(serie.fecha_inicio, serie.hora_inicio) if serie.fecha_inicio and serie.hora_inicio else None
-    fecha_legible = _fecha_email(fecha_inicio, serie.timezone or "UTC") if fecha_inicio else "Sin fecha"
+    fecha_legible = _fecha_email(fecha_inicio, "UTC") if fecha_inicio else "Sin fecha"
     nombre = f"Serie — {servicio.nombre} — {asesor_nombre} — {fecha_legible}"
     carpeta = drive.files().create(
         body={

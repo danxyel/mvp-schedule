@@ -1118,6 +1118,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/google-meet/conectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Conectar Google Meet
+         * @description Conecta el buzón de Google Meet del tenant vía service account + Domain-Wide Delegation.
+         */
+        post: operations["conectar_google_meet_api_v2__tenant_slug__admin_google_meet_conectar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/google-meet/desconectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Desconectar Google Meet
+         * @description Desconecta la configuración de Google Meet del tenant. No revoca la
+         *     delegación de dominio del lado de Google.
+         */
+        delete: operations["desconectar_google_meet_api_v2__tenant_slug__admin_google_meet_desconectar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/google-meet/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado Google Meet
+         * @description Devuelve si el tenant tiene conectado un buzón de Google Meet.
+         */
+        get: operations["estado_google_meet_api_v2__tenant_slug__admin_google_meet_estado_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/tenant/metodo-pago-default": {
         parameters: {
             query?: never;
@@ -1656,6 +1717,23 @@ export interface components {
          * @enum {string}
          */
         EstadoSolicitudEnum: "pendiente" | "aceptada" | "rechazada" | "cancelada";
+        /** GoogleMeetConectarIn */
+        GoogleMeetConectarIn: {
+            /**
+             * Impersonar Email
+             * Format: email
+             */
+            impersonar_email: string;
+        };
+        /** GoogleMeetEstadoOut */
+        GoogleMeetEstadoOut: {
+            /** Conectado */
+            conectado: boolean;
+            /** Impersonar Email */
+            impersonar_email?: string | null;
+            /** Tenant Id */
+            tenant_id: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5358,6 +5436,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MercadoPagoEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    conectar_google_meet_api_v2__tenant_slug__admin_google_meet_conectar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleMeetConectarIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleMeetEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desconectar_google_meet_api_v2__tenant_slug__admin_google_meet_desconectar_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleMeetEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estado_google_meet_api_v2__tenant_slug__admin_google_meet_estado_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleMeetEstadoOut"];
                 };
             };
             /** @description Validation Error */

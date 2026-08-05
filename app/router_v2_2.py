@@ -554,6 +554,7 @@ def crear_nueva_reserva(
             svc.enviar_email_confirmacion(
                 tenant, reserva, resultado["usuario"], sesion,
                 acceso_token_plano=resultado.get("acceso_token_plano"),
+                checkout_url=checkout.url if checkout else None,
             )
         except Exception:
             log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
@@ -1149,6 +1150,7 @@ def registrar_pago_local(
 def asignar_asesor_reserva(
     payload: AsignarAsesorIn,
     reserva_id: int = Path(..., gt=0),
+    request: Request = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     staff: UsuarioTenant = Depends(requiere_staff),
@@ -1207,7 +1209,21 @@ def asignar_asesor_reserva(
         raise _http_de(e)
 
     sesion.asesor_id = payload.asesor_id
-    reserva.estado = EstadoReserva.CONFIRMADA
+
+    # Antes esto era CONFIRMADA sin importar el pago — una reserva pendiente
+    # de un servicio con pago online quedaba "confirmada" debiendo dinero,
+    # sin ningún checkout generado ni aviso en el correo. Mismo criterio que
+    # ya usa crear_reserva() para decidir EN_ESPERA vs CONFIRMADA al crear.
+    metodo = servicio.metodo_pago.value if servicio.metodo_pago else tenant.metodo_pago_default.value
+    requiere_pago_online = (
+        reserva.estado_pago == EstadoPagoReserva.PENDIENTE
+        and metodo == MetodoPago.ONLINE.value
+    )
+    if requiere_pago_online:
+        reserva.estado = EstadoReserva.EN_ESPERA
+        reserva.hold_expira_en = utcnow() + timedelta(minutes=tenant.hold_minutos)
+    else:
+        reserva.estado = EstadoReserva.CONFIRMADA
 
     svc.registrar_bitacora(
         db, tenant.id, "reserva", reserva.id, "asignar_asesor",
@@ -1216,6 +1232,7 @@ def asignar_asesor_reserva(
             "folio": reserva.folio,
             "sesion_id": sesion.id,
             "asesor_id": payload.asesor_id,
+            "requiere_pago_online": requiere_pago_online,
         },
     )
 
@@ -1241,9 +1258,18 @@ def asignar_asesor_reserva(
     db.refresh(reserva)
 
     # Efectos externos DESPUÉS del commit: no rompen la respuesta si fallan.
+    checkout_url = None
+    if requiere_pago_online and cliente is not None:
+        try:
+            checkout = svc.iniciar_checkout(tenant, reserva, cliente, request=request)
+            checkout_url = checkout.url if checkout else None
+        except Exception:
+            log.exception("Fallo al iniciar checkout para folio %s", reserva.folio)
+
     try:
         svc.enviar_email_confirmacion(
-            tenant, reserva, reserva.creado_por, sesion, acceso_token_plano=acceso_token_plano
+            tenant, reserva, reserva.creado_por, sesion,
+            acceso_token_plano=acceso_token_plano, checkout_url=checkout_url,
         )
     except Exception:
         log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)

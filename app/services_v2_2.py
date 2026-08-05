@@ -2393,12 +2393,19 @@ def enviar_email_confirmacion(
     usuario: Optional[Usuario],
     sesion: Sesion,
     acceso_token_plano: Optional[str] = None,
+    checkout_url: Optional[str] = None,
 ) -> None:
     """Envía la confirmación de reserva por SMTP, con el branding del tenant.
 
     Si `acceso_token_plano` viene (el usuario que reservó es invitado nuevo,
     sin contraseña), agrega un bloque de activación de cuenta dentro de este
     mismo correo — nunca se manda un segundo correo aparte para eso.
+
+    Si `checkout_url` viene (la reserva quedó con pago online pendiente,
+    por ejemplo tras asignar_asesor_reserva() a una reserva que venía de
+    confirmación manual), agrega un bloque de "Pagar ahora" — sin esto el
+    cliente no tenía forma de enterarse de que falta pagar salvo entrando
+    por su cuenta a Mis Reservas.
     """
     if usuario is None or not usuario.email:
         log.info("Sin destinatario para la confirmación (folio %s)", reserva.folio)
@@ -2463,9 +2470,31 @@ def enviar_email_confirmacion(
             </table>"""
         activacion_texto = f"\n\nCrea tu contraseña para administrar tus reservas: {link_activacion}"
 
+    pago_html = ""
+    pago_texto = ""
+    if checkout_url:
+        checkout_url_html = html.escape(checkout_url)
+        pago_html = f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;background-color:#fef3c7;border-radius:8px;">
+              <tr><td style="padding:16px;">
+                <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#111827;">Falta completar tu pago</p>
+                <p style="margin:0 0 12px;font-size:13px;color:#4b5563;">
+                  Tu lugar está apartado, pero necesitamos que completes el pago para confirmarlo del todo.
+                </p>
+                <a href="{checkout_url_html}" style="display:inline-block;background-color:#d97706;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+                  Pagar ahora
+                </a>
+              </td></tr>
+            </table>"""
+        pago_texto = f"\n\nFalta completar tu pago para confirmar tu lugar: {checkout_url}"
+
+    saludo = (
+        "tu lugar está apartado, falta completar el pago:" if checkout_url
+        else "tu reserva está confirmada:"
+    )
     cuerpo_interior = f"""\
             <p style="margin:0 0 16px;font-size:15px;color:#111827;">
-              Hola {usuario_nombre_html}, tu reserva está confirmada:
+              Hola {usuario_nombre_html}, {saludo}
             </p>
             <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">{servicio_nombre_html}</p>
             <p style="margin:4px 0 16px;font-size:15px;color:#4b5563;">
@@ -2484,6 +2513,7 @@ def enviar_email_confirmacion(
                   <td style="padding:6px 0;text-align:right;color:#111827;">{reserva.codigo_confirmacion}</td></tr>
             </table>
             {meet_html}
+            {pago_html}
             {activacion_html}
             <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
               Si necesitas cambiar o cancelar esta reserva, contacta a tu proveedor.
@@ -2493,7 +2523,7 @@ def enviar_email_confirmacion(
 
     texto_plano = (
         f"{tenant.nombre} — Reserva confirmada\n\n"
-        f"Hola {usuario.nombre}, tu reserva está confirmada:\n\n"
+        f"Hola {usuario.nombre}, {saludo}\n\n"
         f"{servicio.nombre}\n{fecha}"
         + (f" — {fin}" if fin and fin != fecha else "")
         + f"\nAsesor: {asesor or 'Por asignar'}"
@@ -2501,10 +2531,15 @@ def enviar_email_confirmacion(
         + (f"\nTotal: {reserva.precio_final:.2f} {reserva.moneda}" if reserva.precio_final is not None else "")
         + f"\nFolio: {reserva.folio}\nCódigo: {reserva.codigo_confirmacion}"
         + (f"\n\nEnlace de la sesión: {sesion.meet_url}" if sesion.meet_url else "")
+        + pago_texto
         + activacion_texto
     )
 
-    _enviar_smtp(tenant, usuario.email, f"Confirmación de reserva — {servicio.nombre}", texto_plano, cuerpo_html)
+    asunto = (
+        f"Falta tu pago — {servicio.nombre}" if checkout_url
+        else f"Confirmación de reserva — {servicio.nombre}"
+    )
+    _enviar_smtp(tenant, usuario.email, asunto, texto_plano, cuerpo_html)
 
 
 def enviar_email_activacion(tenant: Tenant, usuario: Usuario, acceso_token_plano: str) -> None:

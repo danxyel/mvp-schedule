@@ -266,19 +266,18 @@ def listar_servicios_publicos(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ):
-    # Mismo filtro que sesiones_abiertas_servicio() (línea ~296): solo
-    # grupal. Sin esto, cualquier servicio individual/recurrente con un
-    # slot futuro libre (lo normal, no algo especial) prendía el aviso
-    # "Ya hay sesiones abiertas — únete" aunque la pantalla a la que manda
-    # ese aviso esté vacía para esos tipos — hueco del prompt original de
-    # PROMPT_W, no contemplaba que el EXISTS necesitaba el mismo filtro de
-    # tipo_agenda que ya tenía el endpoint de sesiones abiertas.
+    # Mismo criterio que sesiones_abiertas_servicio() (línea ~309): cupo
+    # real de la sesión, no tipo_agenda — grupal Y recurrente pueden tener
+    # cupo_maximo > 1 (ver PROMPT_P en HANDOFF, no son categorías
+    # excluyentes en cuanto a capacidad). Individual nunca pasa de 1 por
+    # el propio validador del schema, así que ese caso queda excluido
+    # solo, sin necesidad de mirar tipo_agenda.
     existe_sesion_abierta = (
         exists()
         .where(
             Sesion.servicio_id == Servicio.id,
             Sesion.tenant_id == tenant.id,
-            Servicio.tipo_agenda == TipoAgenda.GRUPAL,
+            Sesion.cupo_maximo > 1,
             Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
             Sesion.inscritos < Sesion.cupo_maximo,
             Sesion.fecha_hora_inicio > utcnow(),
@@ -322,8 +321,6 @@ def sesiones_abiertas_servicio(
     ).scalar_one_or_none()
     if servicio is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
-    if servicio.tipo_agenda != TipoAgenda.GRUPAL:
-        return []
 
     sesiones = db.execute(
         select(Sesion)
@@ -334,6 +331,11 @@ def sesiones_abiertas_servicio(
         .where(
             Sesion.tenant_id == tenant.id,
             Sesion.servicio_id == servicio_id,
+            # No filtramos por tipo_agenda — grupal Y recurrente pueden
+            # tener cupo_maximo > 1 (ver PROMPT_P en HANDOFF). Lo que
+            # importa es si la sesión en sí tiene lugar para más de una
+            # persona, no la etiqueta del servicio.
+            Sesion.cupo_maximo > 1,
             Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
             Sesion.inscritos < Sesion.cupo_maximo,
             Sesion.fecha_hora_inicio > utcnow(),

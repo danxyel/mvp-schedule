@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import mercadopago
+from urllib.parse import quote
 
 from sqlalchemy import and_, or_, func, select, update, text
 from sqlalchemy.orm import Session, selectinload, joinedload
@@ -1930,9 +1931,9 @@ def _mp_preferencia_body(
         },
         "external_reference": external_reference,
         "back_urls": {
-            "success": f"{base_url}/api/v2/mercadopago/redirect?reference={httpx.quote(external_reference)}&status=success",
-            "pending": f"{base_url}/api/v2/mercadopago/redirect?reference={httpx.quote(external_reference)}&status=pending",
-            "failure": f"{base_url}/api/v2/mercadopago/redirect?reference={httpx.quote(external_reference)}&status=failure",
+            "success": f"{base_url}/api/v2/mercadopago/redirect?reference={quote(external_reference)}&status=success",
+            "pending": f"{base_url}/api/v2/mercadopago/redirect?reference={quote(external_reference)}&status=pending",
+            "failure": f"{base_url}/api/v2/mercadopago/redirect?reference={quote(external_reference)}&status=failure",
         },
         "auto_return": "approved",
         "notification_url": notification_url,

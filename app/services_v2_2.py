@@ -25,9 +25,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from zoneinfo import ZoneInfo
 
 import httpx
-import jwt
 import mercadopago
-from urllib.parse import quote
 
 from sqlalchemy import and_, or_, func, select, update, text
 from sqlalchemy.orm import Session, selectinload, joinedload
@@ -1831,10 +1829,8 @@ def sincronizar_calendario(tenant: Tenant, sesion: Sesion) -> Optional[str]:
 
 
 # ── MercadoPago ─────────────────────────────────────────────────────────────
-_MP_AUTH_URL = "https://auth.mercadopago.com/authorization"
-_MP_OAUTH_TOKEN_URL = "https://api.mercadopago.com/oauth/token"
 _MP_PAYMENTS_URL = "https://api.mercadopago.com/v1/payments"
-_MP_180_DAYS = 180  # duración por default del access_token de MercadoPago
+_MP_USERS_ME_URL = "https://api.mercadopago.com/users/me"
 
 
 def _mp_cfg(tenant: Tenant) -> dict:
@@ -1842,147 +1838,55 @@ def _mp_cfg(tenant: Tenant) -> dict:
     return cfg if isinstance(cfg, dict) else {}
 
 
-def _mp_app_credentials() -> Tuple[str, str, str]:
-    """Devuelve (client_id, client_secret, redirect_uri) de las variables globales."""
-    client_id = os.environ.get("MP_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("MP_CLIENT_SECRET", "").strip()
-    redirect_uri = os.environ.get("MP_REDIRECT_URI", "").strip()
-    if not client_id or not client_secret or not redirect_uri:
-        raise ReservaError(
-            "La aplicación de MercadoPago no está configurada",
-            codigo="pago_no_configurado",
+def conectar_mercadopago_token(
+    tenant: Tenant,
+    db: Session,
+    access_token: str,
+    public_key: Optional[str] = None,
+) -> dict:
+    """Valida un Access Token pegado por el admin y lo guarda cifrado.
+
+    No hace commit — el router se encarga de eso.
+    """
+    try:
+        r = httpx.get(
+            _MP_USERS_ME_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=30,
         )
-    return client_id, client_secret, redirect_uri
-
-
-def generar_mp_state(tenant_id: int) -> str:
-    """Genera un JWT firmado con tenant_id para proteger el flujo OAuth."""
-    secret = os.environ.get("JWT_SECRET_KEY")
-    if not secret:
-        raise RuntimeError("JWT_SECRET_KEY requerido para firmar state OAuth")
-    payload = {
-        "tenant_id": tenant_id,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
-        "iat": datetime.now(timezone.utc),
-        "rnd": secrets.token_urlsafe(8),
-    }
-    return jwt.encode(payload, secret, algorithm="HS256")
-
-
-def validar_mp_state(state: str) -> int:
-    """Valida la firma del state JWT y devuelve el tenant_id."""
-    secret = os.environ.get("JWT_SECRET_KEY")
-    if not secret:
-        raise ReservaError("JWT_SECRET_KEY no configurado", codigo="pago_no_configurado")
-    try:
-        payload = jwt.decode(state, secret, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        raise ReservaError("El enlace de autorización expiró", codigo="mp_state_invalido")
-    except jwt.InvalidTokenError:
-        raise ReservaError("El enlace de autorización no es válido", codigo="mp_state_invalido")
-    tenant_id = payload.get("tenant_id")
-    if not isinstance(tenant_id, int):
-        raise ReservaError("El enlace de autorización no es válido", codigo="mp_state_invalido")
-    return tenant_id
-
-
-def _mp_url_autorizacion(tenant_id: int) -> str:
-    client_id, _, redirect_uri = _mp_app_credentials()
-    state = generar_mp_state(tenant_id)
-    params = {
-        "client_id": client_id,
-        "response_type": "code",
-        "redirect_uri": redirect_uri,
-        "state": state,
-        "platform_id": "mp",
-    }
-    return f"{_MP_AUTH_URL}?" + "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
-
-
-def _mp_intercambiar_code(code: str) -> dict:
-    """Intercambia un code de autorización por tokens de MercadoPago."""
-    client_id, client_secret, redirect_uri = _mp_app_credentials()
-    payload = {
-        "grant_type": "authorization_code",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "code": code,
-        "redirect_uri": redirect_uri,
-    }
-    try:
-        r = httpx.post(_MP_OAUTH_TOKEN_URL, data=payload, timeout=30)
     except Exception as exc:
-        log.exception("Error al conectar con MercadoPago OAuth")
+        log.exception("Error al validar token de MercadoPago")
         raise ReservaError("No se pudo contactar a MercadoPago", codigo="mp_error_red") from exc
     if r.status_code != 200:
-        log.warning("MercadoPago OAuth respondió %s: %s", r.status_code, r.text)
-        raise ReservaError("MercadoPago rechazó la autorización", codigo="mp_autorizacion_rechazada")
-    return r.json()
-
-
-def _mp_refrescar_tokens(tenant: Tenant, db: Session) -> bool:
-    """Intenta refrescar el access_token usando el refresh_token. Devuelve True si logró guardar uno nuevo."""
-    cfg = _mp_cfg(tenant)
-    refresh = cfg.get("refresh_token")
-    if not refresh:
-        return False
-    client_id, client_secret, _ = _mp_app_credentials()
-    payload = {
-        "grant_type": "refresh_token",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh,
-    }
-    try:
-        r = httpx.post(_MP_OAUTH_TOKEN_URL, data=payload, timeout=30)
-    except Exception:
-        log.exception("Error al refrescar token de MercadoPago")
-        return False
-    if r.status_code != 200:
-        log.warning("Refresh de MercadoPago falló: %s %s", r.status_code, r.text)
-        return False
+        log.warning("MercadoPago /users/me respondió %s: %s", r.status_code, r.text)
+        raise ReservaError(
+            "El token no es válido o no tiene permisos suficientes",
+            codigo="mp_token_invalido",
+        )
     data = r.json()
-    access_token = data.get("access_token")
-    if not access_token:
-        return False
+    mp_user_id = data.get("id")
     tenant.pago_config = {
-        **cfg,
         "access_token": access_token,
-        "refresh_token": data.get("refresh_token", cfg.get("refresh_token")),
-        "mp_user_id": data.get("user_id", cfg.get("mp_user_id")),
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=_MP_180_DAYS)).isoformat(),
+        "public_key": public_key,
+        "mp_user_id": str(mp_user_id) if mp_user_id is not None else None,
+        "conectado_en": datetime.now(timezone.utc).isoformat(),
     }
-    db.commit()
-    return True
+    return tenant.pago_config
+
+
+def desconectar_mercadopago(tenant: Tenant, db: Session) -> None:
+    """Borra la configuración de MercadoPago del tenant. No revoca el token
+    en el lado de MercadoPago; el admin debe regenerarlo desde su panel.
+    """
+    tenant.pago_config = None
 
 
 def _mp_access_token(tenant: Tenant, db: Session) -> str:
-    """Devuelve el access_token vigente del tenant, refrescándolo si es necesario.
-
-    Nota: el access_token de MercadoPago dura 180 días por default. Si
-    expires_at está presente y venció, intentamos refrescar; si no hay
-    refresh_token o el refresh falla, lanzamos error para que el admin
-    reconecte la cuenta.
-    """
+    """Devuelve el access_token guardado del tenant."""
     cfg = _mp_cfg(tenant)
     access_token = cfg.get("access_token")
     if not access_token:
         raise ReservaError("Este tenant no tiene MercadoPago conectado", codigo="mp_no_conectado")
-    expires_at = cfg.get("expires_at")
-    if expires_at:
-        try:
-            exp = datetime.fromisoformat(expires_at)
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > exp:
-                if not _mp_refrescar_tokens(tenant, db):
-                    raise ReservaError(
-                        "El token de MercadoPago expiró; reconecta la cuenta",
-                        codigo="mp_token_expirado",
-                    )
-                access_token = _mp_cfg(tenant).get("access_token")
-        except (ValueError, TypeError):
-            pass
     return access_token
 
 

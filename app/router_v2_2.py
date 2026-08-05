@@ -3289,6 +3289,15 @@ def estado_google_meet(
 
 @router.post("/admin/google-meet/revisar-contenido", response_model=OperacionOut)
 def revisar_contenido_google_meet(
+    folio: Optional[str] = Query(
+        None,
+        description="Si viene, fuerza el reprocesamiento de la sesión de ESE folio "
+                    "específico, sin importar si ya tiene contenido_enviado_en marcado "
+                    "o si fecha_hora_fin todavía no cumple el margen. Úsalo cuando una "
+                    "sesión se quedó a medias (ej. carpetas creadas pero correo nunca "
+                    "salió porque el proceso se interrumpió después de marcarla como "
+                    "ya procesada).",
+    ),
     tenant: Tenant = Depends(get_current_tenant),
     _: UsuarioTenant = Depends(requiere_admin),
     db: Session = Depends(get_db),
@@ -3299,9 +3308,34 @@ def revisar_contenido_google_meet(
     como botón de emergencia mientras el backend esté en un plan de Render
     que se duerme por inactividad — mientras está dormido, el scheduler en
     proceso tampoco corre, así que el contenido se queda sin procesar hasta
-    que algo despierta al servicio. Nota: procesa TODOS los tenants con
-    contenido pendiente, no solo este — es el mismo job global, expuesto
-    aquí nada más como forma de dispararlo a mano."""
+    que algo despierta al servicio."""
+    if folio:
+        reserva = db.execute(
+            select(Reserva).where(Reserva.tenant_id == tenant.id, Reserva.folio == folio)
+        ).scalar_one_or_none()
+        if reserva is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+        sesion = reserva.sesion
+        if sesion is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Esa reserva no tiene sesión asociada")
+        try:
+            svc._procesar_contenido_sesion(db, sesion)
+        except Exception as e:
+            db.rollback()
+            log.exception("Fallo al forzar reprocesamiento de contenido, folio=%s", folio)
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Falló el reprocesamiento: {e}",
+            )
+        return OperacionOut(
+            ok=True,
+            mensaje=f"Sesión de la reserva {folio} reprocesada",
+            detalle={"folio": folio, "sesion_id": sesion.id},
+        )
+
+    # Sin folio: corre el job global normal (nota: procesa TODOS los tenants
+    # con contenido pendiente, no solo este — es el mismo job de APScheduler,
+    # expuesto aquí nada más como forma de dispararlo a mano).
     procesadas = svc.revisar_contenido_sesiones_virtuales(db)
     return OperacionOut(
         ok=True,

@@ -11,6 +11,8 @@ export default function GoogleMeetTab({ tenantSlug, token }) {
   const [conectando, setConectando] = useState(false)
   const [desconectando, setDesconectando] = useState(false)
   const [revisando, setRevisando] = useState(false)
+  const [folio, setFolio] = useState('')
+  const [reprocesando, setReprocesando] = useState(false)
   const [error, setError] = useState(null)
   const [exito, setExito] = useState(null)
 
@@ -105,6 +107,27 @@ export default function GoogleMeetTab({ tenantSlug, token }) {
       return
     }
     setExito(data?.mensaje ?? 'Revisión completada')
+  }
+
+  const reprocesarFolio = async (e) => {
+    e.preventDefault()
+    if (reprocesando || !folio.trim()) return
+    setReprocesando(true)
+    setError(null)
+    setExito(null)
+    const { data, error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/admin/google-meet/revisar-contenido',
+      {
+        params: { path: { tenant_slug: tenantSlug }, query: { folio: folio.trim() } },
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    )
+    setReprocesando(false)
+    if (fetchErr) {
+      setError(errorMensaje(fetchErr))
+      return
+    }
+    setExito(data?.mensaje ?? 'Sesión reprocesada')
   }
 
   if (loading) {
@@ -204,6 +227,34 @@ export default function GoogleMeetTab({ tenantSlug, token }) {
           >
             {revisando ? 'Revisando...' : 'Revisar contenido ahora'}
           </button>
+
+          <form onSubmit={reprocesarFolio} className="mt-5 border-t border-gray-100 pt-5">
+            <label htmlFor="google-meet-folio" className="mb-1 block text-sm font-medium text-gray-700">
+              Forzar una sesión específica por folio
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              Salta el filtro normal (fecha/estado) y reprocesa esa sesión de
+              inmediato — útil si quedó a medias o si su fecha programada
+              todavía no llega pero ya la probaste en vivo.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                id="google-meet-folio"
+                type="text"
+                value={folio}
+                onChange={(e) => setFolio(e.target.value)}
+                placeholder="R260805-XXXXXXXX"
+                className={`${CAMPO} max-w-xs`}
+              />
+              <button
+                type="submit"
+                disabled={reprocesando || !folio.trim()}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {reprocesando ? 'Reprocesando...' : 'Reprocesar folio'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

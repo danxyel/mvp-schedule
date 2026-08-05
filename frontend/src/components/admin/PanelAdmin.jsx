@@ -723,6 +723,7 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
   const [rechazando, setRechazando] = useState(null)
   const [rechazarModal, setRechazarModal] = useState(null)
   const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [alternativasRechazo, setAlternativasRechazo] = useState([])
   const [rechazandoLoading, setRechazandoLoading] = useState(false)
   const [errores, setErrores] = useState({})
   const [exito, setExito] = useState(null)
@@ -799,12 +800,14 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
   const abrirRechazar = (s) => {
     setRechazarModal(s)
     setMotivoRechazo(s.motivo_rechazo ?? '')
+    setAlternativasRechazo([])
     setErrores((prev) => ({ ...prev, [s.id]: null }))
   }
 
   const cerrarRechazar = () => {
     setRechazarModal(null)
     setMotivoRechazo('')
+    setAlternativasRechazo([])
     setRechazandoLoading(false)
   }
 
@@ -814,11 +817,17 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
     setRechazandoLoading(true)
     setErrores((prev) => ({ ...prev, [rechazarModal.id]: null }))
     setExito(null)
+    const alternativas = alternativasRechazo
+      .filter((v) => v.trim() !== '')
+      .map((v) => `${v}:00${getLocalOffset()}`)
     const { error: fetchErr, response } = await client.POST(
       '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar',
       {
         params: { path: { tenant_slug: tenantSlug, solicitud_id: rechazarModal.id } },
-        body: { motivo: motivoRechazo.trim() || null },
+        body: {
+          motivo: motivoRechazo.trim() || null,
+          alternativas: alternativas.length > 0 ? alternativas : undefined,
+        },
         headers: { Authorization: `Bearer ${token}` },
       },
     )
@@ -1036,6 +1045,50 @@ function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
           <p className="mb-3 text-right text-xs text-gray-400">
             {motivoRechazo.length}/500
           </p>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Opciones alternativas (opcional)
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              El cliente podrá aceptar una de estas fechas desde su portal.
+            </p>
+            <div className="space-y-2">
+              {alternativasRechazo.map((valor, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={valor}
+                    onChange={(e) =>
+                      setAlternativasRechazo((prev) =>
+                        prev.map((v, i) => (i === idx ? e.target.value : v))
+                      )
+                    }
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAlternativasRechazo((prev) => prev.filter((_, i) => i !== idx))
+                    }
+                    className="rounded-lg border border-gray-300 px-2 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+                    title="Quitar opción"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            {alternativasRechazo.length < 10 && (
+              <button
+                type="button"
+                onClick={() => setAlternativasRechazo((prev) => [...prev, ''])}
+                className="mt-2 text-sm font-medium text-blue-600 transition hover:text-blue-800"
+              >
+                + Agregar otra opción
+              </button>
+            )}
+          </div>
 
           {errores[rechazarModal.id] && (
             <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

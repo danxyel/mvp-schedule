@@ -40,7 +40,61 @@ function CardSkeleton() {
   )
 }
 
-function SolicitudCard({ s }) {
+function formatFechaHoraAlternativa(utcString) {
+  return new Intl.DateTimeFormat('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(utcString))
+}
+
+function SolicitudCard({ s, tenantSlug, token, onAceptada }) {
+  const [aceptandoId, setAceptandoId] = useState(null)
+  const [errorAlt, setErrorAlt] = useState(null)
+  const [exitoFolio, setExitoFolio] = useState(null)
+
+  const aceptarAlternativa = async (alt) => {
+    setAceptandoId(alt.id)
+    setErrorAlt(null)
+    setExitoFolio(null)
+    const { data, error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/mis-solicitudes/{solicitud_id}/alternativas/{alternativa_id}/aceptar',
+      {
+        params: {
+          path: {
+            tenant_slug: tenantSlug,
+            solicitud_id: s.id,
+            alternativa_id: alt.id,
+          },
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    setAceptandoId(null)
+    if (fetchErr) {
+      const msg =
+        fetchErr?.codigo === 'franja_ocupada' || fetchErr?.codigo === 'cupo_agotado'
+          ? 'Ese horario ya no está disponible — intenta con otra opción de la lista.'
+          : fetchErr?.codigo === 'alternativa_ya_resuelta'
+            ? 'Ya aceptaste una alternativa para esta solicitud.'
+            : fetchErr?.codigo === 'solicitud_no_rechazada'
+              ? 'Esta solicitud ya no está disponible para aceptar.'
+              : errorMensaje(fetchErr)
+      setErrorAlt(msg)
+      return
+    }
+    setExitoFolio(data?.folio_reserva)
+    onAceptada?.()
+  }
+
+  const mostrarAlternativas =
+    s.estado === 'rechazada' &&
+    s.alternativa_aceptada_id == null &&
+    s.alternativas?.length > 0
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md">
       <div className="mb-1 flex items-start justify-between gap-2">
@@ -70,6 +124,51 @@ function SolicitudCard({ s }) {
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <span className="font-medium">Motivo:</span> {s.motivo_rechazo}
         </p>
+      )}
+
+      {mostrarAlternativas && (
+        <div className="mb-3">
+          <p className="mb-2 text-sm font-medium text-gray-700">
+            El negocio te sugiere estas alternativas:
+          </p>
+          <div className="space-y-2">
+            {s.alternativas.map((alt) => (
+              <div
+                key={alt.id}
+                className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <p className="text-sm text-gray-700">
+                  {formatFechaHoraAlternativa(alt.fecha_hora)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => aceptarAlternativa(alt)}
+                  disabled={aceptandoId === alt.id}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {aceptandoId === alt.id ? 'Aceptando...' : 'Aceptar esta fecha'}
+                </button>
+              </div>
+            ))}
+          </div>
+          {errorAlt && (
+            <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorAlt}
+            </p>
+          )}
+        </div>
+      )}
+
+      {s.estado === 'rechazada' && s.alternativa_aceptada_id != null && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          Aceptaste una fecha alternativa — revisa <Link to="/mis-reservas" className="font-medium underline hover:text-green-800">Mis reservas</Link> para verla.
+        </div>
+      )}
+
+      {exitoFolio && (
+        <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          Reserva creada ({exitoFolio}).
+        </div>
       )}
 
       {s.estado === 'aceptada' && (
@@ -166,7 +265,13 @@ export default function MisSolicitudes() {
       {!loading && !error && items.length > 0 && (
         <div className="space-y-3">
           {items.map((s) => (
-            <SolicitudCard key={s.id} s={s} />
+            <SolicitudCard
+              key={s.id}
+              s={s}
+              tenantSlug={tenantSlug}
+              token={token}
+              onAceptada={fetchSolicitudes}
+            />
           ))}
         </div>
       )}

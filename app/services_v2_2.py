@@ -1953,6 +1953,77 @@ def conectar_mercadopago_token(
     return tenant.pago_config
 
 
+def _google_meet_credentials(tenant: Tenant):
+    """Crea credenciales de service account con Domain-Wide Delegation para
+    impersonar el buzón de Workspace configurado en el tenant.
+    """
+    from google.oauth2.service_account import Credentials
+    import json
+
+    json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if not json_str:
+        raise ReservaError("Google Meet no está configurado en el servidor", codigo="meet_no_configurado")
+
+    try:
+        info = json.loads(json_str)
+    except json.JSONDecodeError as exc:
+        raise ReservaError("Configuración de Google Meet inválida", codigo="meet_config_invalida") from exc
+
+    cfg = tenant.google_meet_config if isinstance(tenant.google_meet_config, dict) else {}
+    impersonar_email = cfg.get("impersonar_email")
+    if not impersonar_email:
+        raise ReservaError("Tenant no tiene buzón de Google Meet configurado", codigo="meet_no_configurado")
+
+    return Credentials.from_service_account_info(
+        info,
+        scopes=[
+            "https://www.googleapis.com/auth/meetings.space.created",
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/documents",
+            "https://www.googleapis.com/auth/calendar.events",
+        ],
+        subject=impersonar_email,
+    )
+
+
+def conectar_google_meet(
+    tenant: Tenant,
+    db: Session,
+    impersonar_email: str,
+) -> dict:
+    """Valida el email y prueba la impersonación con la API de Meet antes de
+    guardar la configuración del tenant.
+    """
+    from googleapiclient.discovery import build
+
+    email = impersonar_email.strip().lower()
+    if "@" not in email:
+        raise ReservaError("El correo de impersonación no es válido", codigo="meet_email_invalido")
+
+    tenant.google_meet_config = {"impersonar_email": email}
+    creds = _google_meet_credentials(tenant)
+    try:
+        meet = build("meet", "v2", credentials=creds)
+        meet.spaces().create(body={"config": {"accessType": "TRUSTED"}}).execute()
+    except Exception as exc:
+        tenant.google_meet_config = None
+        log.exception("Fallo la prueba de conexión a Google Meet para %s", email)
+        raise ReservaError(
+            "No se pudo conectar con Google Meet. Verifica el correo, la delegación de dominio y los scopes.",
+            codigo="meet_error_conexion",
+        ) from exc
+
+    return tenant.google_meet_config
+
+
+def desconectar_google_meet(tenant: Tenant, db: Session) -> None:
+    """Borra la configuración de Google Meet del tenant. No revoca la
+    delegación de dominio ni el acceso del lado de Google; el admin debe
+    hacerlo desde el panel de Google Cloud / Workspace.
+    """
+    tenant.google_meet_config = None
+
+
 def desconectar_mercadopago(tenant: Tenant, db: Session) -> None:
     """Borra la configuración de MercadoPago del tenant. No revoca el token
     en el lado de MercadoPago; el admin debe regenerarlo desde su panel.

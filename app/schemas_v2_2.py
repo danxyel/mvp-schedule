@@ -423,6 +423,16 @@ class MercadoPagoConectarIn(BaseModel):
     public_key: Optional[str] = None
 
 
+class GoogleMeetEstadoOut(BaseModel):
+    conectado: bool
+    impersonar_email: Optional[str] = None
+    tenant_id: int
+
+
+class GoogleMeetConectarIn(BaseModel):
+    impersonar_email: EmailStr
+
+
 class ReservaCreateResponse(BaseModel):
     """Respuesta del POST /reservas.
 

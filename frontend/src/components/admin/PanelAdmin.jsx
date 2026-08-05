@@ -6,6 +6,7 @@ import GestionUsuarios from './GestionUsuarios'
 import SeriesTab from './SeriesTab'
 import CrearSerieModal from './CrearSerieModal'
 import MercadoPagoTab from './MercadoPagoTab'
+import GoogleMeetTab from './GoogleMeetTab'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
@@ -1682,6 +1683,9 @@ export default function PanelAdmin() {
           <TabButton active={tab === 'pagos'} onClick={() => cambiarTab('pagos')}>
             Pagos
           </TabButton>
+          <TabButton active={tab === 'meet'} onClick={() => cambiarTab('meet')}>
+            Meet
+          </TabButton>
         </TabGroup>
       </div>
 
@@ -1702,6 +1706,8 @@ export default function PanelAdmin() {
         <GestionServicios tenantSlug={tenantSlug} token={token} onIrACrearSerie={irACrearSerie} />
       ) : tab === 'pagos' ? (
         <MercadoPagoTab tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'meet' ? (
+        <GoogleMeetTab tenantSlug={tenantSlug} token={token} />
       ) : (
         <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}

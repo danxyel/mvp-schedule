@@ -32,7 +32,8 @@ from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaPublicaOut, ReservaCreateResponse, ReagendarSesionIn,
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
-    PaginacionOut, CheckoutUrlOut, MercadoPagoEstadoOut, MercadoPagoConectarIn, OperacionOut, AsesorPublicOut, SedeOut,
+    PaginacionOut, CheckoutUrlOut, MercadoPagoEstadoOut, MercadoPagoConectarIn,
+    GoogleMeetEstadoOut, GoogleMeetConectarIn, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
     SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn,
@@ -3174,6 +3175,58 @@ def estado_mercadopago(
 ):
     """Devuelve si el tenant tiene conectada una cuenta de MercadoPago."""
     return _mercadopago_estado_out(tenant)
+
+
+# ============================================================
+# GOOGLE MEET — ADMIN
+# ============================================================
+def _google_meet_estado_out(tenant: Tenant) -> dict:
+    cfg = tenant.google_meet_config if isinstance(tenant.google_meet_config, dict) else {}
+    return {
+        "conectado": bool(cfg.get("impersonar_email")),
+        "impersonar_email": cfg.get("impersonar_email"),
+        "tenant_id": tenant.id,
+    }
+
+
+@router.post("/admin/google-meet/conectar", response_model=GoogleMeetEstadoOut)
+def conectar_google_meet(
+    body: GoogleMeetConectarIn,
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Conecta el buzón de Google Meet del tenant vía service account + Domain-Wide Delegation."""
+    try:
+        svc.conectar_google_meet(tenant, db, impersonar_email=body.impersonar_email)
+    except svc.ReservaError as e:
+        raise _http_de(e)
+    db.commit()
+    db.refresh(tenant)
+    return _google_meet_estado_out(tenant)
+
+
+@router.delete("/admin/google-meet/desconectar", response_model=GoogleMeetEstadoOut)
+def desconectar_google_meet(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Desconecta la configuración de Google Meet del tenant. No revoca la
+    delegación de dominio del lado de Google."""
+    svc.desconectar_google_meet(tenant, db)
+    db.commit()
+    db.refresh(tenant)
+    return _google_meet_estado_out(tenant)
+
+
+@router.get("/admin/google-meet/estado", response_model=GoogleMeetEstadoOut)
+def estado_google_meet(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Devuelve si el tenant tiene conectado un buzón de Google Meet."""
+    return _google_meet_estado_out(tenant)
 
 
 @router.patch("/admin/tenant/metodo-pago-default", response_model=TenantAdminOut)

@@ -122,27 +122,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/mercadopago/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Mercadopago Callback
-         * @description Callback OAuth de MercadoPago. Valida el state firmado, intercambia
-         *     el code por tokens y guarda la configuración en el tenant.
-         */
-        get: operations["mercadopago_callback_api_v2_mercadopago_callback_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/webhooks/mercadopago": {
         parameters: {
             query?: never;
@@ -1009,15 +988,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Conectar Mercadopago
-         * @description Genera la URL de autorización OAuth para que el dueño del tenant
-         *     conecte su cuenta de MercadoPago.
+         * @description Conecta la cuenta de MercadoPago del tenant usando un Access Token
+         *     pegado directamente por el admin.
          */
-        get: operations["conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_get"];
+        post: operations["conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/mercadopago/desconectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Desconectar Mercadopago
+         * @description Desconecta la cuenta de MercadoPago del tenant. No revoca el token en
+         *     el lado de MercadoPago; el admin debe regenerarlo desde su panel.
+         */
+        delete: operations["desconectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_desconectar_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1724,6 +1724,13 @@ export interface components {
              * Format: date-time
              */
             fecha_vinculacion: string;
+        };
+        /** MercadoPagoConectarIn */
+        MercadoPagoConectarIn: {
+            /** Access Token */
+            access_token: string;
+            /** Public Key */
+            public_key?: string | null;
         };
         /** MercadoPagoEstadoOut */
         MercadoPagoEstadoOut: {
@@ -3118,38 +3125,6 @@ export interface operations {
             query: {
                 reference: string;
                 status?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mercadopago_callback_api_v2_mercadopago_callback_get: {
-        parameters: {
-            query: {
-                code: string;
-                state: string;
             };
             header?: never;
             path?: never;
@@ -4987,7 +4962,42 @@ export interface operations {
             };
         };
     };
-    conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_get: {
+    conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MercadoPagoConectarIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MercadoPagoEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desconectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_desconectar_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -5004,7 +5014,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MercadoPagoEstadoOut"];
                 };
             };
             /** @description Validation Error */

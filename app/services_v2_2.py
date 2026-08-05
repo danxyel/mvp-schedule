@@ -1917,6 +1917,13 @@ def _crear_espacio_meet(creds) -> dict:
     tendría nada que procesar. Confirmado en vivo con un script aislado
     antes de escribir este prompt (ver HANDOFF) que el plan del tenant sí
     acepta este body.
+
+    smartNotesConfig se apaga a propósito (autoSmartNotesGeneration=OFF):
+    sin esto, la política del workspace lo deja en automático (confirmado
+    en la misma prueba en vivo, veía "ON" sin haberlo pedido) y Google
+    manda un correo de error al organizador cuando falla la generación de
+    notas — no usamos esa función en el feature, no tiene caso arrastrar
+    ese ruido.
     """
     from googleapiclient.discovery import build
 
@@ -1929,6 +1936,7 @@ def _crear_espacio_meet(creds) -> dict:
                 "artifactConfig": {
                     "recordingConfig": {"autoRecordingGeneration": "ON"},
                     "transcriptionConfig": {"autoTranscriptionGeneration": "ON"},
+                    "smartNotesConfig": {"autoSmartNotesGeneration": "OFF"},
                 },
             },
         }

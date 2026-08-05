@@ -47,6 +47,7 @@ function SlotSkeleton() {
 export default function CalendarioDisponibilidad() {
   const { tenantSlug, servicioId } = useParams()
   const navigate = useNavigate()
+  const token = sessionStorage.getItem('token')
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   const [currentDate, setCurrentDate] = useState(() => hoy)
@@ -127,6 +128,19 @@ export default function CalendarioDisponibilidad() {
 
   return (
     <div className="mx-auto max-w-3xl">
+      {token && (
+        <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
+          <Link to="/mis-reservas" className="text-blue-600 hover:underline">
+            Mis reservas
+          </Link>
+          <Link to="/mis-solicitudes" className="text-blue-600 hover:underline">
+            Mis solicitudes
+          </Link>
+          <Link to={`/t/${tenantSlug}`} className="text-blue-600 hover:underline">
+            Elegir otro servicio
+          </Link>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr]">
         <div className="md:sticky md:top-4 md:self-start">
           <SelectorFecha

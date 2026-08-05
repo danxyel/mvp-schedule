@@ -143,7 +143,7 @@ function ReservaCard({ r, navigate }) {
             Unirse
           </a>
         )}
-        {r.estado === 'confirmada' && r.estado_pago === 'pendiente' && !r.inscripcion_id && (
+        {(r.estado === 'confirmada' || r.estado === 'en_espera') && r.estado_pago === 'pendiente' && !r.inscripcion_id && (
           <button
             type="button"
             onClick={pagar}

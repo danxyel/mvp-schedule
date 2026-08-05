@@ -393,6 +393,7 @@ class Servicio(Base, TenantScopedMixin):
     moneda: Mapped[str] = mapped_column(String(3), default="MXN")
     politica_cancelacion_hs: Mapped[Optional[int]] = mapped_column(nullable=True)
     requiere_confirmacion: Mapped[bool] = mapped_column(default=False)
+    permite_solicitudes: Mapped[bool] = mapped_column(default=False)
     permitir_reagendar: Mapped[bool] = mapped_column(default=True)
     visible_web: Mapped[bool] = mapped_column(default=True)
     imagen_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

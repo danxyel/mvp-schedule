@@ -1306,6 +1306,7 @@ def confirmar_solicitud_admin(
     try:
         resultado = svc.crear_reserva(
             db, tenant, payload, usuario_actual=cliente, ip=ip, user_agent=ua,
+            forzar_pendiente=True,
         )
     except ReservaError as e:
         db.rollback()

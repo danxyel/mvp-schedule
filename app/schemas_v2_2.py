@@ -275,6 +275,7 @@ class DisponibilidadDiaOut(BaseModel):
     servicio_id: int
     timezone: str
     requiere_confirmacion: bool
+    permite_solicitudes: bool
     slots: List[SlotDisponible]
 
 
@@ -825,6 +826,7 @@ class ServicioAdminIn(BaseModel):
     precio_paquete: Optional[Decimal] = Field(None, ge=0)
     visible_web: bool = True
     requiere_confirmacion: bool = False
+    permite_solicitudes: bool = False
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -869,6 +871,7 @@ class ServicioAdminUpdate(BaseModel):
     precio_paquete: Optional[Decimal] = Field(None, ge=0)
     visible_web: Optional[bool] = None
     requiere_confirmacion: Optional[bool] = None
+    permite_solicitudes: Optional[bool] = None
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -943,6 +946,7 @@ class ServicioAdminOut(BaseModel):
     cobro_por_paquete_habilitado: bool = False
     precio_paquete: Optional[Decimal] = None
     requiere_confirmacion: bool = False
+    permite_solicitudes: bool = False
     visible_web: bool
     activo: bool
     creado_en: datetime

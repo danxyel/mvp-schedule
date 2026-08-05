@@ -639,6 +639,7 @@ def listar_slots_disponibles(
             "servicio_id": servicio.id,
             "timezone": tzname,
             "requiere_confirmacion": servicio.requiere_confirmacion,
+            "permite_solicitudes": servicio.permite_solicitudes,
             "slots": slots,
         }
 
@@ -727,6 +728,7 @@ def listar_slots_disponibles(
         "servicio_id": servicio.id,
         "timezone": tzname,
         "requiere_confirmacion": servicio.requiere_confirmacion,
+        "permite_solicitudes": servicio.permite_solicitudes,
         "slots": slots,
     }
 
@@ -816,6 +818,7 @@ def crear_reserva(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
     generar_token_activacion: bool = True,
+    forzar_pendiente: bool = False,
 ) -> Dict[str, Any]:
     tenant_id = tenant.id
 
@@ -831,6 +834,8 @@ def crear_reserva(
     ).scalar_one_or_none()
     if servicio is None:
         raise ReservaError("Servicio no encontrado o no disponible")
+
+    confirmacion_manual = servicio.requiere_confirmacion or forzar_pendiente
 
     inicio = _a_utc(payload.fecha_hora_inicio)
     fin = inicio + timedelta(minutes=servicio.duracion_minutos)
@@ -879,13 +884,13 @@ def crear_reserva(
             if (
                 servicio.tipo_agenda == TipoAgenda.GRUPAL
                 and not servicio.creacion_por_alumno
-                and not servicio.requiere_confirmacion
+                and not confirmacion_manual
             ):
                 raise ReservaError(
                     "No hay sesiones programadas en ese horario",
                     codigo="sin_sesion_disponible",
                 )
-            if servicio.requiere_confirmacion:
+            if confirmacion_manual:
                 # Asignación manual de asesor: la sesión se crea SIN asesor y la
                 # reserva queda PENDIENTE. El staff asigna asesor al confirmar
                 # vía POST /admin/reservas/{reserva_id}/asignar-asesor. Aquí solo
@@ -930,7 +935,7 @@ def crear_reserva(
     precio = servicio.precio or Decimal("0.00")
     requiere_pago = servicio.pago_requerido and precio > 0
 
-    if servicio.requiere_confirmacion:
+    if confirmacion_manual:
         estado = EstadoReserva.PENDIENTE
         estado_pago = EstadoPagoReserva.PENDIENTE
         hold_expira = None
@@ -955,7 +960,7 @@ def crear_reserva(
         beneficiario_id=payload.beneficiario_id,
         estado=estado,
         estado_pago=estado_pago,
-        tipo_flujo=TipoFlujo.MANUAL if servicio.requiere_confirmacion else TipoFlujo.AUTO,
+        tipo_flujo=TipoFlujo.MANUAL if confirmacion_manual else TipoFlujo.AUTO,
         hold_expira_en=hold_expira,
         folio=generar_folio(tenant_id),
         codigo_confirmacion=generar_codigo_confirmacion(),
@@ -997,7 +1002,7 @@ def crear_reserva(
         ip=ip, user_agent=user_agent,
     )
 
-    if servicio.requiere_confirmacion:
+    if confirmacion_manual:
         # Nada se dispara post-commit: el email y el calendario se disparan
         # hasta que el staff confirma (asigna asesor) en
         # POST /admin/reservas/{reserva_id}/asignar-asesor.
@@ -1054,9 +1059,9 @@ def crear_solicitud_reserva(
     ).scalar_one_or_none()
     if servicio is None:
         raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
-    if not servicio.requiere_confirmacion:
+    if not servicio.permite_solicitudes:
         raise ReservaError(
-            "Este servicio no requiere confirmación; reserva directamente.",
+            "Este servicio no permite proponer fechas alternativas.",
             codigo="no_requiere_confirmacion",
         )
 
@@ -1138,7 +1143,7 @@ def aceptar_alternativa_solicitud(
     )
     resultado = crear_reserva(
         db, tenant, payload, usuario_actual=cliente, ip=ip, user_agent=user_agent,
-        generar_token_activacion=False,
+        generar_token_activacion=False, forzar_pendiente=True,
     )
     reserva = resultado["reserva"]
     sesion = resultado["sesion"]

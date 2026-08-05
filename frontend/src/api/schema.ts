@@ -1562,6 +1562,8 @@ export interface components {
             timezone: string;
             /** Requiere Confirmacion */
             requiere_confirmacion: boolean;
+            /** Permite Solicitudes */
+            permite_solicitudes: boolean;
             /** Slots */
             slots: components["schemas"]["SlotDisponible"][];
         };
@@ -2265,6 +2267,11 @@ export interface components {
              * @default false
              */
             requiere_confirmacion: boolean;
+            /**
+             * Permite Solicitudes
+             * @default false
+             */
+            permite_solicitudes: boolean;
         };
         /** ServicioAdminOut */
         ServicioAdminOut: {
@@ -2317,6 +2324,11 @@ export interface components {
              * @default false
              */
             requiere_confirmacion: boolean;
+            /**
+             * Permite Solicitudes
+             * @default false
+             */
+            permite_solicitudes: boolean;
             /** Visible Web */
             visible_web: boolean;
             /** Activo */
@@ -2375,6 +2387,8 @@ export interface components {
             visible_web?: boolean | null;
             /** Requiere Confirmacion */
             requiere_confirmacion?: boolean | null;
+            /** Permite Solicitudes */
+            permite_solicitudes?: boolean | null;
         };
         /** ServicioPublicOut */
         ServicioPublicOut: {

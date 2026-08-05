@@ -266,15 +266,24 @@ def listar_servicios_publicos(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ):
+    # Mismo filtro que sesiones_abiertas_servicio() (línea ~296): solo
+    # grupal. Sin esto, cualquier servicio individual/recurrente con un
+    # slot futuro libre (lo normal, no algo especial) prendía el aviso
+    # "Ya hay sesiones abiertas — únete" aunque la pantalla a la que manda
+    # ese aviso esté vacía para esos tipos — hueco del prompt original de
+    # PROMPT_W, no contemplaba que el EXISTS necesitaba el mismo filtro de
+    # tipo_agenda que ya tenía el endpoint de sesiones abiertas.
     existe_sesion_abierta = (
         exists()
         .where(
             Sesion.servicio_id == Servicio.id,
             Sesion.tenant_id == tenant.id,
+            Servicio.tipo_agenda == TipoAgenda.GRUPAL,
             Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
             Sesion.inscritos < Sesion.cupo_maximo,
             Sesion.fecha_hora_inicio > utcnow(),
         )
+        .correlate(Servicio)
     )
 
     filas = db.execute(

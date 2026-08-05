@@ -232,6 +232,7 @@ class Tenant(Base):
     stripe_account_id: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     stripe_public_key: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     pago_config: Mapped[Optional[dict]] = mapped_column(EncryptedJSON, nullable=True)
+    google_meet_config: Mapped[Optional[dict]] = mapped_column(EncryptedJSON, nullable=True)
 
     max_asesores: Mapped[int] = mapped_column(default=5)
     max_sedes: Mapped[int] = mapped_column(default=1)
@@ -398,6 +399,7 @@ class Servicio(Base, TenantScopedMixin):
     visible_web: Mapped[bool] = mapped_column(default=True)
     imagen_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     metodo_pago: Mapped[Optional[MetodoPago]] = mapped_column(SQLEnum(MetodoPago), nullable=True)
+    drive_folder_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     pago_requerido: Mapped[bool] = mapped_column(default=True)
     cobro_por_sesion_habilitado: Mapped[bool] = mapped_column(default=True)
     cobro_por_paquete_habilitado: Mapped[bool] = mapped_column(default=False)
@@ -457,10 +459,14 @@ class Sesion(Base, TenantScopedMixin):
     creado_por_tipo: Mapped[CreadoPorTipo] = mapped_column(SQLEnum(CreadoPorTipo), default=CreadoPorTipo.ADMIN)
     meet_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     meet_generado_auto: Mapped[bool] = mapped_column(default=False)
+    meet_space_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     google_event_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     ics_uid: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     notas_internas: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    drive_recording_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    drive_transcript_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    contenido_enviado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     version_id: Mapped[int] = mapped_column(default=1, nullable=False)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -660,6 +666,7 @@ class SerieReserva(Base, TenantScopedMixin):
 
     # Estado
     estado: Mapped[EstadoSerie] = mapped_column(SQLEnum(EstadoSerie), default=EstadoSerie.ACTIVA)
+    drive_folder_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

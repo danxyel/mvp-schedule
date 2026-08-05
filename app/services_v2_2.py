@@ -2969,15 +2969,43 @@ def _obtener_o_crear_carpeta_serie(
     return carpeta["id"]
 
 
-def _mover_archivo(drive, file_id: str, carpeta_destino_id: str) -> None:
+def _mover_archivo(drive, file_id: str, carpeta_destino_id: str) -> List[str]:
+    """Mueve un archivo a carpeta_destino_id (le quita todos sus padres
+    actuales y le pone el nuevo). Devuelve la lista de IDs de carpetas
+    padre que tenía antes de moverlo, para que el llamador pueda revisar
+    si quedaron vacías y limpiarlas."""
     archivo = drive.files().get(fileId=file_id, fields="parents").execute()
-    padres_actuales = ",".join(archivo.get("parents", []))
+    padres_actuales_lista = archivo.get("parents", [])
+    padres_actuales = ",".join(padres_actuales_lista)
     drive.files().update(
         fileId=file_id,
         addParents=carpeta_destino_id,
         removeParents=padres_actuales,
         fields="id, parents",
     ).execute()
+    return padres_actuales_lista
+
+
+def _limpiar_carpetas_origen_vacias(drive, carpetas_ids: set, carpeta_a_conservar: str) -> None:
+    """Google crea automáticamente una carpeta contenedora por cada espacio
+    de Meet donde deposita la grabación/transcripción. Una vez que movemos
+    esos archivos a nuestra estructura organizada, esa carpeta original
+    queda vacía pero Drive no la borra sola. La eliminamos (a la papelera)
+    si de verdad quedó sin contenido, para no dejar basura en el Drive del
+    tenant. No es crítico: si falla, solo se registra el error."""
+    for carpeta_id in carpetas_ids:
+        if not carpeta_id or carpeta_id == carpeta_a_conservar:
+            continue
+        try:
+            hijos = drive.files().list(
+                q=f"'{carpeta_id}' in parents and trashed=false",
+                fields="files(id)",
+                pageSize=1,
+            ).execute()
+            if not hijos.get("files"):
+                drive.files().update(fileId=carpeta_id, body={"trashed": True}).execute()
+        except Exception:
+            log.exception("No se pudo limpiar la carpeta origen %s de Meet", carpeta_id)
 
 
 def _clientes_con_acceso_contenido(db: Session, sesion: Sesion) -> List[Usuario]:
@@ -3083,8 +3111,11 @@ def _procesar_contenido_sesion(db: Session, sesion: Sesion) -> None:
         ).execute()
         carpeta_destino_id = carpeta_sesion["id"]
 
-    _mover_archivo(drive, recording_file_id, carpeta_destino_id)
-    _mover_archivo(drive, transcript_file_id, carpeta_destino_id)
+    padres_grabacion = _mover_archivo(drive, recording_file_id, carpeta_destino_id)
+    padres_transcripcion = _mover_archivo(drive, transcript_file_id, carpeta_destino_id)
+    _limpiar_carpetas_origen_vacias(
+        drive, set(padres_grabacion) | set(padres_transcripcion), carpeta_destino_id
+    )
 
     # Renombrar archivos
     drive.files().update(

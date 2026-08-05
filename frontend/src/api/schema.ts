@@ -1542,6 +1542,8 @@ export interface components {
             servicio_id: number;
             /** Timezone */
             timezone: string;
+            /** Requiere Confirmacion */
+            requiere_confirmacion: boolean;
             /** Slots */
             slots: components["schemas"]["SlotDisponible"][];
         };

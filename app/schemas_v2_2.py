@@ -274,6 +274,7 @@ class DisponibilidadDiaOut(BaseModel):
     fecha: datetime
     servicio_id: int
     timezone: str
+    requiere_confirmacion: bool
     slots: List[SlotDisponible]
 
 

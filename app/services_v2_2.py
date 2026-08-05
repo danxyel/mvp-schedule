@@ -725,6 +725,7 @@ def listar_slots_disponibles(
         "fecha": inicio_dia,
         "servicio_id": servicio.id,
         "timezone": tzname,
+        "requiere_confirmacion": servicio.requiere_confirmacion,
         "slots": slots,
     }
 

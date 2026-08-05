@@ -107,6 +107,7 @@ const FORM_VACIO = {
   precio_paquete: '',
   visible_web: true,
   requiere_confirmacion: false,
+  permite_solicitudes: false,
   buffer_antes_min: 0,
   buffer_despues_min: 0,
 }
@@ -209,6 +210,7 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
       precio_paquete: s.precio_paquete === null || s.precio_paquete === undefined ? '' : String(s.precio_paquete),
       visible_web: s.visible_web,
       requiere_confirmacion: s.requiere_confirmacion ?? false,
+      permite_solicitudes: s.permite_solicitudes ?? false,
       buffer_antes_min: s.buffer_antes_min,
       buffer_despues_min: s.buffer_despues_min,
     })
@@ -287,6 +289,7 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
           : null,
       visible_web: form.visible_web,
       requiere_confirmacion: form.requiere_confirmacion,
+      permite_solicitudes: form.permite_solicitudes,
       buffer_antes_min: Number(form.buffer_antes_min),
       buffer_despues_min: Number(form.buffer_despues_min),
     }
@@ -397,6 +400,9 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
     if (form.visible_web !== editando.visible_web) cambios.visible_web = form.visible_web
     if (form.requiere_confirmacion !== (editando.requiere_confirmacion ?? false)) {
       cambios.requiere_confirmacion = form.requiere_confirmacion
+    }
+    if (form.permite_solicitudes !== (editando.permite_solicitudes ?? false)) {
+      cambios.permite_solicitudes = form.permite_solicitudes
     }
     if (Number(form.buffer_antes_min) !== editando.buffer_antes_min) {
       cambios.buffer_antes_min = Number(form.buffer_antes_min)
@@ -914,6 +920,15 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
                 />
                 Requiere confirmación manual
               </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.permite_solicitudes}
+                  onChange={(e) => setCampo('permite_solicitudes', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                />
+                Permite proponer fecha alternativa
+              </label>
             </div>
 
             {form.tipo_agenda === 'recurrente' && (
@@ -1211,6 +1226,15 @@ export default function GestionServicios({ tenantSlug, token, onIrACrearSerie })
                   className="h-4 w-4 rounded border-gray-300 text-blue-600"
                 />
                 Requiere confirmación manual
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.permite_solicitudes}
+                  onChange={(e) => setCampo('permite_solicitudes', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                />
+                Permite proponer fecha alternativa
               </label>
             </div>
 

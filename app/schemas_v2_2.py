@@ -434,6 +434,7 @@ class ReservaCreateResponse(BaseModel):
     sesion_creada: bool = Field(
         description="True si se creó una sesión nueva; False si el cliente se unió a una existente."
     )
+    activacion_url: Optional[str] = None
 
 
 class OperacionOut(BaseModel):

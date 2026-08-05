@@ -486,6 +486,10 @@ def crear_nueva_reserva(
         except Exception:
             log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
 
+    activacion_url = None
+    if resultado.get("acceso_token_plano"):
+        activacion_url = svc._link_activacion(tenant, resultado["acceso_token_plano"])
+
     return ReservaCreateResponse(
         reserva=ReservaOut(
             id=reserva.id,
@@ -513,6 +517,7 @@ def crear_nueva_reserva(
         mensaje=resultado["mensaje"],
         sesion_asignada_id=sesion.id,
         sesion_creada=resultado["sesion_creada"],
+        activacion_url=activacion_url,
     )
 
 

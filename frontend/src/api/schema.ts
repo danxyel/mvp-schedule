@@ -1909,6 +1909,8 @@ export interface components {
              * @description True si se creó una sesión nueva; False si el cliente se unió a una existente.
              */
             sesion_creada: boolean;
+            /** Activacion Url */
+            activacion_url?: string | null;
         };
         /** ReservaOut */
         ReservaOut: {

@@ -338,6 +338,7 @@ export default function FlujReserva() {
   const esNuevoEstadoPendiente = resultado?.reserva?.estado === 'pendiente'
   const reserva = resultado?.reserva
   const checkout = resultado?.checkout
+  const activacionUrl = resultado?.activacion_url
 
   return (
     <div className="mx-auto max-w-md">
@@ -472,6 +473,22 @@ export default function FlujReserva() {
               Volver al calendario
             </button>
           </>
+        )}
+
+        {!errorReserva && activacionUrl && (
+          <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            <p className="mb-2 font-medium">Crea tu contraseña para dar seguimiento a tus reservas</p>
+            <p className="mb-3 text-blue-700">
+              Con tu cuenta activada puedes ver, reagendar o cancelar tus reservas
+              desde "Mis reservas" cuando quieras.
+            </p>
+            <a
+              href={activacionUrl}
+              className="block w-full rounded-lg bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              Activar mi cuenta
+            </a>
+          </div>
         )}
       </div>
     </div>

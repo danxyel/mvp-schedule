@@ -327,15 +327,26 @@ async def webhook_mercadopago(
     if not payment_id:
         return {"ok": True}
 
-    # Buscar tenant por mp_user_id si la notificación lo trae; si no, iterar.
+    # pago_config se cifra completo con Fernet (EncryptedJSON, mismo patrón que
+    # smtp_config) — el contenido real de la columna en Postgres es un blob
+    # opaco, no un objeto JSON con llaves navegables. `->>` no puede funcionar
+    # contra eso (y SQLAlchemy termina cifrando hasta el literal de comparación
+    # antes de mandarlo a la base, produciendo "operator does not exist: json
+    # ->> json"). La única forma correcta es traer los candidatos y comparar
+    # mp_user_id ya desencriptado en Python, vía el ORM.
     tenant = None
     if mp_user_id:
-        tenant = db.execute(
-            select(Tenant).where(
-                Tenant.pago_config.isnot(None),
-                Tenant.pago_config.op("->>")("mp_user_id") == str(mp_user_id),
-            )
-        ).scalars().first()
+        candidatos_por_id = db.execute(
+            select(Tenant).where(Tenant.pago_config.isnot(None))
+        ).scalars().all()
+        tenant = next(
+            (
+                t for t in candidatos_por_id
+                if isinstance(t.pago_config, dict)
+                and str(t.pago_config.get("mp_user_id")) == str(mp_user_id)
+            ),
+            None,
+        )
 
     if tenant is None:
         # Fallback MVP: probar con cada tenant conectado hasta encontrar el pago.

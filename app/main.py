@@ -39,6 +39,22 @@ log = logging.getLogger(__name__)
 
 
 # ── Lifespan ─────────────────────────────────────────────────────────────────
+from apscheduler.schedulers.background import BackgroundScheduler
+
+scheduler = BackgroundScheduler(timezone="UTC")
+
+
+def revisar_contenido_sesiones_virtuales_job():
+    """Wrapper que abre una sesión de DB para el job de fondo."""
+    db = next(get_db())
+    try:
+        svc.revisar_contenido_sesiones_virtuales(db)
+    except Exception:
+        log.exception("Error en job de contenido virtual")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Tareas de arranque y apagado."""
@@ -48,9 +64,19 @@ async def lifespan(app: FastAPI):
     else:
         log.warning("Base de datos: no disponible al arrancar")
 
+    scheduler.add_job(
+        revisar_contenido_sesiones_virtuales_job,
+        "interval",
+        minutes=10,
+        id="meet_contenido",
+        replace_existing=True,
+    )
+    scheduler.start()
+
     yield  # la app corre aquí
 
-    # Apagado limpio (APScheduler si lo tienes)
+    # Apagado limpio
+    scheduler.shutdown(wait=False)
     log.info("Apagando servidor...")
 
 

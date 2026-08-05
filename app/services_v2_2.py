@@ -31,6 +31,7 @@ from urllib.parse import quote
 from sqlalchemy import and_, or_, func, select, update, text
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sede, Servicio, Sesion, Reserva,
@@ -2907,6 +2908,348 @@ def enviar_email_invitacion_serie(
         f"{nota}\n{link}"
     )
     _enviar_smtp(tenant, cliente.email, f"{tenant.nombre} — Invitación a serie de sesiones", texto_plano, cuerpo_html)
+
+
+def _obtener_o_crear_carpeta_servicio(drive, servicio: Servicio, db: Session) -> str:
+    if servicio.drive_folder_id:
+        return servicio.drive_folder_id
+    carpeta = drive.files().create(
+        body={"name": servicio.nombre, "mimeType": "application/vnd.google-apps.folder"},
+        fields="id",
+    ).execute()
+    servicio.drive_folder_id = carpeta["id"]
+    db.commit()
+    return carpeta["id"]
+
+
+def _obtener_o_crear_carpeta_serie(
+    drive, serie: SerieReserva, carpeta_servicio_id: str, db: Session
+) -> str:
+    if serie.drive_folder_id:
+        return serie.drive_folder_id
+    servicio = serie.servicio
+    asesor = db.execute(
+        select(Usuario).join(UsuarioTenant).where(UsuarioTenant.id == serie.asesor_id)
+    ).scalar_one_or_none() if serie.asesor_id else None
+    asesor_nombre = asesor.nombre if asesor else "Sin asesor"
+    fecha_inicio = datetime.combine(serie.fecha_inicio, serie.hora_inicio) if serie.fecha_inicio and serie.hora_inicio else None
+    fecha_legible = _fecha_email(fecha_inicio, serie.timezone or "UTC") if fecha_inicio else "Sin fecha"
+    nombre = f"Serie — {servicio.nombre} — {asesor_nombre} — {fecha_legible}"
+    carpeta = drive.files().create(
+        body={
+            "name": nombre,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [carpeta_servicio_id],
+        },
+        fields="id",
+    ).execute()
+    serie.drive_folder_id = carpeta["id"]
+    db.commit()
+    return carpeta["id"]
+
+
+def _mover_archivo(drive, file_id: str, carpeta_destino_id: str) -> None:
+    archivo = drive.files().get(fileId=file_id, fields="parents").execute()
+    padres_actuales = ",".join(archivo.get("parents", []))
+    drive.files().update(
+        fileId=file_id,
+        addParents=carpeta_destino_id,
+        removeParents=padres_actuales,
+        fields="id, parents",
+    ).execute()
+
+
+def _clientes_con_acceso_contenido(db: Session, sesion: Sesion) -> List[Usuario]:
+    """Devuelve los usuarios destinatarios de la grabación/transcripción de
+    una sesión, aplicando el gate de pago: confirmada + pagada.
+    """
+    reservas = db.execute(
+        select(Reserva).where(Reserva.sesion_id == sesion.id)
+    ).scalars().all()
+
+    clientes: List[Usuario] = []
+    for r in reservas:
+        if r.estado != EstadoReserva.CONFIRMADA:
+            continue
+        if r.estado_pago not in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO):
+            continue
+        if r.creado_por is not None and r.creado_por.email and r.creado_por not in clientes:
+            clientes.append(r.creado_por)
+    return clientes
+
+
+def _serie_de_sesion(db: Session, sesion: Sesion) -> Optional[SerieReserva]:
+    """Si la sesión pertenece a una serie, devuelve esa serie."""
+    reserva_serie = db.execute(
+        select(Reserva).where(
+            Reserva.sesion_id == sesion.id,
+            Reserva.serie_id.is_not(None),
+        )
+    ).scalar_one_or_none()
+    if reserva_serie is None:
+        return None
+    return db.get(SerieReserva, reserva_serie.serie_id)
+
+
+def _procesar_contenido_sesion(db: Session, sesion: Sesion) -> None:
+    """Consulta grabación/transcripción de una sesión virtual ya terminada,
+    organiza los archivos en Drive, da permisos a los clientes pagados y,
+    para sesiones sueltas, manda el correo de contenido. Para sesiones de
+    serie solo guarda los links; el correo se dispara cuando TODAS las
+    sesiones de la serie ya tengan contenido procesado.
+    """
+    from googleapiclient.discovery import build
+
+    tenant = sesion.tenant
+    if not tenant:
+        log.warning("Sesión %s sin tenant, se omite contenido", sesion.id)
+        return
+
+    servicio = sesion.servicio
+    if servicio is None or servicio.modalidad.value not in ("virtual", "hibrida"):
+        return
+    if not sesion.meet_space_name:
+        return
+
+    creds = _google_meet_credentials(tenant)
+    meet = build("meet", "v2", credentials=creds)
+
+    records = meet.conferenceRecords().list(
+        filter=f'space.name="{sesion.meet_space_name}"'
+    ).execute()
+    items = records.get("conferenceRecords", [])
+    if not items:
+        return
+    record = items[0]
+
+    recordings = meet.conferenceRecords().recordings().list(parent=record["name"]).execute()
+    transcripts = meet.conferenceRecords().transcripts().list(parent=record["name"]).execute()
+
+    rec_item = next((r for r in recordings.get("recordings", []) if r.get("state") == "FILE_GENERATED"), None)
+    trx_item = next((t for t in transcripts.get("transcripts", []) if t.get("state") == "FILE_GENERATED"), None)
+
+    if rec_item is None or trx_item is None:
+        return
+
+    recording_file_id = rec_item.get("driveDestination", {}).get("file")
+    transcript_file_id = trx_item.get("docsDestination", {}).get("document")
+    transcript_export_uri = trx_item.get("docsDestination", {}).get("exportUri")
+
+    if not recording_file_id or not transcript_file_id:
+        return
+
+    drive = build("drive", "v3", credentials=creds)
+    docs = build("docs", "v1", credentials=creds)
+
+    asesor_nombre = sesion.asesor.usuario.nombre if sesion.asesor and sesion.asesor.usuario else "Sin asesor asignado"
+    fecha_legible = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+    titulo = f"{servicio.nombre} — {asesor_nombre} — {fecha_legible}"
+    descripcion = f"Sesión de {servicio.nombre} con {asesor_nombre}, {fecha_legible}. Generado automáticamente por MVP Schedule."
+
+    # Organizar carpetas
+    carpeta_servicio_id = _obtener_o_crear_carpeta_servicio(drive, servicio, db)
+    serie = _serie_de_sesion(db, sesion)
+    if serie is not None:
+        carpeta_destino_id = _obtener_o_crear_carpeta_serie(drive, serie, carpeta_servicio_id, db)
+    else:
+        carpeta_sesion = drive.files().create(
+            body={
+                "name": f"{fecha_legible} — {asesor_nombre}",
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [carpeta_servicio_id],
+            },
+            fields="id",
+        ).execute()
+        carpeta_destino_id = carpeta_sesion["id"]
+
+    _mover_archivo(drive, recording_file_id, carpeta_destino_id)
+    _mover_archivo(drive, transcript_file_id, carpeta_destino_id)
+
+    # Renombrar archivos
+    drive.files().update(
+        fileId=recording_file_id,
+        body={"name": f"{titulo} — Grabación", "description": descripcion},
+    ).execute()
+    drive.files().update(
+        fileId=transcript_file_id,
+        body={"name": f"{titulo} — Transcripción", "description": descripcion},
+    ).execute()
+
+    # Encabezado en la transcripción
+    try:
+        encabezado = f"{servicio.nombre}\n{asesor_nombre}\n{fecha_legible}\n\n"
+        docs.documents().batchUpdate(
+            documentId=transcript_file_id,
+            body={"requests": [{"insertText": {"location": {"index": 1}, "text": encabezado}}]},
+        ).execute()
+    except Exception:
+        log.exception("Fallo al insertar encabezado en transcripción %s", transcript_file_id)
+
+    # Links
+    recording_link = drive.files().get(fileId=recording_file_id, fields="webViewLink").execute().get("webViewLink")
+    sesion.drive_recording_link = recording_link
+    sesion.drive_transcript_link = transcript_export_uri
+
+    # Permisos
+    clientes = _clientes_con_acceso_contenido(db, sesion)
+    for cliente in clientes:
+        if not cliente.email:
+            continue
+        try:
+            drive.permissions().create(
+                fileId=recording_file_id,
+                body={
+                    "type": "user",
+                    "role": "reader",
+                    "emailAddress": cliente.email,
+                },
+                sendNotificationEmail=False,
+                fields="id",
+            ).execute()
+            drive.permissions().create(
+                fileId=transcript_file_id,
+                body={
+                    "type": "user",
+                    "role": "reader",
+                    "emailAddress": cliente.email,
+                },
+                sendNotificationEmail=False,
+                fields="id",
+            ).execute()
+        except Exception:
+            log.exception("Fallo al compartir contenido con %s", cliente.email)
+
+    sesion.contenido_enviado_en = utcnow()
+    db.commit()
+
+    # Correo: standalone inmediato; serie diferido al final de la serie
+    if serie is None:
+        enviar_email_contenido_sesion(tenant, [sesion], clientes)
+    else:
+        # Buscar todas las sesiones de la serie y ver si todas tienen contenido
+        sesiones_serie = db.execute(
+            select(Sesion)
+            .join(Reserva, Reserva.sesion_id == Sesion.id)
+            .where(
+                Reserva.serie_id == serie.id,
+                Sesion.meet_generado_auto.is_(True),
+                Sesion.meet_space_name.is_not(None),
+            )
+            .distinct()
+        ).scalars().all()
+        if all(s.contenido_enviado_en is not None for s in sesiones_serie):
+            clientes_serie = []
+            for s in sesiones_serie:
+                for c in _clientes_con_acceso_contenido(db, s):
+                    if c not in clientes_serie:
+                        clientes_serie.append(c)
+            enviar_email_contenido_sesion(tenant, sesiones_serie, clientes_serie)
+
+
+def revisar_contenido_sesiones_virtuales(db: Session, margen_minutos: int = 15) -> int:
+    """Busca sesiones virtuales ya terminadas con Meet generado por la app,
+    revisa si Google ya dejó lista la grabación/transcripción, y si es así
+    otorga acceso de Drive + dispara el correo correspondiente.
+
+    Corre cada 10 min vía APScheduler (ver main.py). `margen_minutos` es
+    el colchón después de fecha_hora_fin antes de intentar consultar —
+    Google tarda un rato en procesar el archivo tras colgar la llamada.
+    """
+    limite = utcnow() - timedelta(minutes=margen_minutos)
+    sesiones = db.execute(
+        select(Sesion).where(
+            Sesion.meet_generado_auto.is_(True),
+            Sesion.meet_space_name.is_not(None),
+            Sesion.fecha_hora_fin < limite,
+            Sesion.contenido_enviado_en.is_(None),
+        )
+    ).scalars().all()
+
+    procesadas = 0
+    for sesion in sesiones:
+        try:
+            _procesar_contenido_sesion(db, sesion)
+            procesadas += 1
+        except Exception:
+            log.exception("Fallo revisando contenido de sesión %s", sesion.id)
+            db.rollback()
+    return procesadas
+
+
+def enviar_email_contenido_sesion(
+    tenant: Tenant,
+    sesiones: List[Sesion],
+    clientes: List[Usuario],
+) -> None:
+    """Envía correo con links de grabación y transcripción de una o más sesiones.
+    Una sola sesión para reserva suelta; lista completa de sesiones al final de
+    una serie recurrente.
+    """
+    if not sesiones or not clientes:
+        return
+
+    servicio = sesiones[0].servicio
+    if servicio is None:
+        return
+
+    es_serie = len(sesiones) > 1
+    servicio_nombre_html = html.escape(servicio.nombre or "")
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+
+    filas = []
+    filas_texto = []
+    for sesion in sesiones:
+        asesor_nombre = sesion.asesor.usuario.nombre if sesion.asesor and sesion.asesor.usuario else "Sin asesor asignado"
+        fecha = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+        rec_link = sesion.drive_recording_link
+        trx_link = sesion.drive_transcript_link
+        filas.append(
+            f'<tr><td style="padding:12px;border-bottom:1px solid #e5e7eb;">'
+            f'<div style="font-weight:600;color:#111827;">{html.escape(fecha)}</div>'
+            f'<div style="font-size:12px;color:#6b7280;">{html.escape(asesor_nombre)}</div>'
+            f'</td><td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">'
+            f'<a href="{html.escape(rec_link or "")}" style="color:#2563eb;font-weight:600;">Ver grabación</a>'
+            f'<br><a href="{html.escape(trx_link or "")}" style="color:#2563eb;font-size:12px;">Ver transcripción</a>'
+            f'</td></tr>'
+        )
+        filas_texto.append(
+            f"{fecha} ({asesor_nombre})\nGrabación: {rec_link or 'No disponible'}\nTranscripción: {trx_link or 'No disponible'}"
+        )
+
+    asunto = (
+        f"Grabación y transcripción de tu sesión — {servicio.nombre}"
+        if not es_serie
+        else f"Grabaciones y transcripciones de tu serie — {servicio.nombre}"
+    )
+    titulo_html = (
+        "Grabación y transcripción de tu sesión"
+        if not es_serie
+        else "Grabaciones y transcripciones de tu serie"
+    )
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              {tenant_nombre_html} comparte el contenido de tu {servicio_nombre_html}:
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-collapse:collapse;">
+              {''.join(filas)}
+            </table>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              Los links están compartidos con tu correo. Si no puedes abrirlos, responde a este correo.
+            </p>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} — {titulo_html}\n\n"
+        f"{servicio.nombre}\n\n"
+        + "\n\n".join(filas_texto)
+        + "\n\nLos links están compartidos con tu correo."
+    )
+
+    for cliente in clientes:
+        if not cliente.email:
+            continue
+        _enviar_smtp(tenant, cliente.email, asunto, texto_plano, cuerpo_html)
 
 
 def generar_mapa_url(sede: Optional[Sede]) -> Optional[str]:

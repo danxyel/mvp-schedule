@@ -3941,6 +3941,8 @@ export interface operations {
                 fecha?: string | null;
                 /** @description Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas */
                 estado?: string | null;
+                /** @description Busca por folio, código de confirmación, nombre o email del cliente */
+                q?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -4050,6 +4052,8 @@ export interface operations {
                 /** @description Filtrar por estado. Default: todas */
                 estado?: components["schemas"]["EstadoSolicitud"] | null;
                 servicio_id?: number | null;
+                /** @description Busca por folio, código de confirmación, nombre o email del cliente */
+                q?: string | null;
             };
             header?: never;
             path: {

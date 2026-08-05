@@ -1028,6 +1028,7 @@ def confirmar_mi_inscripcion_serie(
 def listar_reservas_admin(
     fecha: Optional[date] = Query(None, description="Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas)"),
     estado: Optional[str] = Query(None, description="Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas"),
+    q: Optional[str] = Query(None, min_length=1, max_length=50, description="Busca por folio, código de confirmación, nombre o email del cliente"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -1044,34 +1045,49 @@ def listar_reservas_admin(
                 f"Estado de reserva inválido: {estado}",
             )
 
-    if fecha is None and estado_enum is None:
+    busqueda = q and q.strip()
+    if fecha is None and estado_enum is None and not busqueda:
         fecha = date.today()
 
     cond = [Reserva.tenant_id == tenant.id]
-    if fecha is not None:
-        inicio = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
-        fin = inicio + timedelta(days=1)
-        cond.extend([
-            Sesion.fecha_hora_inicio >= inicio,
-            Sesion.fecha_hora_inicio < fin,
-        ])
+    if busqueda:
+        patron_codigo = f"%{q.strip().upper()}%"
+        patron_texto = f"%{q.strip().lower()}%"
+        cond.append(
+            or_(
+                func.upper(Reserva.folio).like(patron_codigo),
+                func.upper(Reserva.codigo_confirmacion).like(patron_codigo),
+                func.lower(Usuario.nombre).like(patron_texto),
+                func.lower(Usuario.email).like(patron_texto),
+            )
+        )
+    else:
+        if fecha is not None:
+            inicio = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
+            fin = inicio + timedelta(days=1)
+            cond.extend([
+                Sesion.fecha_hora_inicio >= inicio,
+                Sesion.fecha_hora_inicio < fin,
+            ])
     if estado_enum is not None:
         cond.append(Reserva.estado == estado_enum)
 
     total = db.execute(
         select(func.count(Reserva.id))
         .join(Sesion, Sesion.id == Reserva.sesion_id)
+        .join(Usuario, Usuario.id == Reserva.creado_por_usuario_id)
         .where(*cond)
     ).scalar_one()
 
     reservas = db.execute(
         select(Reserva)
         .join(Sesion, Sesion.id == Reserva.sesion_id)
-          .options(
-              joinedload(Reserva.sesion).joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
-              joinedload(Reserva.servicio),
-              joinedload(Reserva.creado_por),
-          )
+        .join(Usuario, Usuario.id == Reserva.creado_por_usuario_id)
+        .options(
+            joinedload(Reserva.sesion).joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+            joinedload(Reserva.servicio),
+            joinedload(Reserva.creado_por),
+        )
         .where(*cond)
         .order_by(Sesion.fecha_hora_inicio.desc())
         .limit(limit).offset(offset)
@@ -1335,6 +1351,7 @@ def listar_solicitudes_admin(
         None, description="Filtrar por estado. Default: todas",
     ),
     servicio_id: Optional[int] = Query(None, gt=0),
+    q: Optional[str] = Query(None, min_length=1, max_length=50, description="Busca por folio, código de confirmación, nombre o email del cliente"),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     _: UsuarioTenant = Depends(requiere_staff),
@@ -1345,8 +1362,27 @@ def listar_solicitudes_admin(
     if servicio_id is not None:
         cond.append(SolicitudReserva.servicio_id == servicio_id)
 
+    if q and q.strip():
+        patron_codigo = f"%{q.strip().upper()}%"
+        patron_texto = f"%{q.strip().lower()}%"
+        cond.append(
+            or_(
+                SolicitudReserva.reserva_id.in_(
+                    select(Reserva.id).where(
+                        or_(
+                            func.upper(Reserva.folio).like(patron_codigo),
+                            func.upper(Reserva.codigo_confirmacion).like(patron_codigo),
+                        )
+                    )
+                ),
+                func.lower(Usuario.nombre).like(patron_texto),
+                func.lower(Usuario.email).like(patron_texto),
+            )
+        )
+
     filas = db.execute(
         select(SolicitudReserva)
+        .join(Usuario, Usuario.id == SolicitudReserva.cliente_usuario_id)
         .where(*cond)
         .order_by(SolicitudReserva.creado_en.asc())
     ).scalars().all()

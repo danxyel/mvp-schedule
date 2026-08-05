@@ -272,6 +272,9 @@ def listar_servicios_publicos(
     # excluyentes en cuanto a capacidad). Individual nunca pasa de 1 por
     # el propio validador del schema, así que ese caso queda excluido
     # solo, sin necesidad de mirar tipo_agenda.
+    # Igual que sesiones_abiertas_servicio() (línea ~316): una sesión que
+    # ya es parte de una serie no cuenta — tiene su propio mecanismo
+    # (Mis Series), no se ofrece como "únete" suelto.
     existe_sesion_abierta = (
         exists()
         .where(
@@ -281,6 +284,10 @@ def listar_servicios_publicos(
             Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
             Sesion.inscritos < Sesion.cupo_maximo,
             Sesion.fecha_hora_inicio > utcnow(),
+            ~exists().where(
+                Reserva.sesion_id == Sesion.id,
+                Reserva.serie_id.is_not(None),
+            ),
         )
         .correlate(Servicio)
     )
@@ -322,6 +329,18 @@ def sesiones_abiertas_servicio(
     if servicio is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
 
+    # Una sesión que ya es parte de una serie (Reserva.serie_id no nulo
+    # para alguna reserva de esa sesión) NO cuenta como "sesión abierta"
+    # aquí — las series son su propia "asignatura" con su propio mecanismo
+    # (Mis Series / inscripción), no se mezclan con sesiones grupales
+    # sueltas nacidas de una solicitud aceptada. Confirmado con Daniel:
+    # "una serie es una materia y cada sesión es una clase" — no tiene
+    # sentido ofrecer "únete" a una clase individual de una materia ajena.
+    sin_serie = ~exists().where(
+        Reserva.sesion_id == Sesion.id,
+        Reserva.serie_id.is_not(None),
+    )
+
     sesiones = db.execute(
         select(Sesion)
         .options(
@@ -339,6 +358,7 @@ def sesiones_abiertas_servicio(
             Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
             Sesion.inscritos < Sesion.cupo_maximo,
             Sesion.fecha_hora_inicio > utcnow(),
+            sin_serie,
         )
         .order_by(Sesion.fecha_hora_inicio.asc())
         .limit(50)

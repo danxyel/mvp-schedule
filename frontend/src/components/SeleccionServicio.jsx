@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
 import { errorMensaje } from '../utils/errores'
 const MODALIDAD_INFO = {
@@ -124,6 +124,14 @@ export default function SeleccionServicio() {
                   {mod.label}
                 </p>
               </div>
+              {s.tiene_sesiones_abiertas && (
+                <Link
+                  to={`/t/${tenantSlug}/servicio/${s.id}/sesiones-abiertas`}
+                  className="mb-2 block rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-center text-xs font-medium text-green-700 hover:bg-green-100"
+                >
+                  Ya hay sesiones abiertas — únete
+                </Link>
+              )}
               <div className="mt-auto flex items-center justify-between">
                 <span className="text-base font-bold text-gray-900">{precio ?? 'Sin costo'}</span>
                 <button

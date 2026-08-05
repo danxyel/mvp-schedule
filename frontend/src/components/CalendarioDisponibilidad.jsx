@@ -54,6 +54,8 @@ export default function CalendarioDisponibilidad() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sesionesAbiertas, setSesionesAbiertas] = useState([])
+  const [avisoCargado, setAvisoCargado] = useState(false)
 
   const fetchDisponibilidad = useCallback(async () => {
     setLoading(true)
@@ -84,6 +86,42 @@ export default function CalendarioDisponibilidad() {
   useEffect(() => {
     fetchDisponibilidad()
   }, [fetchDisponibilidad])
+
+  useEffect(() => {
+    let cancelado = false
+    const cargar = async () => {
+      try {
+        const { data: result, error: fetchErr } = await client.GET(
+          '/api/v2/{tenant_slug}/servicios/{servicio_id}/sesiones-abiertas',
+          {
+            params: {
+              path: { tenant_slug: tenantSlug, servicio_id: servicioId },
+            },
+          },
+        )
+        if (cancelado) return
+        if (fetchErr) {
+          // falla en silencio para no bloquear la pantalla principal
+          // eslint-disable-next-line no-console
+          console.warn('No se pudieron cargar sesiones abiertas', fetchErr)
+          setSesionesAbiertas([])
+        } else {
+          setSesionesAbiertas(result ?? [])
+        }
+      } catch (err) {
+        if (cancelado) return
+        // eslint-disable-next-line no-console
+        console.warn('No se pudieron cargar sesiones abiertas', err)
+        setSesionesAbiertas([])
+      } finally {
+        if (!cancelado) setAvisoCargado(true)
+      }
+    }
+    cargar()
+    return () => {
+      cancelado = true
+    }
+  }, [tenantSlug, servicioId])
 
   const motivoLabel = (motivo) => MOTIVO_LABELS[motivo] ?? motivo
 
@@ -140,6 +178,14 @@ export default function CalendarioDisponibilidad() {
             Elegir otro servicio
           </Link>
         </div>
+      )}
+      {avisoCargado && sesionesAbiertas.length > 0 && (
+        <Link
+          to={`/t/${tenantSlug}/servicio/${servicioId}/sesiones-abiertas`}
+          className="mb-4 block rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-center text-sm font-medium text-green-700 hover:bg-green-100"
+        >
+          Ya hay sesiones abiertas para este servicio — únete
+        </Link>
       )}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr]">
         <div className="md:sticky md:top-4 md:self-start">

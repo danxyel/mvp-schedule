@@ -5,6 +5,7 @@ import Activar from './components/Activar'
 import SeleccionServicio from './components/SeleccionServicio'
 import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
+import SesionesAbiertas from './components/SesionesAbiertas'
 import FlujReserva from './components/FlujReserva'
 import SolicitarFecha from './components/SolicitarFecha'
 import MisReservas from './components/MisReservas'
@@ -30,6 +31,7 @@ function App() {
         {/* Rutas públicas del tenant (sin login) */}
         <Route path="/t/:tenantSlug" element={<SeleccionServicio />} />
         <Route path="/t/:tenantSlug/servicio/:servicioId" element={<CalendarioDisponibilidad />} />
+        <Route path="/t/:tenantSlug/servicio/:servicioId/sesiones-abiertas" element={<SesionesAbiertas />} />
         <Route path="/t/:tenantSlug/reservar/:servicioId" element={<FlujReserva />} />
         <Route path="/t/:tenantSlug/reclamar" element={<Reclamar />} />
         <Route path="/t/:tenantSlug/activar" element={<Activar />} />

@@ -131,7 +131,7 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
 from fastapi import Body
 from pydantic import EmailStr
 from app.dependencies import crear_token
-from app.models_v2_2 import Usuario, UsuarioTenant, Tenant
+from app.models_v2_2 import Usuario, UsuarioTenant, Tenant, Reserva
 from app.schemas_v2_2 import TenantPublicOut
 from app.database import get_db
 from sqlalchemy.orm import Session
@@ -354,13 +354,38 @@ def listar_tenants_publicos(db: Session = Depends(get_db)):
 def mercadopago_redirect(
     reference: str,
     status: str = "pending",
+    db: Session = Depends(get_db),
 ):
-    """Redirige al frontend después de que el cliente vuelve de MercadoPago."""
+    """Redirige al frontend después de que el cliente vuelve de MercadoPago.
+
+    El flujo de reserva permite pagar como invitado (sin cuenta, sin token
+    en sessionStorage) — por eso NO podemos mandar a rutas protegidas como
+    /mis-reservas/{folio}: un invitado nunca tuvo sesión, así que
+    ProtectedRoute lo rebota a /login. Para "reserva:" resolvemos el
+    tenant_slug y el codigo_confirmacion desde la BD y mandamos a la ruta
+    pública /t/{tenant_slug}/r/{folio}, que ya está pensada para
+    mostrarse sin login (folio + código).
+    """
     base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
     if reference.startswith("reserva:"):
         folio = reference[len("reserva:"):]
-        redirect_url = f"{base}/mis-reservas/{folio}?pago={status}"
+        reserva = db.execute(
+            select(Reserva).where(Reserva.folio == folio)
+        ).scalar_one_or_none()
+        if reserva is not None and reserva.tenant is not None:
+            redirect_url = (
+                f"{base}/t/{reserva.tenant.slug}/r/{folio}"
+                f"?codigo={reserva.codigo_confirmacion}&pago={status}"
+            )
+        else:
+            # No debería pasar (folio viene de nuestra propia preferencia),
+            # pero si el folio no existe no tiene caso mandar a una pantalla
+            # protegida tampoco — mejor login que un 404 público confuso.
+            redirect_url = f"{base}/mis-reservas/{folio}?pago={status}"
     elif reference.startswith("inscripcion:"):
+        # TODO: mismo problema aplica aquí si la serie se compró como
+        # invitado — no existe todavía una pantalla pública de detalle de
+        # inscripción/serie. Mientras tanto se queda igual (protegida).
         redirect_url = f"{base}/mis-series?pago={status}"
     else:
         redirect_url = f"{base}/mis-reservas?pago={status}"

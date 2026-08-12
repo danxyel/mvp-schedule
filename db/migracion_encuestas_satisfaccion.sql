@@ -5,11 +5,15 @@
 BEGIN;
 
 -- 1. Enum para distinguir intake vs satisfacción
-CREATE TYPE tipoformulario AS ENUM ('intake', 'satisfaccion');
+-- Labels en MAYÚSCULA: SQLAlchemy graba enums Python por su .name (no .value)
+-- por default (ver EstadoReserva, RolUsuario, etc. — mismo patrón en todo el
+-- proyecto). Con labels en minúscula el driver manda "SATISFACCION" contra un
+-- tipo que solo conoce "satisfaccion" -> error nativo de Postgres.
+CREATE TYPE tipoformulario AS ENUM ('INTAKE', 'SATISFACCION');
 
 -- 2. Columna tipo en formularios (default intake preserva el significado previo)
 ALTER TABLE formularios
-    ADD COLUMN tipo tipoformulario NOT NULL DEFAULT 'intake';
+    ADD COLUMN tipo tipoformulario NOT NULL DEFAULT 'INTAKE';
 
 -- 3. Columna grupo_matriz en campos de formulario (para agrupar filas de una matriz)
 ALTER TABLE campo_formularios

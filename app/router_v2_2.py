@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional, List, Tuple
 
 import bcrypt
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Path, Request, UploadFile, status
 from sqlalchemy import select, func, or_, exists
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -28,6 +28,7 @@ from app.models_v2_2 import (
     TipoBloqueo, utcnow, Formulario, CampoFormulario, TipoFormulario,
 )
 from app.rate_limiter import limiter
+from app.cloudinary_client import uploader
 from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaPublicaOut, ReservaCreateResponse, ReagendarSesionIn,
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
@@ -41,6 +42,7 @@ from app.schemas_v2_2 import (
     SerieReservaCreate, SerieReservaOut, InscripcionSerieCreate, InscripcionSerieOut,
     ConfirmarInscripcionIn, InscripcionSerieClienteOut,
     TenantCreate, TenantAdminOut, TenantUpdate, MetodoPagoDefaultIn,
+    PersonalizacionOut, PersonalizacionColorIn,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
     UsuarioGlobalOut, UsuariosGlobalPaginadosOut, UsuarioGlobalDetalleOut, MembresiaGlobalOut,
@@ -3674,6 +3676,123 @@ def checkout_inscripcion(
     if checkout is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No se pudo iniciar el pago con MercadoPago")
     return checkout
+
+
+# ============================================================
+# ADMIN — PERSONALIZACIÓN DE MARCA
+# ============================================================
+_LOGO_TIPOS_PERMITIDOS = {"image/png", "image/jpeg", "image/webp"}
+_LOGO_TAMANO_MAXIMO = 2 * 1024 * 1024  # 2 MB
+
+
+def _personalizacion_out(tenant: Tenant) -> PersonalizacionOut:
+    return PersonalizacionOut(
+        color_primario=tenant.color_primario,
+        logo_url=tenant.logo_url,
+        nombre=tenant.nombre,
+        slug=tenant.slug,
+    )
+
+
+@router.get("/admin/personalizacion", response_model=PersonalizacionOut)
+def obtener_personalizacion(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Devuelve el color primario y logo actuales del tenant."""
+    return _personalizacion_out(tenant)
+
+
+@router.patch("/admin/personalizacion", response_model=PersonalizacionOut)
+def actualizar_color_personalizacion(
+    body: PersonalizacionColorIn,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Actualiza únicamente el color primario del tenant (formato #RRGGBB)."""
+    tenant.color_primario = body.color_primario.lower()
+    db.commit()
+    db.refresh(tenant)
+    return _personalizacion_out(tenant)
+
+
+@router.post("/admin/personalizacion/logo", response_model=PersonalizacionOut)
+async def subir_logo_personalizacion(
+    logo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Sube un logo de tenant a Cloudinary y reemplaza el anterior si existía."""
+    if logo.content_type not in _LOGO_TIPOS_PERMITIDOS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "codigo": "logo_formato_invalido",
+                "mensaje": "Solo se permiten imágenes PNG, JPEG o WebP.",
+            },
+        )
+
+    contenido = await logo.read()
+    if len(contenido) > _LOGO_TAMANO_MAXIMO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "codigo": "logo_muy_grande",
+                "mensaje": "El logo no debe superar los 2 MB.",
+            },
+        )
+
+    try:
+        resultado = uploader.upload(
+            contenido,
+            folder="tenant_logos",
+            public_id=f"tenant_{tenant.id}",
+            overwrite=True,
+            resource_type="image",
+        )
+    except Exception as exc:
+        log.exception("Error al subir logo a Cloudinary")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "codigo": "logo_no_disponible",
+                "mensaje": "No se pudo conectar con el servicio de almacenamiento de logos. Verifica CLOUDINARY_URL.",
+            },
+        ) from exc
+
+    if tenant.logo_public_id and tenant.logo_public_id != resultado.get("public_id"):
+        try:
+            uploader.destroy(tenant.logo_public_id)
+        except Exception:
+            log.exception("No se pudo borrar el logo anterior: %s", tenant.logo_public_id)
+
+    tenant.logo_url = resultado.get("secure_url")
+    tenant.logo_public_id = resultado.get("public_id")
+    db.commit()
+    db.refresh(tenant)
+    return _personalizacion_out(tenant)
+
+
+@router.delete("/admin/personalizacion/logo", response_model=PersonalizacionOut)
+def quitar_logo_personalizacion(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Elimina el logo del tenant en Cloudinary y vuelve al avatar de inicial."""
+    if tenant.logo_public_id:
+        try:
+            uploader.destroy(tenant.logo_public_id)
+        except Exception:
+            log.exception("No se pudo borrar el logo en Cloudinary: %s", tenant.logo_public_id)
+
+    tenant.logo_url = None
+    tenant.logo_public_id = None
+    db.commit()
+    db.refresh(tenant)
+    return _personalizacion_out(tenant)
 
 
 # ============================================================

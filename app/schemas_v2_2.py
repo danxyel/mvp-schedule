@@ -766,6 +766,20 @@ class MetodoPagoDefaultIn(BaseModel):
 
 
 # ============================================================
+# ADMIN — PERSONALIZACIÓN DE MARCA
+# ============================================================
+class PersonalizacionOut(BaseModel):
+    color_primario: str
+    logo_url: Optional[str] = None
+    nombre: str
+    slug: str
+
+
+class PersonalizacionColorIn(BaseModel):
+    color_primario: str = Field(..., pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+# ============================================================
 # ADMIN — SERVICIOS
 # ============================================================
 class UsuarioAdminOut(BaseModel):

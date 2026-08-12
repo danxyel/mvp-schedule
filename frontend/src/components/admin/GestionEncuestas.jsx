@@ -62,7 +62,7 @@ function camposAPreguntas(campos) {
         tipo: 'radio',
         label: c.label,
         requerido: c.requerido,
-        opciones: Array.isArray(opciones) ? opciones : [],
+        opciones: Array.isArray(opciones?.opciones) ? opciones.opciones : [],
         orden: c.orden,
         idsExistentes: [c.id],
       })
@@ -138,7 +138,7 @@ function preguntasACampos(preguntas) {
       campos.push({
         ...base,
         tipo: 'radio',
-        opciones: p.opciones?.length ? p.opciones : ['Sí', 'No'],
+        opciones: { opciones: p.opciones?.length ? p.opciones : ['Sí', 'No'] },
       })
     } else if (p.tipo === 'escala') {
       campos.push({

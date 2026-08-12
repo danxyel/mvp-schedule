@@ -217,6 +217,7 @@ class Tenant(Base):
     activo: Mapped[bool] = mapped_column(default=True)
     plan: Mapped[PlanTenant] = mapped_column(SQLEnum(PlanTenant), default=PlanTenant.STARTER)
     logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    logo_public_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     color_primario: Mapped[str] = mapped_column(String(7), default="#2563eb")
     nombre_empresa: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), default="America/Mexico_City")

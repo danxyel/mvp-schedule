@@ -24,6 +24,9 @@ Referencia completa de todo lo que el código realmente lee del entorno (verific
 | `MP_CLIENT_SECRET` | **Obsoleta, no configurar** | — | Mismo motivo que `MP_CLIENT_ID`. |
 | `MP_REDIRECT_URI` | **Obsoleta, no configurar** | — | Mismo motivo — el callback OAuth (`/api/v2/mercadopago/callback`) se elimina en `PROMPT_M`. |
 | `API_BASE_URL` | Recomendado para pago en línea | Se deduce de la request si falta | URL pública del backend, sin slash final — arma el `notification_url` del webhook y las `back_urls` de MercadoPago. Sigue siendo necesaria — no depende de OAuth. *(PROMPT_G, vigente)* |
+| `CLOUDINARY_URL` | Requerida para subir logos | — | Credenciales de Cloudinary: `cloudinary://api_key:api_secret@cloud_name`. El tenant admin puede subir un logo real; sin esta variable el endpoint de logo devuelve error. *(PROMPT_AB)* |
+
+> 📝 **Pendiente manual (Daniel):** crear una cuenta gratuita en [cloudinary.com](https://cloudinary.com), copiar el `CLOUDINARY_URL` completo del dashboard y pegarlo como variable de entorno en Render.
 
 ## Frontend (Vercel / `frontend/.env`)
 

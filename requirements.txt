@@ -45,3 +45,6 @@ weasyprint==62.3
 # Utilidades
 python-multipart==0.0.12     # para form data en FastAPI
 httpx==0.28.1                # cliente HTTP async (tests y webhooks)
+
+# Almacenamiento de logos por tenant
+cloudinary>=1.41.0,<2.0.0

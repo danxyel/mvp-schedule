@@ -11,6 +11,8 @@ OpenAPI disponible en:
 
 import logging
 import os
+import hashlib
+import hmac
 
 from decimal import Decimal
 from typing import Optional, List
@@ -131,10 +133,11 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
 from fastapi import Body
 from pydantic import EmailStr
 from app.dependencies import crear_token
-from app.models_v2_2 import Usuario, UsuarioTenant, Tenant, Reserva
-from app.schemas_v2_2 import TenantPublicOut
+from app.models_v2_2 import Usuario, UsuarioTenant, Tenant, Reserva, EncuestaEnvio, CampoFormulario, utcnow
+from app.schemas_v2_2 import TenantPublicOut, EncuestaValidarOut, EncuestaResponderIn
 from app.database import get_db
 from sqlalchemy.orm import Session
+from sqlalchemy import select, func
 import bcrypt
 import app.services_v2_2 as svc
 
@@ -345,6 +348,107 @@ def recuperar_password(
 def listar_tenants_publicos(db: Session = Depends(get_db)):
     tenants = db.query(Tenant).filter(Tenant.activo == True).order_by(Tenant.nombre).all()
     return tenants
+
+
+# ============================================================
+# ENCUESTAS DE SATISFACCIÓN — PÚBLICAS (sin login ni tenant_slug)
+# ============================================================
+def _buscar_encuesta_envio_por_token(db: Session, token: str) -> Optional[EncuestaEnvio]:
+    """Busca un EncuestaEnvio vigente comparando hash en memoria.
+
+    El universo de tokens vigentes es pequeño; se filtra primero por
+    expiración para evitar recorrer todo el histórico.
+    """
+    candidatos = db.execute(
+        select(EncuestaEnvio).where(
+            EncuestaEnvio.respondido_en.is_(None),
+            EncuestaEnvio.expira_en > utcnow(),
+        )
+    ).scalars().all()
+
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    for envio in candidatos:
+        if hmac.compare_digest(envio.token_hash, token_hash):
+            return envio
+    return None
+
+
+@app.get("/encuestas/validar", response_model=EncuestaValidarOut, tags=["Encuestas"])
+def validar_encuesta(token: str, db: Session = Depends(get_db)):
+    """Devuelve el formulario asociado a un token de encuesta válido."""
+    envio = _buscar_encuesta_envio_por_token(db, token)
+    if envio is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"codigo": "encuesta_no_encontrada", "mensaje": "El enlace de encuesta no es válido o ya expiró."},
+        )
+
+    if envio.respondido_en is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"codigo": "encuesta_ya_respondida", "mensaje": "Esta encuesta ya fue respondida."},
+        )
+    if envio.expira_en < utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"codigo": "encuesta_expirada", "mensaje": "El enlace de encuesta ya expiró."},
+        )
+
+    formulario = envio.formulario
+    campos = sorted(formulario.campos, key=lambda c: c.orden)
+    return EncuestaValidarOut(
+        token=token,
+        formulario_id=formulario.id,
+        formulario_nombre=formulario.nombre,
+        reserva_id=envio.reserva_id,
+        campos=[
+            {
+                "id": c.id,
+                "tipo": c.tipo.value if hasattr(c.tipo, "value") else c.tipo,
+                "label": c.label,
+                "placeholder": c.placeholder,
+                "requerido": c.requerido,
+                "opciones": c.opciones,
+                "grupo_matriz": c.grupo_matriz,
+                "ayuda": c.ayuda,
+                "orden": c.orden,
+            }
+            for c in campos
+        ],
+    )
+
+
+@app.post("/encuestas/responder", tags=["Encuestas"])
+def responder_encuesta(body: EncuestaResponderIn, db: Session = Depends(get_db)):
+    """Guarda las respuestas de una encuesta de satisfacción y consume el token."""
+    envio = _buscar_encuesta_envio_por_token(db, body.token)
+    if envio is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"codigo": "encuesta_no_encontrada", "mensaje": "El enlace de encuesta no es válido o ya expiró."},
+        )
+
+    if envio.respondido_en is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"codigo": "encuesta_ya_respondida", "mensaje": "Esta encuesta ya fue respondida."},
+        )
+    if envio.expira_en < utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"codigo": "encuesta_expirada", "mensaje": "El enlace de encuesta ya expiró."},
+        )
+
+    svc._persistir_respuestas_formulario(
+        db,
+        envio.tenant_id,
+        envio.reserva,
+        envio.formulario_id,
+        body.respuestas,
+    )
+    envio.respondido_en = utcnow()
+    db.commit()
+    return {"ok": True}
 
 
 # ============================================================

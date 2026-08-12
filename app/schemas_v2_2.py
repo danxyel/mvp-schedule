@@ -1117,6 +1117,32 @@ class FormularioAdminOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EncuestaCampoOut(BaseModel):
+    id: int
+    tipo: str
+    label: str
+    placeholder: Optional[str] = None
+    requerido: bool
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = None
+    ayuda: Optional[str] = None
+    orden: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EncuestaValidarOut(BaseModel):
+    token: str
+    formulario_id: int
+    formulario_nombre: str
+    reserva_id: int
+    campos: List[EncuestaCampoOut]
+
+
+class EncuestaResponderIn(BaseModel):
+    token: str
+    respuestas: Dict[str, Any]
+
+
 class BloqueoCreate(BaseModel):
     entidad_tipo: str = "asesor"
     entidad_id: Optional[int] = Field(None, gt=0)

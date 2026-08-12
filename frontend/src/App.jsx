@@ -4,6 +4,7 @@ import Reclamar from './components/Reclamar'
 import Activar from './components/Activar'
 import RecuperarPassword from './components/RecuperarPassword'
 import RestablecerPassword from './components/RestablecerPassword'
+import ResponderEncuesta from './components/ResponderEncuesta'
 import SeleccionServicio from './components/SeleccionServicio'
 import SeleccionTenant from './components/SeleccionTenant'
 import CalendarioDisponibilidad from './components/CalendarioDisponibilidad'
@@ -30,6 +31,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/recuperar-password" element={<RecuperarPassword />} />
         <Route path="/recuperar-password/confirmar" element={<RestablecerPassword />} />
+        <Route path="/encuestas/responder" element={<ResponderEncuesta />} />
 
         {/* Ruta pública: detalle de reserva por folio + código */}
         <Route path="/t/:tenantSlug/r/:folio" element={<DetalleReservaPublica />} />

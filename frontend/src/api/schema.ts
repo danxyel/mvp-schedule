@@ -126,6 +126,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/encuestas/validar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Validar Encuesta
+         * @description Devuelve el formulario asociado a un token de encuesta válido.
+         */
+        get: operations["validar_encuesta_encuestas_validar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/encuestas/responder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Responder Encuesta
+         * @description Guarda las respuestas de una encuesta de satisfacción y consume el token.
+         */
+        post: operations["responder_encuesta_encuestas_responder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/mercadopago/redirect": {
         parameters: {
             query?: never;
@@ -1939,6 +1979,47 @@ export interface components {
             /** Slots */
             slots: components["schemas"]["SlotDisponible"][];
         };
+        /** EncuestaCampoOut */
+        EncuestaCampoOut: {
+            /** Id */
+            id: number;
+            /** Tipo */
+            tipo: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Requerido */
+            requerido: boolean;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /** Orden */
+            orden: number;
+        };
+        /** EncuestaResponderIn */
+        EncuestaResponderIn: {
+            /** Token */
+            token: string;
+            /** Respuestas */
+            respuestas: Record<string, never>;
+        };
+        /** EncuestaValidarOut */
+        EncuestaValidarOut: {
+            /** Token */
+            token: string;
+            /** Formulario Id */
+            formulario_id: number;
+            /** Formulario Nombre */
+            formulario_nombre: string;
+            /** Reserva Id */
+            reserva_id: number;
+            /** Campos */
+            campos: components["schemas"]["EncuestaCampoOut"][];
+        };
         /**
          * EstadoInscripcionEnum
          * @enum {string}
@@ -3750,6 +3831,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantPublicOut"][];
+                };
+            };
+        };
+    };
+    validar_encuesta_encuestas_validar_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EncuestaValidarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    responder_encuesta_encuestas_responder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EncuestaResponderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

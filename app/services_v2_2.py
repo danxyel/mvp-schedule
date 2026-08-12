@@ -193,6 +193,7 @@ def generar_token_acceso(usuario: Usuario, horas_expira: int = 48) -> str:
 
 def _generar_token_encuesta(
     db: Session,
+    tenant_id: int,
     formulario_id: int,
     reserva_id: int,
     dias_expira: int = 30,
@@ -204,6 +205,7 @@ def _generar_token_encuesta(
     """
     token = secrets.token_urlsafe(32)
     envio = EncuestaEnvio(
+        tenant_id=tenant_id,
         formulario_id=formulario_id,
         reserva_id=reserva_id,
         token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
@@ -3210,7 +3212,7 @@ def _procesar_contenido_sesion(db: Session, sesion: Sesion) -> None:
         tokens_encuesta = {}
         for reserva in _reservas_con_acceso_contenido(db, sesion):
             token = _generar_token_encuesta(
-                db, servicio.encuesta_satisfaccion_formulario_id, reserva.id
+                db, tenant.id, servicio.encuesta_satisfaccion_formulario_id, reserva.id
             )
             if reserva.creado_por is not None:
                 tokens_encuesta[reserva.creado_por.id] = token

@@ -2470,6 +2470,9 @@ def listar_respuestas_formulario_admin(
                         label=campos_por_id[r.campo_id].label if r.campo_id in campos_por_id else "",
                         valor=r.valor,
                         grupo_matriz=campos_por_id[r.campo_id].grupo_matriz if r.campo_id in campos_por_id else None,
+                        tipo=campos_por_id[r.campo_id].tipo.value if r.campo_id in campos_por_id else "texto",
+                        opciones=campos_por_id[r.campo_id].opciones if r.campo_id in campos_por_id else None,
+                        orden=campos_por_id[r.campo_id].orden if r.campo_id in campos_por_id else 0,
                     )
                     for r in respuestas_raw
                 ],

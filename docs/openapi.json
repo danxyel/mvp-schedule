@@ -7000,12 +7000,33 @@
               }
             ],
             "title": "Grupo Matriz"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "orden": {
+            "type": "integer",
+            "title": "Orden"
           }
         },
         "type": "object",
         "required": [
           "campo_id",
-          "label"
+          "label",
+          "tipo",
+          "orden"
         ],
         "title": "EncuestaRespuestaCampoOut"
       },

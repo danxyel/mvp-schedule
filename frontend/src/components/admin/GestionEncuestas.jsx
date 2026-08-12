@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import { errorMensaje } from '../../utils/errores'
@@ -184,6 +184,160 @@ function preguntasACampos(preguntas) {
   return campos
 }
 
+function agregarPorPregunta(respuestas) {
+  const porCampo = new Map()
+  for (const cliente of respuestas) {
+    for (const r of cliente.respuestas) {
+      if (!porCampo.has(r.campo_id)) {
+        porCampo.set(r.campo_id, {
+          campo_id: r.campo_id,
+          label: r.label,
+          tipo: r.tipo,
+          opciones: r.opciones,
+          grupo_matriz: r.grupo_matriz,
+          orden: r.orden,
+          valores: [],
+        })
+      }
+      if (r.valor !== null && r.valor !== undefined && r.valor !== '') {
+        porCampo.get(r.campo_id).valores.push(r.valor)
+      }
+    }
+  }
+
+  const individuales = []
+  const grupos = new Map()
+  for (const c of porCampo.values()) {
+    if (c.grupo_matriz) {
+      if (!grupos.has(c.grupo_matriz)) grupos.set(c.grupo_matriz, [])
+      grupos.get(c.grupo_matriz).push(c)
+    } else {
+      individuales.push(c)
+    }
+  }
+  individuales.sort((a, b) => a.orden - b.orden)
+  const gruposArr = Array.from(grupos.entries())
+    .map(([grupo, campos]) => ({ grupo, campos: campos.sort((a, b) => a.orden - b.orden) }))
+    .sort((a, b) => a.campos[0].orden - b.campos[0].orden)
+
+  return { individuales, grupos: gruposArr }
+}
+
+function BarraHorizontal({ etiqueta, cantidad, total }) {
+  const pct = total > 0 ? Math.round((cantidad / total) * 100) : 0
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-28 shrink-0 truncate text-xs text-gray-600" title={etiqueta}>
+        {etiqueta}
+      </div>
+      <div className="h-2.5 flex-1 overflow-hidden rounded bg-blue-100">
+        <div className="h-2.5 rounded-r bg-blue-600" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="w-16 shrink-0 text-right text-xs tabular-nums text-gray-500">
+        {cantidad} ({pct}%)
+      </div>
+    </div>
+  )
+}
+
+function DistribucionRadio({ campo }) {
+  const opciones = Array.isArray(campo.opciones?.opciones) ? campo.opciones.opciones : []
+  const conteos = new Map()
+  campo.valores.forEach((v) => conteos.set(v, (conteos.get(v) || 0) + 1))
+  const ordenValores = [...opciones, ...[...conteos.keys()].filter((v) => !opciones.includes(v))]
+  const total = campo.valores.length
+
+  if (total === 0) return <p className="text-xs text-gray-400">Sin respuestas todavía.</p>
+
+  return (
+    <div className="space-y-1.5">
+      {ordenValores.map((op) => (
+        <BarraHorizontal key={op} etiqueta={op} cantidad={conteos.get(op) || 0} total={total} />
+      ))}
+    </div>
+  )
+}
+
+function Histograma({ campo }) {
+  const min = campo.opciones?.min ?? 1
+  const max = campo.opciones?.max ?? 5
+  const valoresNum = campo.valores.map(Number).filter((n) => !Number.isNaN(n))
+  const total = valoresNum.length
+  const promedio = total > 0 ? valoresNum.reduce((a, b) => a + b, 0) / total : null
+
+  if (total === 0) return <p className="text-xs text-gray-400">Sin respuestas todavía.</p>
+
+  const conteos = {}
+  for (let n = min; n <= max; n++) conteos[n] = 0
+  valoresNum.forEach((n) => {
+    if (conteos[n] !== undefined) conteos[n]++
+  })
+  const maxConteo = Math.max(1, ...Object.values(conteos))
+
+  return (
+    <div>
+      <p className="mb-2">
+        <span className="text-2xl font-semibold tabular-nums text-gray-900">{promedio.toFixed(1)}</span>
+        <span className="ml-2 text-xs text-gray-500">
+          promedio de {total} {total === 1 ? 'respuesta' : 'respuestas'} (escala {min}–{max})
+        </span>
+      </p>
+      <div className="space-y-1.5">
+        {Object.entries(conteos).map(([valor, cantidad]) => (
+          <div key={valor} className="flex items-center gap-3">
+            <div className="w-6 shrink-0 text-xs text-gray-600">{valor}</div>
+            <div className="h-2.5 flex-1 overflow-hidden rounded bg-blue-100">
+              <div
+                className="h-2.5 rounded-r bg-blue-600"
+                style={{ width: `${(cantidad / maxConteo) * 100}%` }}
+              />
+            </div>
+            <div className="w-8 shrink-0 text-right text-xs tabular-nums text-gray-500">{cantidad}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ResumenPregunta({ campo }) {
+  const total = campo.valores.length
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="mb-3 truncate text-sm font-semibold text-gray-900" title={campo.label}>
+        {campo.label}
+      </p>
+      {campo.tipo === 'radio' ? (
+        <DistribucionRadio campo={campo} />
+      ) : campo.tipo === 'numero' ? (
+        <Histograma campo={campo} />
+      ) : (
+        <p className="text-xs text-gray-500">
+          {total} {total === 1 ? 'respuesta de texto' : 'respuestas de texto'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ResumenMatriz({ campos }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="mb-3 text-sm font-semibold text-gray-900">Matriz de calificación</p>
+      <div className="space-y-4">
+        {campos.map((c) => (
+          <div key={c.campo_id}>
+            <p className="mb-1 truncate text-xs font-medium text-gray-700" title={c.label}>
+              {c.label}
+            </p>
+            <Histograma campo={c} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function GestionEncuestas({ tenantSlug, token }) {
   const [plantillas, setPlantillas] = useState([])
   const [loading, setLoading] = useState(true)
@@ -304,6 +458,8 @@ export default function GestionEncuestas({ tenantSlug, token }) {
     setErrorRespuestas(null)
     setFilaExpandida(null)
   }
+
+  const resumen = useMemo(() => agregarPorPregunta(respuestas), [respuestas])
 
   const crearPlantilla = async (e) => {
     e.preventDefault()
@@ -876,6 +1032,17 @@ export default function GestionEncuestas({ tenantSlug, token }) {
             ))}
           </div>
         ) : (
+          <>
+            {respuestas.length > 0 && (
+              <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                {resumen.individuales.map((c) => (
+                  <ResumenPregunta key={c.campo_id} campo={c} />
+                ))}
+                {resumen.grupos.map((g) => (
+                  <ResumenMatriz key={g.grupo} campos={g.campos} />
+                ))}
+              </div>
+            )}
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
             <table className="w-full text-left text-sm">
               <thead>
@@ -936,6 +1103,7 @@ export default function GestionEncuestas({ tenantSlug, token }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     )

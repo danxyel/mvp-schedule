@@ -1148,6 +1148,9 @@ class EncuestaRespuestaCampoOut(BaseModel):
     label: str
     valor: Optional[str] = None
     grupo_matriz: Optional[str] = None
+    tipo: str
+    opciones: Optional[Dict[str, Any]] = None
+    orden: int
 
 
 class EncuestaRespuestaClienteOut(BaseModel):

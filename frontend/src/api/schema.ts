@@ -2034,6 +2034,12 @@ export interface components {
             valor?: string | null;
             /** Grupo Matriz */
             grupo_matriz?: string | null;
+            /** Tipo */
+            tipo: string;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Orden */
+            orden: number;
         };
         /** EncuestaRespuestaClienteOut */
         EncuestaRespuestaClienteOut: {

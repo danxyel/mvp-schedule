@@ -185,12 +185,18 @@ function preguntasACampos(preguntas) {
 }
 
 function agregarPorPregunta(respuestas) {
-  const porCampo = new Map()
+  // Se agrupa por texto de la pregunta (label+tipo), no por campo_id: cada vez
+  // que se guarda la plantilla, GestionEncuestas.jsx desactiva los campos
+  // viejos y crea filas nuevas (con campo_id e id de grupo_matriz distintos)
+  // aunque el texto de la pregunta no haya cambiado -- agrupar por campo_id
+  // mostraba una tarjeta duplicada por cada guardado.
+  const porPregunta = new Map()
   for (const cliente of respuestas) {
     for (const r of cliente.respuestas) {
-      if (!porCampo.has(r.campo_id)) {
-        porCampo.set(r.campo_id, {
-          campo_id: r.campo_id,
+      const key = `${r.tipo}::${(r.label || '').trim().toLowerCase()}`
+      if (!porPregunta.has(key)) {
+        porPregunta.set(key, {
+          key,
           label: r.label,
           tipo: r.tipo,
           opciones: r.opciones,
@@ -200,27 +206,21 @@ function agregarPorPregunta(respuestas) {
         })
       }
       if (r.valor !== null && r.valor !== undefined && r.valor !== '') {
-        porCampo.get(r.campo_id).valores.push(r.valor)
+        porPregunta.get(key).valores.push(r.valor)
       }
     }
   }
 
   const individuales = []
-  const grupos = new Map()
-  for (const c of porCampo.values()) {
-    if (c.grupo_matriz) {
-      if (!grupos.has(c.grupo_matriz)) grupos.set(c.grupo_matriz, [])
-      grupos.get(c.grupo_matriz).push(c)
-    } else {
-      individuales.push(c)
-    }
+  const filasMatriz = []
+  for (const c of porPregunta.values()) {
+    if (c.grupo_matriz) filasMatriz.push(c)
+    else individuales.push(c)
   }
   individuales.sort((a, b) => a.orden - b.orden)
-  const gruposArr = Array.from(grupos.entries())
-    .map(([grupo, campos]) => ({ grupo, campos: campos.sort((a, b) => a.orden - b.orden) }))
-    .sort((a, b) => a.campos[0].orden - b.campos[0].orden)
+  filasMatriz.sort((a, b) => a.orden - b.orden)
 
-  return { individuales, grupos: gruposArr }
+  return { individuales, filasMatriz }
 }
 
 function BarraHorizontal({ etiqueta, cantidad, total }) {
@@ -326,7 +326,7 @@ function ResumenMatriz({ campos }) {
       <p className="mb-3 text-sm font-semibold text-gray-900">Matriz de calificación</p>
       <div className="space-y-4">
         {campos.map((c) => (
-          <div key={c.campo_id}>
+          <div key={c.key}>
             <p className="mb-1 truncate text-xs font-medium text-gray-700" title={c.label}>
               {c.label}
             </p>
@@ -1036,11 +1036,9 @@ export default function GestionEncuestas({ tenantSlug, token }) {
             {respuestas.length > 0 && (
               <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 {resumen.individuales.map((c) => (
-                  <ResumenPregunta key={c.campo_id} campo={c} />
+                  <ResumenPregunta key={c.key} campo={c} />
                 ))}
-                {resumen.grupos.map((g) => (
-                  <ResumenMatriz key={g.grupo} campos={g.campos} />
-                ))}
+                {resumen.filasMatriz.length > 0 && <ResumenMatriz campos={resumen.filasMatriz} />}
               </div>
             )}
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">

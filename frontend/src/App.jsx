@@ -19,11 +19,13 @@ import PanelAdmin from './components/admin/PanelAdmin'
 import GestionTenants from './components/superadmin/GestionTenants'
 import GestionUsuariosGlobal from './components/superadmin/GestionUsuariosGlobal'
 import ProtectedRoute from './components/ProtectedRoute'
+import TenantThemeProvider from './components/TenantThemeProvider'
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <TenantThemeProvider>
+        <Routes>
         {/* Rutas públicas */}
         <Route path="/login" element={<Login />} />
         <Route path="/recuperar-password" element={<RecuperarPassword />} />
@@ -127,6 +129,7 @@ function App() {
         {/* Ruta catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      </TenantThemeProvider>
     </BrowserRouter>
   )
 }

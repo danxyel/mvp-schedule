@@ -38,7 +38,7 @@ from app.models_v2_2 import (
     SolicitudReserva, SolicitudAlternativa, EstadoSolicitud,
     SerieReserva, InscripcionSerie, ModalidadCobro, EstadoSerie, EstadoInscripcion,
     HorarioDisponibilidad, HorarioBloqueo, Bitacora, AsesorServicio,
-    CampoFormulario, RespuestaFormulario,
+    CampoFormulario, RespuestaFormulario, EncuestaEnvio,
     EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
     TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad, Canal,
     ESTADOS_OCUPAN_CUPO, ESTADOS_SESION_ACTIVA, utcnow,
@@ -188,6 +188,28 @@ def generar_token_acceso(usuario: Usuario, horas_expira: int = 48) -> str:
     token = secrets.token_urlsafe(32)
     usuario.acceso_token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     usuario.acceso_token_expira_en = utcnow() + timedelta(hours=horas_expira)
+    return token
+
+
+def _generar_token_encuesta(
+    db: Session,
+    formulario_id: int,
+    reserva_id: int,
+    dias_expira: int = 30,
+) -> str:
+    """Genera un token de un solo uso para responder una encuesta de satisfacción.
+
+    El hash se guarda en EncuestaEnvio; el caller debe hacer db.commit().
+    Devuelve el token en claro para incluirlo en el correo.
+    """
+    token = secrets.token_urlsafe(32)
+    envio = EncuestaEnvio(
+        formulario_id=formulario_id,
+        reserva_id=reserva_id,
+        token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        expira_en=utcnow() + timedelta(days=dias_expira),
+    )
+    db.add(envio)
     return token
 
 
@@ -786,14 +808,14 @@ def _persistir_respuestas_formulario(
     db: Session,
     tenant_id: int,
     reserva: Reserva,
-    servicio: Servicio,
+    formulario_id: Optional[int],
     respuestas: Dict[str, Any],
 ) -> None:
-    if not servicio.formulario_id or not respuestas:
+    if not formulario_id or not respuestas:
         return
 
     campos = list(db.execute(
-        select(CampoFormulario).where(CampoFormulario.formulario_id == servicio.formulario_id)
+        select(CampoFormulario).where(CampoFormulario.formulario_id == formulario_id)
     ).scalars().all())
     campos_dict = {str(c.id): c for c in campos}
 
@@ -986,7 +1008,7 @@ def crear_reserva(
         raise
 
     if payload.respuestas_formulario:
-        _persistir_respuestas_formulario(db, tenant_id, reserva, servicio, payload.respuestas_formulario)
+        _persistir_respuestas_formulario(db, tenant_id, reserva, servicio.formulario_id, payload.respuestas_formulario)
 
     actualizar_estado_sesion(db, sesion.id, tenant_id)
 
@@ -3012,19 +3034,27 @@ def _clientes_con_acceso_contenido(db: Session, sesion: Sesion) -> List[Usuario]
     """Devuelve los usuarios destinatarios de la grabación/transcripción de
     una sesión, aplicando el gate de pago: confirmada + pagada.
     """
+    return [
+        r.creado_por
+        for r in _reservas_con_acceso_contenido(db, sesion)
+        if r.creado_por is not None
+    ]
+
+
+def _reservas_con_acceso_contenido(db: Session, sesion: Sesion) -> List[Reserva]:
+    """Mismo filtro de pago que _clientes_con_acceso_contenido, pero
+    devuelve las Reserva completas (para poder anclar EncuestaEnvio.reserva_id)."""
     reservas = db.execute(
         select(Reserva).where(Reserva.sesion_id == sesion.id)
     ).scalars().all()
 
-    clientes: List[Usuario] = []
-    for r in reservas:
-        if r.estado != EstadoReserva.CONFIRMADA:
-            continue
-        if r.estado_pago not in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO):
-            continue
-        if r.creado_por is not None and r.creado_por.email and r.creado_por not in clientes:
-            clientes.append(r.creado_por)
-    return clientes
+    return [
+        r for r in reservas
+        if r.estado == EstadoReserva.CONFIRMADA
+        and r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+        and r.creado_por is not None
+        and r.creado_por.email
+    ]
 
 
 def _serie_de_sesion(db: Session, sesion: Sesion) -> Optional[SerieReserva]:
@@ -3174,9 +3204,21 @@ def _procesar_contenido_sesion(db: Session, sesion: Sesion) -> None:
     sesion.contenido_enviado_en = utcnow()
     db.commit()
 
+    # Encuesta de satisfacción: un token por reserva/cliente elegible
+    tokens_encuesta: Optional[Dict[int, str]] = None
+    if servicio.encuesta_satisfaccion_formulario_id:
+        tokens_encuesta = {}
+        for reserva in _reservas_con_acceso_contenido(db, sesion):
+            token = _generar_token_encuesta(
+                db, servicio.encuesta_satisfaccion_formulario_id, reserva.id
+            )
+            if reserva.creado_por is not None:
+                tokens_encuesta[reserva.creado_por.id] = token
+        db.commit()
+
     # Correo: standalone inmediato; serie diferido al final de la serie
     if serie is None:
-        enviar_email_contenido_sesion(tenant, [sesion], clientes)
+        enviar_email_contenido_sesion(tenant, [sesion], clientes, tokens_encuesta=tokens_encuesta)
     else:
         # Buscar todas las sesiones de la serie y ver si todas tienen contenido
         sesiones_serie = db.execute(
@@ -3195,7 +3237,7 @@ def _procesar_contenido_sesion(db: Session, sesion: Sesion) -> None:
                 for c in _clientes_con_acceso_contenido(db, s):
                     if c not in clientes_serie:
                         clientes_serie.append(c)
-            enviar_email_contenido_sesion(tenant, sesiones_serie, clientes_serie)
+            enviar_email_contenido_sesion(tenant, sesiones_serie, clientes_serie, tokens_encuesta=tokens_encuesta)
 
 
 def revisar_contenido_sesiones_virtuales(db: Session, margen_minutos: int = 15) -> int:
@@ -3232,10 +3274,12 @@ def enviar_email_contenido_sesion(
     tenant: Tenant,
     sesiones: List[Sesion],
     clientes: List[Usuario],
+    tokens_encuesta: Optional[Dict[int, str]] = None,
 ) -> None:
     """Envía correo con links de grabación y transcripción de una o más sesiones.
     Una sola sesión para reserva suelta; lista completa de sesiones al final de
-    una serie recurrente.
+    una serie recurrente. Si `tokens_encuesta` viene, agrega un link de encuesta
+    de satisfacción por cliente.
     """
     if not sesiones or not clientes:
         return
@@ -3301,7 +3345,27 @@ def enviar_email_contenido_sesion(
     for cliente in clientes:
         if not cliente.email:
             continue
-        _enviar_smtp(tenant, cliente.email, asunto, texto_plano, cuerpo_html)
+
+        token = tokens_encuesta.get(cliente.id) if tokens_encuesta else None
+        if token:
+            link = (
+                f"{os.environ.get('FRONTEND_URL', 'http://localhost:5173').rstrip('/')}/encuestas/responder?token={token}"
+            )
+            bloque_encuesta_html = f"""\
+            <div style="margin:24px 0;padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+              <p style="margin:0 0 12px;font-size:15px;color:#111827;">Tu opinión nos ayuda a mejorar. ¿Nos cuentas cómo te fue?</p>
+              <a href="{html.escape(link)}" style="display:inline-block;padding:10px 16px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Responder encuesta</a>
+            </div>"""
+            bloque_encuesta_texto = (
+                f"\n\nTu opinión nos ayuda a mejorar. Responde la encuesta aquí: {link}"
+            )
+            html_cliente = _email_shell(tenant, cuerpo_interior + bloque_encuesta_html)
+            texto_cliente = texto_plano + bloque_encuesta_texto
+        else:
+            html_cliente = cuerpo_html
+            texto_cliente = texto_plano
+
+        _enviar_smtp(tenant, cliente.email, asunto, texto_cliente, html_cliente)
 
 
 def generar_mapa_url(sede: Optional[Sede]) -> Optional[str]:

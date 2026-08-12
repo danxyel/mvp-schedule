@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
+import { Button, Card, Field } from './ui'
+
+const APP_NOMBRE = import.meta.env.VITE_APP_NOMBRE || 'MVP Schedule'
 
 function persistirSesion({ token, usuario, tenantSlug, tenantNombre }) {
   const guardar = (clave, valor) => {
@@ -50,7 +53,7 @@ export default function Login() {
         tenant_slug: data.tenant_slug ?? null,
         tenant_nombre: data.tenant_nombre ?? null,
       }
-      
+
       persistirSesion({
         token: data.token,
         usuario,
@@ -58,7 +61,6 @@ export default function Login() {
         tenantNombre: usuario.tenant_nombre,
       })
 
-      // Redirigir según el rol
       if (usuario.rol === 'superadmin') {
         navigate('/superadmin')
       } else if (usuario.rol === 'admin' || usuario.rol === 'asesor') {
@@ -79,50 +81,38 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <Card className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <h1 className="text-xl font-bold text-gray-900">MVP Schedule</h1>
+          <h1 className="text-xl font-bold text-gray-900">{APP_NOMBRE}</h1>
           <p className="mt-1 text-sm text-gray-500">Inicia sesión para continuar</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value)
-                if (error) setError(null)
-              }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-              placeholder="correo@ejemplo.com"
-            />
-          </div>
+          <Field
+            label="Email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (error) setError(null)
+            }}
+            placeholder="correo@ejemplo.com"
+            required
+          />
 
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value)
-                if (error) setError(null)
-              }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
-            />
-          </div>
+          <Field
+            label="Contraseña"
+            name="password"
+            type="password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              if (error) setError(null)
+            }}
+            placeholder="••••••••"
+            required
+          />
 
           {error && (
             <p
@@ -133,29 +123,28 @@ export default function Login() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <Button type="submit" loading={loading}>
             {loading ? 'Entrando...' : 'Entrar'}
-          </button>
+          </Button>
         </form>
 
-        <div className="mt-2 text-center">
-          <Link to="/recuperar-password" className="text-sm text-blue-600 hover:underline">
+        <div className="mt-4 space-y-2 text-center">
+          <Link to="/recuperar-password" className="text-sm text-brand-700 hover:underline">
             ¿Olvidaste tu contraseña?
           </Link>
-        </div>
 
-        {tenantSlug && (
-          <div className="mt-4 text-center">
-            <Link to={`/t/${tenantSlug}/reclamar`} className="text-sm text-blue-600 hover:underline">
-              ¿No tienes contraseña? Reclama tu cuenta
-            </Link>
-          </div>
-        )}
-      </div>
+          {tenantSlug && (
+            <p>
+              <Link
+                to={`/t/${tenantSlug}/reclamar`}
+                className="text-sm text-brand-700 hover:underline"
+              >
+                ¿No tienes contraseña? Reclama tu cuenta
+              </Link>
+            </p>
+          )}
+        </div>
+      </Card>
     </div>
   )
 }

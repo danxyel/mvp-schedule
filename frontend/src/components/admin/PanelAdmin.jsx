@@ -8,6 +8,7 @@ import SeriesTab from './SeriesTab'
 import CrearSerieModal from './CrearSerieModal'
 import MercadoPagoTab from './MercadoPagoTab'
 import GoogleMeetTab from './GoogleMeetTab'
+import GestionPersonalizacion from './GestionPersonalizacion'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
@@ -1690,6 +1691,9 @@ export default function PanelAdmin() {
           <TabButton active={tab === 'encuestas'} onClick={() => cambiarTab('encuestas')}>
             Encuestas
           </TabButton>
+          <TabButton active={tab === 'personalizacion'} onClick={() => cambiarTab('personalizacion')}>
+            Personalización
+          </TabButton>
         </TabGroup>
       </div>
 
@@ -1709,11 +1713,13 @@ export default function PanelAdmin() {
       ) : tab === 'servicios' ? (
         <GestionServicios tenantSlug={tenantSlug} token={token} onIrACrearSerie={irACrearSerie} onIrAEncuestas={() => cambiarTab('encuestas')} />
       ) : tab === 'encuestas' ? (
+        <GestionEncuestas tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'pagos' ? (
         <MercadoPagoTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'meet' ? (
         <GoogleMeetTab tenantSlug={tenantSlug} token={token} />
-      ) : tab === 'encuestas' ? (
-        <GestionEncuestas tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'personalizacion' ? (
+        <GestionPersonalizacion tenantSlug={tenantSlug} token={token} />
       ) : (
         <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}

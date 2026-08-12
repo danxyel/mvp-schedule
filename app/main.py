@@ -395,7 +395,7 @@ def validar_encuesta(token: str, db: Session = Depends(get_db)):
         )
 
     formulario = envio.formulario
-    campos = sorted(formulario.campos, key=lambda c: c.orden)
+    campos = sorted((c for c in formulario.campos if c.activo), key=lambda c: c.orden)
     return EncuestaValidarOut(
         token=token,
         formulario_id=formulario.id,

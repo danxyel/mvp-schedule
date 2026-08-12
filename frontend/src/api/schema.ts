@@ -136,6 +136,14 @@ export interface paths {
         /**
          * Mercadopago Redirect
          * @description Redirige al frontend después de que el cliente vuelve de MercadoPago.
+         *
+         *     El flujo de reserva permite pagar como invitado (sin cuenta, sin token
+         *     en sessionStorage) — por eso NO podemos mandar a rutas protegidas como
+         *     /mis-reservas/{folio}: un invitado nunca tuvo sesión, así que
+         *     ProtectedRoute lo rebota a /login. Para "reserva:" resolvemos el
+         *     tenant_slug y el codigo_confirmacion desde la BD y mandamos a la ruta
+         *     pública /t/{tenant_slug}/r/{folio}, que ya está pensada para
+         *     mostrarse sin login (folio + código).
          */
         get: operations["mercadopago_redirect_api_v2_mercadopago_redirect_get"];
         put?: never;
@@ -1355,6 +1363,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/personalizacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Obtener Personalizacion
+         * @description Devuelve el color primario y logo actuales del tenant.
+         */
+        get: operations["obtener_personalizacion_api_v2__tenant_slug__admin_personalizacion_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Actualizar Color Personalizacion
+         * @description Actualiza únicamente el color primario del tenant (formato #RRGGBB).
+         */
+        patch: operations["actualizar_color_personalizacion_api_v2__tenant_slug__admin_personalizacion_patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/personalizacion/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Subir Logo Personalizacion
+         * @description Sube un logo de tenant a Cloudinary y reemplaza el anterior si existía.
+         */
+        post: operations["subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post"];
+        /**
+         * Quitar Logo Personalizacion
+         * @description Elimina el logo del tenant en Cloudinary y vuelve al avatar de inicial.
+         */
+        delete: operations["quitar_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/superadmin/tenants": {
         parameters: {
             query?: never;
@@ -1732,6 +1788,14 @@ export interface components {
             nombre: string;
             /** Telefono */
             telefono?: string | null;
+        };
+        /** Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post */
+        Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post: {
+            /**
+             * Logo
+             * Format: binary
+             */
+            logo: string;
         };
         /** Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post */
         Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post: {
@@ -2220,6 +2284,22 @@ export interface components {
             monto?: number | string | null;
             /** Referencia */
             referencia?: string | null;
+        };
+        /** PersonalizacionColorIn */
+        PersonalizacionColorIn: {
+            /** Color Primario */
+            color_primario: string;
+        };
+        /** PersonalizacionOut */
+        PersonalizacionOut: {
+            /** Color Primario */
+            color_primario: string;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Slug */
+            slug: string;
         };
         /** ReagendarSesionIn */
         ReagendarSesionIn: {
@@ -6182,6 +6262,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckoutUrlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obtener_personalizacion_api_v2__tenant_slug__admin_personalizacion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_color_personalizacion_api_v2__tenant_slug__admin_personalizacion_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalizacionColorIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quitar_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
                 };
             };
             /** @description Validation Error */

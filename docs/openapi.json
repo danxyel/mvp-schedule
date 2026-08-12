@@ -3075,6 +3075,67 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/respuestas": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Respuestas Formulario Admin",
+        "operationId": "listar_respuestas_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__respuestas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EncuestaRespuestaClienteOut"
+                  },
+                  "title": "Response Listar Respuestas Formulario Admin Api V2  Tenant Slug  Admin Formularios  Formulario Id  Respuestas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos": {
       "post": {
         "tags": [
@@ -6907,6 +6968,89 @@
           "respuestas"
         ],
         "title": "EncuestaResponderIn"
+      },
+      "EncuestaRespuestaCampoOut": {
+        "properties": {
+          "campo_id": {
+            "type": "integer",
+            "title": "Campo Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo_id",
+          "label"
+        ],
+        "title": "EncuestaRespuestaCampoOut"
+      },
+      "EncuestaRespuestaClienteOut": {
+        "properties": {
+          "reserva_id": {
+            "type": "integer",
+            "title": "Reserva Id"
+          },
+          "cliente_nombre": {
+            "type": "string",
+            "title": "Cliente Nombre"
+          },
+          "cliente_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Email"
+          },
+          "respondido_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Respondido En"
+          },
+          "respuestas": {
+            "items": {
+              "$ref": "#/components/schemas/EncuestaRespuestaCampoOut"
+            },
+            "type": "array",
+            "title": "Respuestas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reserva_id",
+          "cliente_nombre",
+          "respondido_en",
+          "respuestas"
+        ],
+        "title": "EncuestaRespuestaClienteOut"
       },
       "EncuestaValidarOut": {
         "properties": {

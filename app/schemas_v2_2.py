@@ -1143,6 +1143,21 @@ class EncuestaResponderIn(BaseModel):
     respuestas: Dict[str, Any]
 
 
+class EncuestaRespuestaCampoOut(BaseModel):
+    campo_id: int
+    label: str
+    valor: Optional[str] = None
+    grupo_matriz: Optional[str] = None
+
+
+class EncuestaRespuestaClienteOut(BaseModel):
+    reserva_id: int
+    cliente_nombre: str
+    cliente_email: Optional[str] = None
+    respondido_en: datetime
+    respuestas: List[EncuestaRespuestaCampoOut]
+
+
 class BloqueoCreate(BaseModel):
     entidad_tipo: str = "asesor"
     entidad_id: Optional[int] = Field(None, gt=0)

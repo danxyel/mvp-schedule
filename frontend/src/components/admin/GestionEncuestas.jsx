@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import { errorMensaje } from '../../utils/errores'
@@ -203,6 +203,12 @@ export default function GestionEncuestas({ tenantSlug, token }) {
   const [creando, setCreando] = useState(false)
   const [errorCrear, setErrorCrear] = useState(null)
 
+  const [verRespuestas, setVerRespuestas] = useState(null)
+  const [respuestas, setRespuestas] = useState([])
+  const [cargandoRespuestas, setCargandoRespuestas] = useState(false)
+  const [errorRespuestas, setErrorRespuestas] = useState(null)
+  const [filaExpandida, setFilaExpandida] = useState(null)
+
   const fetchPlantillas = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -266,6 +272,37 @@ export default function GestionEncuestas({ tenantSlug, token }) {
     setCamposOriginales([])
     setPreguntas([])
     setErrorEditor(null)
+  }
+
+  const abrirRespuestas = async (p) => {
+    setVerRespuestas(p)
+    setCargandoRespuestas(true)
+    setErrorRespuestas(null)
+    setRespuestas([])
+    setFilaExpandida(null)
+
+    const { data, error: fetchErr } = await client.GET(
+      '/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/respuestas',
+      {
+        params: { path: { tenant_slug: tenantSlug, formulario_id: p.id } },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+
+    if (fetchErr) {
+      setErrorRespuestas(errorMensaje(fetchErr))
+      setCargandoRespuestas(false)
+      return
+    }
+    setRespuestas(data ?? [])
+    setCargandoRespuestas(false)
+  }
+
+  const cerrarRespuestas = () => {
+    setVerRespuestas(null)
+    setRespuestas([])
+    setErrorRespuestas(null)
+    setFilaExpandida(null)
   }
 
   const crearPlantilla = async (e) => {
@@ -812,6 +849,98 @@ export default function GestionEncuestas({ tenantSlug, token }) {
     )
   }
 
+  if (verRespuestas) {
+    return (
+      <div className="min-w-0">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={cerrarRespuestas}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            ← Volver a plantillas
+          </button>
+          <p className="text-sm font-medium text-gray-900">{verRespuestas.nombre}</p>
+        </div>
+
+        {errorRespuestas && (
+          <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {errorRespuestas}
+          </p>
+        )}
+
+        {cargandoRespuestas ? (
+          <div className="animate-pulse space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-12 rounded-lg bg-gray-100" />
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-3 font-medium">Cliente</th>
+                  <th className="px-4 py-3 font-medium">Email</th>
+                  <th className="px-4 py-3 font-medium">Respondió</th>
+                  <th className="px-4 py-3 text-right font-medium">Detalle</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {respuestas.map((r) => (
+                  <Fragment key={r.reserva_id}>
+                    <tr className="transition hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{r.cliente_nombre}</td>
+                      <td className="px-4 py-3 text-gray-700">{r.cliente_email || '—'}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {new Date(r.respondido_en).toLocaleString('es-MX')}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFilaExpandida((prev) => (prev === r.reserva_id ? null : r.reserva_id))
+                          }
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                        >
+                          {filaExpandida === r.reserva_id ? 'Ocultar' : 'Ver respuestas'}
+                        </button>
+                      </td>
+                    </tr>
+                    {filaExpandida === r.reserva_id && (
+                      <tr>
+                        <td colSpan={4} className="bg-gray-50 px-4 py-4">
+                          <dl className="space-y-3">
+                            {r.respuestas.map((resp) => (
+                              <div key={resp.campo_id}>
+                                <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                  {resp.label}
+                                  {resp.grupo_matriz ? ` (${resp.grupo_matriz})` : ''}
+                                </dt>
+                                <dd className="text-sm text-gray-900">{resp.valor || '—'}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+                {respuestas.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-gray-500">
+                      Nadie ha respondido esta encuesta todavía.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="min-w-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -860,6 +989,13 @@ export default function GestionEncuestas({ tenantSlug, token }) {
                 </td>
                 <td className="px-4 py-3 text-gray-700">{p.num_campos}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => abrirRespuestas(p)}
+                    className="mr-2 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                  >
+                    Ver respuestas
+                  </button>
                   <button
                     type="button"
                     onClick={() => abrirEditor(p)}

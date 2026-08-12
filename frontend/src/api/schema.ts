@@ -854,6 +854,23 @@ export interface paths {
         patch: operations["actualizar_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__patch"];
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/respuestas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Respuestas Formulario Admin */
+        get: operations["listar_respuestas_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__respuestas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos": {
         parameters: {
             query?: never;
@@ -2006,6 +2023,33 @@ export interface components {
             token: string;
             /** Respuestas */
             respuestas: Record<string, never>;
+        };
+        /** EncuestaRespuestaCampoOut */
+        EncuestaRespuestaCampoOut: {
+            /** Campo Id */
+            campo_id: number;
+            /** Label */
+            label: string;
+            /** Valor */
+            valor?: string | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+        };
+        /** EncuestaRespuestaClienteOut */
+        EncuestaRespuestaClienteOut: {
+            /** Reserva Id */
+            reserva_id: number;
+            /** Cliente Nombre */
+            cliente_nombre: string;
+            /** Cliente Email */
+            cliente_email?: string | null;
+            /**
+             * Respondido En
+             * Format: date-time
+             */
+            respondido_en: string;
+            /** Respuestas */
+            respuestas: components["schemas"]["EncuestaRespuestaCampoOut"][];
         };
         /** EncuestaValidarOut */
         EncuestaValidarOut: {
@@ -5301,6 +5345,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_respuestas_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__respuestas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EncuestaRespuestaClienteOut"][];
                 };
             };
             /** @description Validation Error */

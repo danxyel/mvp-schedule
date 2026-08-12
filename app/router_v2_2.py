@@ -26,6 +26,7 @@ from app.models_v2_2 import (
     EstadoSolicitud, EstadoSerie, ModalidadCobro, EstadoInscripcion, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
     TipoBloqueo, utcnow, Formulario, CampoFormulario, TipoFormulario,
+    RespuestaFormulario, EncuestaEnvio,
 )
 from app.rate_limiter import limiter
 from app.cloudinary_client import uploader
@@ -49,7 +50,7 @@ from app.schemas_v2_2 import (
     BloqueoCreate, BloqueoOut,
     TipoFormularioEnum, FormularioAdminIn, FormularioAdminUpdate, FormularioAdminOut,
     FormularioListAdminOut, CampoFormularioBulkAdminIn, CampoFormularioAdminUpdate,
-    CampoFormularioAdminOut,
+    CampoFormularioAdminOut, EncuestaRespuestaClienteOut, EncuestaRespuestaCampoOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -2411,6 +2412,70 @@ def obtener_formulario_admin(
     if f is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
     return FormularioAdminOut.model_validate(f)
+
+
+@router.get(
+    "/admin/formularios/{formulario_id}/respuestas",
+    response_model=List[EncuestaRespuestaClienteOut],
+)
+def listar_respuestas_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    campos = db.execute(
+        select(CampoFormulario).where(CampoFormulario.formulario_id == formulario_id)
+    ).scalars().all()
+    campos_por_id = {c.id: c for c in campos}
+
+    envios = db.execute(
+        select(EncuestaEnvio)
+        .where(
+            EncuestaEnvio.formulario_id == formulario_id,
+            EncuestaEnvio.tenant_id == tenant.id,
+            EncuestaEnvio.respondido_en.is_not(None),
+        )
+        .order_by(EncuestaEnvio.respondido_en.desc())
+    ).scalars().all()
+
+    out = []
+    for envio in envios:
+        cliente = envio.reserva.creado_por if envio.reserva else None
+        respuestas_raw = (
+            db.execute(
+                select(RespuestaFormulario).where(
+                    RespuestaFormulario.reserva_id == envio.reserva_id,
+                    RespuestaFormulario.campo_id.in_(campos_por_id.keys()),
+                )
+            ).scalars().all()
+            if campos_por_id
+            else []
+        )
+        out.append(
+            EncuestaRespuestaClienteOut(
+                reserva_id=envio.reserva_id,
+                cliente_nombre=cliente.nombre if cliente else "Desconocido",
+                cliente_email=cliente.email if cliente else None,
+                respondido_en=envio.respondido_en,
+                respuestas=[
+                    EncuestaRespuestaCampoOut(
+                        campo_id=r.campo_id,
+                        label=campos_por_id[r.campo_id].label if r.campo_id in campos_por_id else "",
+                        valor=r.valor,
+                        grupo_matriz=campos_por_id[r.campo_id].grupo_matriz if r.campo_id in campos_por_id else None,
+                    )
+                    for r in respuestas_raw
+                ],
+            )
+        )
+    return out
 
 
 @router.patch("/admin/formularios/{formulario_id}", response_model=FormularioAdminOut)

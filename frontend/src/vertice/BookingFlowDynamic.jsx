@@ -149,12 +149,17 @@ export function BookingFlowDynamic() {
         const tzOffset = `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
         const fecha_hora_inicio = `${dateStr}T${slot.rango}:00${tzOffset}`
 
+        // Intentar obtener token si existe
+        const token = localStorage.getItem('acceso_token') || sessionStorage.getItem('acceso_token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
         const { data: reserva, error: reservaErr } = await client.POST(
           '/api/v2/{tenant_slug}/reservas',
           {
             params: {
               path: { tenant_slug: tenantSlug },
             },
+            headers,
             body: {
               servicio_id: parseInt(servicioId),
               fecha_hora_inicio,
@@ -162,14 +167,17 @@ export function BookingFlowDynamic() {
           }
         )
 
-        if (reservaErr) throw reservaErr
+        if (reservaErr) {
+          console.error('Error del API:', reservaErr)
+          throw reservaErr
+        }
 
         navigate(
           `/t/${tenantSlug}/confirmar/${reserva.codigo_confirmacion}`,
           { state: { reserva } }
         )
       } catch (err) {
-        setError(err.message || 'Error al crear reserva')
+        setError(err.message || err.detail?.detail || 'Error al crear reserva')
         console.error('Error creando reserva:', err)
       }
     }

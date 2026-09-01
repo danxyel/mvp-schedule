@@ -97,31 +97,38 @@ export function BookingFlowDynamic() {
           throw dispErr
         }
 
-        if (disp?.sesiones) {
+        if (disp?.slots) {
+          // Transformar datos del API al formato esperado por el frontend
+          const sesionesTransformadas = disp.slots.map(slot => ({
+            fecha_hora_inicio: slot.fecha_hora_inicio,
+            fecha_hora_fin: slot.fecha_hora_fin,
+            rango: new Date(slot.fecha_hora_inicio).toLocaleTimeString('es-MX', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            disponible: slot.disponible,
+            estado: slot.disponible ? 'Disponible' : (slot.motivo_no_disponible === 'cupo_lleno' ? 'Lleno' : 'No disponible'),
+            asesor: slot.asesor,
+            cupo_disponible: slot.cupo_disponible,
+            motivo_no_disponible: slot.motivo_no_disponible,
+          }))
+          setDisponibilidad({
+            ...disp,
+            sesiones: sesionesTransformadas,
+          })
+        } else if (disp?.sesiones) {
+          // Fallback para API antiguo
           setDisponibilidad(disp)
         } else {
-          // Fallback: mock data si no hay respuesta
+          // Sin datos disponibles
           setDisponibilidad({
-            sesiones: [
-              { rango: '09:00', estado: 'Disponible', disponible: true },
-              { rango: '10:00', estado: 'Disponible', disponible: true },
-              { rango: '11:00', estado: 'Lleno', disponible: false },
-              { rango: '14:00', estado: 'Disponible', disponible: true },
-              { rango: '15:00', estado: 'Disponible', disponible: true },
-            ],
+            sesiones: [],
           })
         }
       } catch (err) {
         console.error('Error cargando disponibilidad:', err)
-        // Mock data de fallback
         setDisponibilidad({
-          sesiones: [
-            { rango: '09:00', estado: 'Disponible', disponible: true },
-            { rango: '10:00', estado: 'Disponible', disponible: true },
-            { rango: '11:00', estado: 'Lleno', disponible: false },
-            { rango: '14:00', estado: 'Disponible', disponible: true },
-            { rango: '15:00', estado: 'Disponible', disponible: true },
-          ],
+          sesiones: [],
         })
       }
     }
@@ -155,14 +162,17 @@ export function BookingFlowDynamic() {
         const sesiones = disponibilidad.sesiones || []
         const slot = sesiones[horarioSeleccionado]
 
-        // Construir fecha_hora_inicio correctamente
-        const dateStr = fechaSeleccionada.toISOString().split('T')[0]
-        const offset = -fechaSeleccionada.getTimezoneOffset()
-        const hours = Math.floor(Math.abs(offset) / 60)
-        const minutes = Math.abs(offset) % 60
-        const sign = offset >= 0 ? '+' : '-'
-        const tzOffset = `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-        const fecha_hora_inicio = `${dateStr}T${slot.rango}:00${tzOffset}`
+        // Usar fecha_hora_inicio directamente del slot si existe, si no construirla
+        let fecha_hora_inicio = slot.fecha_hora_inicio
+        if (!fecha_hora_inicio) {
+          const dateStr = fechaSeleccionada.toISOString().split('T')[0]
+          const offset = -fechaSeleccionada.getTimezoneOffset()
+          const hours = Math.floor(Math.abs(offset) / 60)
+          const minutes = Math.abs(offset) % 60
+          const sign = offset >= 0 ? '+' : '-'
+          const tzOffset = `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+          fecha_hora_inicio = `${dateStr}T${slot.rango}:00${tzOffset}`
+        }
 
         // Intentar obtener token si existe
         const token = localStorage.getItem('acceso_token') || sessionStorage.getItem('acceso_token')

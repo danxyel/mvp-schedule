@@ -54,16 +54,21 @@ def get_current_tenant(
 # ── Usuario autenticado ───────────────────────────────────────────────────────
 def _decode_token(token: str) -> dict:
     """Decodifica y valida el JWT. Lanza 401 si es inválido o expirado."""
+    import logging
+    log = logging.getLogger(__name__)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        log.info(f"_decode_token: Token decoded successfully for user {payload.get('sub')}")
         return payload
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as e:
+        log.error(f"_decode_token: Token expirado: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expirado",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        log.error(f"_decode_token: Token inválido: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido",
@@ -76,12 +81,18 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> Usuario:
     """Exige usuario autenticado. 401 si no hay token o es inválido."""
+    import logging
+    log = logging.getLogger(__name__)
+
     if credentials is None:
+        log.warning("get_current_user: No Authorization header found")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Se requiere autenticación",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    log.info(f"get_current_user: Token received (first 20 chars): {credentials.credentials[:20]}...")
 
     payload = _decode_token(credentials.credentials)
     usuario_id: Optional[int] = payload.get("sub")

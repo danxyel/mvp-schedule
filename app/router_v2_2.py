@@ -631,6 +631,7 @@ def crear_nueva_reserva(
         sesion_asignada_id=sesion.id,
         sesion_creada=resultado["sesion_creada"],
         activacion_url=activacion_url,
+        acceso_token_plano=resultado.get("acceso_token_plano"),
     )
 
 

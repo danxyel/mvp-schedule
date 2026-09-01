@@ -25,33 +25,36 @@ Se ha implementado la **capa de tokens y componentes core** del design system V�
 - `frontend/src/design-system/index.js` — Exporta tokens y componentes
 - `frontend/src/design-system/tokens.css` — Maestro que importa todos los tokens
 
-## Próximos Pasos
+## Pantallas (Screens) Implementadas
 
-### Componentes Navigation (2-3 horas)
-- `NavItem` — Destino en barra/rail/sidebar
-- `Stepper` — Progreso del flujo de reserva (3 pasos)
-- `StepArrow` — Navegación de periodo
-- `ActionBar` — Barra pegada al fondo con resumen + acción
+### BookingFlow (3-step flujo)
+- `BookingFlow.jsx` — Componente completo con gestión de estado local
+- Paso 1: Selección de servicio con filtros (chips)
+- Paso 2: Calendario + selección de horario
+- Paso 3: Planes de pago con resumen
+- Stepper navegable, ActionBar con resumen
+- Mock data incluido para pruebas
 
-### Componentes Booking (3-4 horas)
-- `ServiceRow` — Fila de catálogo sin caja
-- `SlotCard` — Horario reservable
-- `PlanCard` — Opción de pago con precios
-- `CalendarMonth` — Calendario navegable con disponibilidad
+### ConfirmationScreen
+- `ConfirmationScreen.jsx` — Pantalla de éxito post-reserva
+- Animación `riseIn` en título (fade + 6px arriba)
+- Código de reserva en monospace grande
+- Dos acciones ghost (Mis reservas, Inicio)
 
-### Componentes Records (2 horas)
-- `StatCard` — Cifra de consulta (saldo, gasto)
-- `BookingRow` — Reserva en "Mis reservas"
-- `MovementRow` — Línea de historial con tintado automático
+### MyReservations
+- `MyReservations.jsx` — Historial de reservas del usuario
+- Listado adaptativo con BookingRow
+- Filtros (Todas/Próximas/Pasadas)
+- Detalles de código, actions por reserva
+- Estado visual de cada reserva (Confirmada/Pendiente/Completada)
 
-### Pantallas y Vistas (8-10 horas)
-1. **Paso 1: Servicio** — Selección de catálogo
-2. **Paso 2: Fecha y hora** — Calendario + horarios
-3. **Paso 3: Pago** — Planes y confirmación
-4. **Confirmación** — Display "Lugar asegurado"
-5. **Mis reservas** — Consulta de reservas
-6. **Bonos** — Consulta de saldo y movimientos
-7. **Equipo** — Consulta de disponibilidad del profesional
+## Próximos Pasos Opcionales
+
+- **Pantalla de Equipo** — Agenda del profesional con grid semanal
+- **Pantalla de Bonos** — StatCard + MovementRow para saldo
+- **Navegación adaptativa** — NavItem en bar/rail/sidebar por breakpoint
+- **Integración API** — Conectar BookingFlow a backend real
+- **Validación de formularios** — Añadir reglas y feedback visual
 
 ## Importación en Componentes
 

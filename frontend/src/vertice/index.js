@@ -10,6 +10,8 @@ export { SeleccionServicioVertice } from './SeleccionServicioVertice'
 export { BookingFlowDynamic } from './BookingFlowDynamic'
 export { ConfirmationScreenDynamic } from './ConfirmationScreenDynamic'
 export { MyReservationsDynamic } from './MyReservationsDynamic'
+export { ReservationDetailDynamic } from './ReservationDetailDynamic'
+export { CheckoutDynamic } from './CheckoutDynamic'
 
 // Test page
 export { TestPage } from './TestPage'

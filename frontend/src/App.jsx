@@ -27,6 +27,8 @@ import {
   BookingFlowDynamic,
   ConfirmationScreenDynamic,
   MyReservationsDynamic,
+  ReservationDetailDynamic,
+  CheckoutDynamic,
 } from './vertice'
 
 function App() {
@@ -67,6 +69,10 @@ function App() {
           path="/t/:tenantSlug/confirmar/:codigo"
           element={<ConfirmationScreenDynamic />}
         />
+        <Route
+          path="/t/:tenantSlug/checkout/:codigoConfirmacion"
+          element={<CheckoutDynamic />}
+        />
 
         {/* Rutas protegidas */}
         <Route
@@ -82,7 +88,7 @@ function App() {
           path="/mis-reservas/:folio"
           element={
             <ProtectedRoute allowedRoles={['cliente']}>
-              <DetalleReserva />
+              <ReservationDetailDynamic />
             </ProtectedRoute>
           }
         />

@@ -1,0 +1,11 @@
+:root {
+  /* Redondeo en escala: cuanto mayor el bloque, mayor el radio. */
+  --radius-pill:  999px;  /* botones, chips, etiquetas, flechas */
+  --radius-sm:    10px;   /* eventos de agenda, cuadro de marca */
+  --radius-md:    12px;   /* base */
+  --radius-lg:    14px;   /* celdas de calendario, ítems de menú */
+  --radius-xl:    16px;   /* horarios, planes de pago */
+  --radius-2xl:   18px;   /* tarjetas y paneles */
+  --radius-frame: 24px;   /* marco de dispositivo */
+  --radius-round: 50%;    /* avatares y puntos de color */
+}

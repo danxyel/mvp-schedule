@@ -1,0 +1,73 @@
+:root {
+  /* ── Base: Focus & Clear ─────────────────────────────── */
+  --indigo-500: #4F46E5;   /* Student indigo */
+  --teal-500:   #14B8A6;   /* Vibrant turquoise */
+  --amber-500:  #F59E0B;   /* Caution yellow */
+  --white:      #FFFFFF;   /* Optical white */
+  --slate-800:  #334155;   /* Slate gray text */
+
+  /* ── Rampa acento (indigo) — OKLCH, tono 272 ─────────── */
+  --color-accent:      #4F46E5;
+  --color-accent-100:  oklch(96.5% .025 272);
+  --color-accent-200:  oklch(92%   .05  272);
+  --color-accent-300:  oklch(85%   .09  272);
+  --color-accent-400:  oklch(66%   .18  272);
+  --color-accent-500:  #4F46E5;
+  --color-accent-600:  oklch(45%   .225 272);
+  --color-accent-700:  oklch(40%   .195 272);
+  --color-accent-800:  oklch(33%   .155 272);
+  --color-accent-900:  oklch(26%   .115 272);
+
+  /* ── Rampa acento 2 (turquesa) — tono 180 ────────────── */
+  --color-accent-2:      #14B8A6;
+  --color-accent-2-100:  oklch(96.5% .03  180);
+  --color-accent-2-200:  oklch(92%   .055 180);
+  --color-accent-2-300:  oklch(85%   .085 180);
+  --color-accent-2-400:  oklch(78%   .11  180);
+  --color-accent-2-500:  #14B8A6;
+  --color-accent-2-600:  oklch(63%   .12  180);
+  --color-accent-2-700:  oklch(50%   .10  180);
+  --color-accent-2-800:  oklch(41%   .085 180);
+  --color-accent-2-900:  oklch(32%   .065 180);
+
+  /* ── Aviso (ámbar) — tono 70 ─────────────────────────── */
+  --color-warn:      #F59E0B;
+  --color-warn-100:  oklch(97% .03 70);
+  --color-warn-300:  oklch(88% .09 70);
+  --color-warn-500:  #F59E0B;
+  --color-warn-700:  oklch(50% .12 70);
+
+  /* ── Neutrales (escala Slate) ────────────────────────── */
+  --color-neutral-100: #F8FAFC;
+  --color-neutral-200: #EEF2F6;
+  --color-neutral-300: #E2E8F0;
+  --color-neutral-400: #CBD5E1;
+  --color-neutral-500: #94A3B8;
+  --color-neutral-600: #64748B;
+  --color-neutral-700: #475569;
+  --color-neutral-800: #334155;
+  --color-neutral-900: #1E293B;
+
+  /* ── Alias semánticos ────────────────────────────────── */
+  --color-bg:            #F8FAFC;  /* lienzo de la app */
+  --color-surface:       #FFFFFF;  /* nav, tarjetas, barra de acción */
+  --color-surface-sunk:  #EEF2F6;  /* fondo del navegador / fuera del marco */
+  --color-text:          #334155;
+  --color-text-muted:    #64748B;
+  --color-text-subtle:   #94A3B8;
+  --color-text-invert:   #FFFFFF;
+  --color-border:        #E2E8F0;  /* separadores y bordes de tarjeta */
+  --color-border-strong: #CBD5E1;  /* bordes de control */
+
+  --state-positive-fill:   var(--color-accent-2-100);
+  --state-positive-ink:    var(--color-accent-2-800);
+  --state-positive-border: var(--color-accent-2-300);
+  --state-warn-fill:       var(--color-warn-100);
+  --state-warn-ink:        var(--color-warn-700);
+  --state-warn-border:     var(--color-warn-300);
+  --state-idle-fill:       var(--color-neutral-200);
+  --state-idle-ink:        var(--color-neutral-700);
+  --state-idle-border:     var(--color-neutral-400);
+
+  --focus-ring: 2px solid var(--color-accent);
+}

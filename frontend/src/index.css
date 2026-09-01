@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./design-system/tokens.css";
 
 @theme {
   --color-brand-50:  var(--tenant-brand-50,  var(--color-indigo-50));

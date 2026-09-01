@@ -21,7 +21,7 @@ import GestionTenants from './components/superadmin/GestionTenants'
 import GestionUsuariosGlobal from './components/superadmin/GestionUsuariosGlobal'
 import ProtectedRoute from './components/ProtectedRoute'
 import TenantThemeProvider from './components/TenantThemeProvider'
-import { TestPage } from './vertice/TestPage'
+import { TestPage, MyReservationsDynamic, ConfirmationScreenDynamic } from './vertice'
 
 function App() {
   return (
@@ -54,14 +54,20 @@ function App() {
           }
         />
 
+        {/* Rutas de confirmación (Vértice) */}
+        <Route
+          path="/t/:tenantSlug/confirmar/:codigo"
+          element={<ConfirmationScreenDynamic />}
+        />
+
         {/* Rutas protegidas */}
-        <Route 
-          path="/mis-reservas" 
+        <Route
+          path="/mis-reservas"
           element={
             <ProtectedRoute allowedRoles={['cliente']}>
-              <MisReservas />
+              <MyReservationsDynamic />
             </ProtectedRoute>
-          } 
+          }
         />
         
         <Route

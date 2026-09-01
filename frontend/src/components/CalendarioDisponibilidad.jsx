@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import { getLocalOffset } from '../utils/fechas'
 import SelectorFecha from './common/SelectorFecha'
+import { badgeClassForTone } from '../utils/estado'
 const MOTIVO_LABELS = {
   bloqueado: 'No disponible',
   ocupado: 'Ocupado',
@@ -151,28 +152,17 @@ export default function CalendarioDisponibilidad() {
             {data?.slots.map((slot, idx) => {
               if (!slot.disponible) {
                 const label = motivoLabel(slot.motivo_no_disponible)
-                const isLleno = slot.motivo_no_disponible === 'cupo_lleno'
 
                 return (
                   <div
                     key={idx}
-                    className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
-                      isLleno
-                        ? 'border-yellow-200 bg-yellow-50'
-                        : 'border-gray-200 bg-gray-50'
-                    }`}
+                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 opacity-50"
                   >
-                    <p className="text-sm font-medium text-gray-500">
+                    <p className="text-sm font-medium text-slate-500">
                       {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
                       {toLocalTime(slot.fecha_hora_fin, timezone)}
                     </p>
-                    {isLleno ? (
-                      <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                        {label}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium text-gray-400">{label}</span>
-                    )}
+                    <span className={badgeClassForTone('idle')}>{label}</span>
                   </div>
                 )
               }
@@ -182,22 +172,13 @@ export default function CalendarioDisponibilidad() {
                   key={idx}
                   type="button"
                   onClick={() => navigate(`/t/${tenantSlug}/reservar/${servicioId}`, { state: { slot } })}
-                  className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left transition hover:bg-blue-100 hover:shadow-sm"
+                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50 hover:shadow-sm"
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-blue-800">
-                      {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
-                      {toLocalTime(slot.fecha_hora_fin, timezone)}
-                    </p>
-                    {slot.asesor ? (
-                      <p className="text-xs text-blue-600">{slot.asesor.nombre}</p>
-                    ) : (
-                      <p className="text-xs text-blue-500">
-                        Se te asignar&aacute; un asesor al confirmar
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-xs font-medium text-blue-500">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {toLocalTime(slot.fecha_hora_inicio, timezone)} &mdash;{' '}
+                    {toLocalTime(slot.fecha_hora_fin, timezone)}
+                  </p>
+                  <span className={badgeClassForTone('accent')}>
                     {slot.cupo_disponible != null && slot.cupo_disponible > 0
                       ? `${slot.cupo_disponible} lugar${slot.cupo_disponible !== 1 ? 'es' : ''}`
                       : 'Disponible'}

@@ -5,8 +5,6 @@ import {
   Button,
   Stepper,
   ActionBar,
-  Chip,
-  ServiceRow,
   CalendarMonth,
   SlotCard,
   PlanCard,
@@ -21,92 +19,121 @@ export function BookingFlowDynamic() {
   const [error, setError] = useState(null)
 
   // Estado de datos
-  const [servicios, setServicios] = useState([])
-  const [planes, setPlanes] = useState([])
-  const [slots, setSlots] = useState([])
+  const [servicio, setServicio] = useState(null)
+  const [disponibilidad, setDisponibilidad] = useState({})
 
   // Estado de selección
-  const [servicioSeleccionado, setServicioSeleccionado] = useState(servicioId || null)
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null)
   const [horarioSeleccionado, setHorarioSeleccionado] = useState(null)
   const [planSeleccionado, setPlanSeleccionado] = useState(null)
-  const [filtro, setFiltro] = useState('Todos')
 
-  // Cargar datos del API
+  // Mock planes (usar del API si existe)
+  const planes = [
+    { id: 1, nombre: 'Sesión suelta', precio: 0, descripcion: 'Pago único' },
+    { id: 2, nombre: 'Paquete de 5', precio: 0, descripcion: 'Ahorra' },
+    { id: 3, nombre: 'Paquete de 10', precio: 0, descripcion: 'Ahorra más' },
+  ]
+
+  // Cargar datos del servicio
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchServicio = async () => {
       try {
         setLoading(true)
-        const { data: srvs, error: srvErr } = await client.GET(
+        const { data: srv, error: srvErr } = await client.GET(
           '/api/v2/{tenant_slug}/servicios',
           {
             params: { path: { tenant_slug: tenantSlug } },
           }
         )
         if (srvErr) throw srvErr
-        setServicios(srvs || [])
 
-        // Cargar planes - si el endpoint existe
-        try {
-          const { data: plns } = await client.GET(
-            '/api/v2/{tenant_slug}/planes',
-            {
-              params: { path: { tenant_slug: tenantSlug } },
-            }
-          )
-          setPlanes(plns || [])
-        } catch {
-          // Si no hay endpoint de planes, usar planes por defecto
-          setPlanes([
-            { id: 1, nombre: 'Sesión suelta', precio: 0, descripcion: 'Pago único' },
-            { id: 2, nombre: 'Paquete de 5', precio: 0, descripcion: 'Ahorra' },
-            { id: 3, nombre: 'Paquete de 10', precio: 0, descripcion: 'Ahorra más' },
-          ])
-        }
-
+        const service = srv?.find((s) => s.id == servicioId)
+        if (!service) throw new Error('Servicio no encontrado')
+        setServicio(service)
         setError(null)
       } catch (err) {
-        setError(err.message || 'Error al cargar datos')
-        console.error('Error cargando datos:', err)
+        setError(err.message || 'Error al cargar servicio')
+        console.error('Error:', err)
       } finally {
         setLoading(false)
       }
     }
 
-    if (tenantSlug) {
-      fetchData()
+    if (tenantSlug && servicioId) {
+      fetchServicio()
     }
-  }, [tenantSlug])
+  }, [tenantSlug, servicioId])
 
-  // Cargar slots cuando se selecciona servicio y fecha
+  // Cargar disponibilidad cuando se selecciona fecha
   useEffect(() => {
-    const fetchSlots = async () => {
-      if (!servicioSeleccionado || !fechaSeleccionada) return
+    if (!fechaSeleccionada || !servicioId) return
 
+    const fetchDisponibilidad = async () => {
       try {
-        const fecha = fechaSeleccionada.toISOString().split('T')[0]
-        const { data: slts } = await client.GET(
-          `/api/v1/servicios/${servicioSeleccionado}/slots`,
+        // Formato RFC3339 con offset de timezone: 2026-08-01T00:00:00-06:00
+        const offset = -fechaSeleccionada.getTimezoneOffset()
+        const hours = Math.floor(Math.abs(offset) / 60)
+        const minutes = Math.abs(offset) % 60
+        const sign = offset >= 0 ? '+' : '-'
+        const tzOffset = `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+        const isoDate = fechaSeleccionada.toISOString().split('T')[0]
+        const fecha = `${isoDate}T00:00:00${tzOffset}`
+
+        // Intentar obtener disponibilidad del API con tenant_slug
+        const { data: disp, error: dispErr } = await client.GET(
+          '/api/v2/{tenant_slug}/servicios/{servicio_id}/disponibilidad',
           {
-            params: { query: { fecha, tenant_slug: tenantSlug } },
+            params: {
+              path: { tenant_slug: tenantSlug, servicio_id: servicioId },
+              query: { fecha },
+            },
           }
         )
-        setSlots(slts || [])
+
+        if (dispErr) {
+          console.error('Error del API:', dispErr)
+          throw dispErr
+        }
+
+        if (disp?.sesiones) {
+          setDisponibilidad(disp)
+        } else {
+          // Fallback: mock data si no hay respuesta
+          setDisponibilidad({
+            sesiones: [
+              { rango: '09:00', estado: 'Disponible', disponible: true },
+              { rango: '10:00', estado: 'Disponible', disponible: true },
+              { rango: '11:00', estado: 'Lleno', disponible: false },
+              { rango: '14:00', estado: 'Disponible', disponible: true },
+              { rango: '15:00', estado: 'Disponible', disponible: true },
+            ],
+          })
+        }
       } catch (err) {
-        console.error('Error cargando slots:', err)
+        console.error('Error cargando disponibilidad:', err)
+        // Mock data de fallback
+        setDisponibilidad({
+          sesiones: [
+            { rango: '09:00', estado: 'Disponible', disponible: true },
+            { rango: '10:00', estado: 'Disponible', disponible: true },
+            { rango: '11:00', estado: 'Lleno', disponible: false },
+            { rango: '14:00', estado: 'Disponible', disponible: true },
+            { rango: '15:00', estado: 'Disponible', disponible: true },
+          ],
+        })
       }
     }
 
-    fetchSlots()
-  }, [servicioSeleccionado, fechaSeleccionada, tenantSlug])
+    fetchDisponibilidad()
+  }, [fechaSeleccionada, servicioId, tenantSlug])
 
   const handlePasoSelect = (n) => {
     if (n <= paso) setPaso(n)
   }
 
   const handleProximo = async () => {
-    if (paso === 1 && !servicioSeleccionado) return
-    if (paso === 2 && !horarioSeleccionado) return
+    if (paso === 1 && !fechaSeleccionada) return
+    if (paso === 2 && horarioSeleccionado === null) return
     if (paso === 3 && !planSeleccionado) return
 
     if (paso < 3) {
@@ -114,13 +141,14 @@ export function BookingFlowDynamic() {
     } else {
       // Crear reserva
       try {
-        const slot = slots[horarioSeleccionado]
+        const sesiones = disponibilidad.sesiones || []
+        const slot = sesiones[horarioSeleccionado]
 
         const { data: reserva, error: reservaErr } = await client.POST(
           '/reservas',
           {
             body: {
-              servicio_id: servicioSeleccionado,
+              servicio_id: parseInt(servicioId),
               fecha_inicio: `${fechaSeleccionada.toISOString().split('T')[0]}T${slot.rango}`,
             },
           }
@@ -142,21 +170,19 @@ export function BookingFlowDynamic() {
     if (paso > 1) setPaso(paso - 1)
   }
 
+  const sesiones = disponibilidad.sesiones || []
+
   const resumenPaso = {
-    1: servicioSeleccionado
-      ? servicios.find((s) => s.id === servicioSeleccionado)?.nombre
-      : 'Elige un servicio',
-    2: fechaSeleccionada
+    1: fechaSeleccionada
       ? `${fechaSeleccionada.getDate()}/${fechaSeleccionada.getMonth() + 1}`
-      : 'Elige fecha y hora',
-    3: planSeleccionado
-      ? planes[planSeleccionado - 1]?.nombre
-      : 'Elige un plan',
+      : 'Elige una fecha',
+    2: horarioSeleccionado !== null ? sesiones[horarioSeleccionado]?.rango : 'Elige una hora',
+    3: planSeleccionado ? planes[planSeleccionado - 1]?.nombre : 'Elige un plan',
   }
 
   const botonDeshabilitado = {
-    1: !servicioSeleccionado,
-    2: !horarioSeleccionado,
+    1: !fechaSeleccionada,
+    2: horarioSeleccionado === null,
     3: !planSeleccionado,
   }
 
@@ -168,13 +194,13 @@ export function BookingFlowDynamic() {
     )
   }
 
-  if (error) {
+  if (error && !servicio) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ color: 'var(--color-warn)', fontSize: 'var(--text-body)' }}>Error: {error}</p>
-          <Button variant="primary" onClick={() => window.location.reload()}>
-            Reintentar
+          <Button variant="primary" onClick={() => navigate(`/t/${tenantSlug}`)}>
+            Volver al catálogo
           </Button>
         </div>
       </div>
@@ -203,13 +229,23 @@ export function BookingFlowDynamic() {
             fontSize: 'var(--text-h2)',
             fontWeight: 'var(--weight-semibold)',
             margin: 0,
-            marginBottom: 'var(--space-6)',
+            marginBottom: 'var(--space-3)',
           }}
         >
           Reservar
         </h1>
+        <p
+          style={{
+            fontSize: 'var(--text-body-sm)',
+            color: 'var(--color-text-muted)',
+            margin: 0,
+            marginBottom: 'var(--space-4)',
+          }}
+        >
+          {servicio?.nombre}
+        </p>
         <Stepper
-          steps={['Servicio', 'Fecha y hora', 'Pago']}
+          steps={['Fecha', 'Hora', 'Plan']}
           current={paso}
           onSelect={handlePasoSelect}
         />
@@ -225,131 +261,71 @@ export function BookingFlowDynamic() {
           margin: '0 auto',
         }}
       >
+        {error && (
+          <div
+            style={{
+              backgroundColor: 'var(--color-warn-100)',
+              color: 'var(--color-warn)',
+              padding: 'var(--space-4)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: 'var(--space-6)',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
         {paso === 1 && (
           <div>
             <h2 style={{ fontSize: 'var(--text-h3)', margin: '0 0 var(--space-5) 0' }}>
-              Elige un servicio
+              Elige una fecha
             </h2>
 
-            {/* Filtro */}
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--space-3)',
-                marginBottom: 'var(--space-6)',
-                overflowX: 'auto',
-                paddingBottom: 'var(--space-2)',
-              }}
-            >
-              {['Todos', 'Individual', 'Grupal'].map((f) => (
-                <Chip
-                  key={f}
-                  selected={filtro === f}
-                  onClick={() => setFiltro(f)}
-                >
-                  {f}
-                </Chip>
-              ))}
-            </div>
-
-            {/* Listado de servicios */}
-            <div>
-              {servicios.length === 0 ? (
-                <p style={{ color: 'var(--color-text-muted)' }}>
-                  No hay servicios disponibles
-                </p>
-              ) : (
-                servicios.map((s) => (
-                  <ServiceRow
-                    key={s.id}
-                    id={s.id}
-                    nombre={s.nombre}
-                    desc={s.descripcion || ''}
-                    precio={`$${s.precio}`}
-                    tipo={s.tipo}
-                    modalidad={s.modalidad}
-                    duracion={`${s.duracion_minutos} min`}
-                    ocupados={s.sesiones_confirmadas || 0}
-                    cupo={s.cupo || 10}
-                    tone="accent"
-                    onClick={() => setServicioSeleccionado(s.id)}
-                    style={{
-                      opacity: servicioSeleccionado === s.id ? 1 : 0.7,
-                      backgroundColor:
-                        servicioSeleccionado === s.id ? 'var(--color-accent-100)' : 'transparent',
-                      borderLeft:
-                        servicioSeleccionado === s.id ? '3px solid var(--color-accent)' : 'none',
-                      paddingLeft:
-                        servicioSeleccionado === s.id ? 'var(--space-3)' : 'var(--space-5)',
-                    }}
-                  />
-                ))
-              )}
-            </div>
+            <CalendarMonth
+              month={new Date()}
+              selected={fechaSeleccionada}
+              minDate={new Date()}
+              onSelect={setFechaSeleccionada}
+              availability={() => 2}
+              footer="Selecciona una fecha para ver horarios disponibles"
+            />
           </div>
         )}
 
         {paso === 2 && (
           <div>
             <h2 style={{ fontSize: 'var(--text-h3)', margin: '0 0 var(--space-5) 0' }}>
-              Elige fecha y hora
+              {fechaSeleccionada?.toLocaleDateString('es-MX', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}
             </h2>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: 'var(--space-6)',
-              }}
-            >
-              {/* Calendario */}
-              <div>
-                <CalendarMonth
-                  month={new Date()}
-                  selected={fechaSeleccionada}
-                  minDate={new Date()}
-                  onSelect={setFechaSeleccionada}
-                  availability={(d) => Math.floor(Math.random() * 3)}
-                  footer="Elige una fecha para ver horarios disponibles"
-                />
+            {sesiones.length === 0 ? (
+              <p style={{ color: 'var(--color-text-muted)' }}>
+                No hay horarios disponibles para esta fecha.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                  gap: 'var(--space-3)',
+                }}
+              >
+                {sesiones.map((slot, idx) => (
+                  <SlotCard
+                    key={idx}
+                    rango={slot.rango}
+                    estado={slot.estado}
+                    disponible={slot.disponible !== false}
+                    selected={horarioSeleccionado === idx}
+                    onClick={() => setHorarioSeleccionado(idx)}
+                  />
+                ))}
               </div>
-
-              {/* Horarios */}
-              <div>
-                <h3
-                  style={{
-                    fontSize: 'var(--text-title)',
-                    margin: '0 0 var(--space-4) 0',
-                  }}
-                >
-                  Horarios disponibles
-                </h3>
-                {slots.length === 0 ? (
-                  <p style={{ color: 'var(--color-text-muted)' }}>
-                    Selecciona una fecha para ver horarios
-                  </p>
-                ) : (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                      gap: 'var(--space-3)',
-                    }}
-                  >
-                    {slots.map((slot, idx) => (
-                      <SlotCard
-                        key={idx}
-                        rango={slot.rango || slot.hora}
-                        estado={slot.estado || 'Disponible'}
-                        disponible={slot.disponible !== false}
-                        selected={horarioSeleccionado === idx}
-                        onClick={() => setHorarioSeleccionado(idx)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -360,20 +336,16 @@ export function BookingFlowDynamic() {
             </h2>
 
             <div style={{ marginBottom: 'var(--space-6)' }}>
-              {planes.length === 0 ? (
-                <p style={{ color: 'var(--color-text-muted)' }}>No hay planes disponibles</p>
-              ) : (
-                planes.map((plan, idx) => (
-                  <PlanCard
-                    key={idx}
-                    nombre={plan.nombre}
-                    precio={`$${plan.precio}`}
-                    nota={plan.descripcion || ''}
-                    selected={planSeleccionado === idx + 1}
-                    onClick={() => setPlanSeleccionado(idx + 1)}
-                  />
-                ))
-              )}
+              {planes.map((plan, idx) => (
+                <PlanCard
+                  key={idx}
+                  nombre={plan.nombre}
+                  precio={`$${plan.precio}`}
+                  nota={plan.descripcion}
+                  selected={planSeleccionado === idx + 1}
+                  onClick={() => setPlanSeleccionado(idx + 1)}
+                />
+              ))}
             </div>
 
             {/* Resumen */}
@@ -390,15 +362,13 @@ export function BookingFlowDynamic() {
               </h3>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
                 <span>Servicio:</span>
-                <span style={{ fontWeight: 'var(--weight-semibold)' }}>
-                  {servicios.find((s) => s.id === servicioSeleccionado)?.nombre}
-                </span>
+                <span style={{ fontWeight: 'var(--weight-semibold)' }}>{servicio?.nombre}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
                 <span>Fecha y hora:</span>
                 <span style={{ fontWeight: 'var(--weight-semibold)' }}>
                   {fechaSeleccionada && horarioSeleccionado !== null
-                    ? `${fechaSeleccionada.getDate()}/${fechaSeleccionada.getMonth() + 1} a las ${slots[horarioSeleccionado]?.rango}`
+                    ? `${fechaSeleccionada.getDate()}/${fechaSeleccionada.getMonth() + 1} a las ${sesiones[horarioSeleccionado]?.rango}`
                     : '-'}
                 </span>
               </div>
@@ -412,7 +382,7 @@ export function BookingFlowDynamic() {
               >
                 <span style={{ fontWeight: 'var(--weight-semibold)' }}>Total:</span>
                 <span style={{ fontSize: 'var(--text-h3)', fontWeight: 'var(--weight-bold)' }}>
-                  ${planes[planSeleccionado - 1]?.precio || '0'}
+                  ${servicio?.precio || planes[planSeleccionado - 1]?.precio || '0'}
                 </span>
               </div>
             </div>

@@ -2,30 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import Modal from './common/Modal'
-const BADGE = {
-  confirmada: 'bg-green-100 text-green-700 border-green-200',
-  en_espera: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  pendiente: 'bg-gray-100 text-gray-600 border-gray-200',
-  cancelada: 'bg-red-100 text-red-700 border-red-200',
-  completada: 'bg-blue-100 text-blue-700 border-blue-200',
-  no_show: 'bg-red-200 text-red-800 border-red-300',
-}
-
-const ESTADO_LABEL = {
-  confirmada: 'Confirmada',
-  en_espera: 'En espera de pago',
-  pendiente: 'Procesando...',
-  cancelada: 'Cancelada',
-  completada: 'Completada',
-  no_show: 'No asistió',
-}
-
-const PAGO_LABEL = {
-  pendiente: 'Pago pendiente',
-  completado: 'Pagado',
-  reembolsado: 'Reembolsado',
-  exento: 'Sin costo',
-}
+import { badgeClassForEstado, ESTADO_LABEL, PAGO_LABEL } from '../utils/estado'
 
 const MODALIDAD_ICON = {
   presencial: '📍',
@@ -68,9 +45,9 @@ function CountdownTimer({ expiraEn }) {
   const mins = Math.floor(remaining / 60000)
   const secs = Math.floor((remaining % 60000) / 1000)
   return (
-    <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-center">
-      <p className="text-xs text-yellow-600">Tiempo restante para pagar:</p>
-      <span className="font-mono text-lg font-bold text-yellow-700">
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center">
+      <p className="text-xs text-amber-600">Tiempo restante para pagar:</p>
+      <span className="font-mono text-lg font-bold text-amber-700">
         {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
       </span>
     </div>
@@ -227,11 +204,7 @@ export default function DetalleReserva() {
               Código: {r.codigo_confirmacion}
             </p>
           </div>
-          <span
-            className={`inline-flex shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${
-              BADGE[r.estado] ?? 'bg-gray-100 text-gray-600'
-            }`}
-          >
+          <span className={badgeClassForEstado(r.estado)}>
             {ESTADO_LABEL[r.estado] ?? r.estado}
           </span>
         </div>
@@ -299,10 +272,10 @@ export default function DetalleReserva() {
               <span
                 className={`ml-2 text-xs ${
                   r.estado_pago === 'completado'
-                    ? 'text-green-600'
+                    ? 'text-teal-700'
                     : r.estado_pago === 'pendiente'
-                      ? 'text-yellow-600'
-                      : 'text-gray-500'
+                      ? 'text-amber-600'
+                      : 'text-slate-500'
                 }`}
               >
                 ({PAGO_LABEL[r.estado_pago] ?? r.estado_pago})

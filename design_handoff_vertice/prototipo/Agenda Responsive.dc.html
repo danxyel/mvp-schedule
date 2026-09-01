@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/broadsheet-d932cc1e-d6d5-44aa-94d8-e342715e3453/styles.css">
+<script src="_ds/broadsheet-d932cc1e-d6d5-44aa-94d8-e342715e3453/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap">
+<style>
+:root{--font-heading:'Plus Jakarta Sans',system-ui,sans-serif;--font-body:'Plus Jakarta Sans',system-ui,sans-serif;
+--color-bg:#F8FAFC;--color-surface:#FFFFFF;--color-text:#334155;
+--color-accent:#4F46E5;
+--color-accent-100:oklch(96.5% .025 272);--color-accent-200:oklch(92% .05 272);--color-accent-300:oklch(85% .09 272);
+--color-accent-400:oklch(66% .18 272);--color-accent-500:#4F46E5;--color-accent-600:oklch(45% .225 272);
+--color-accent-700:oklch(40% .195 272);--color-accent-800:oklch(33% .155 272);--color-accent-900:oklch(26% .115 272);
+--color-accent-2:#14B8A6;
+--color-accent-2-100:oklch(96.5% .03 180);--color-accent-2-200:oklch(92% .055 180);--color-accent-2-300:oklch(85% .085 180);
+--color-accent-2-400:oklch(78% .11 180);--color-accent-2-500:#14B8A6;--color-accent-2-600:oklch(63% .12 180);
+--color-accent-2-700:oklch(50% .10 180);--color-accent-2-800:oklch(41% .085 180);--color-accent-2-900:oklch(32% .065 180);
+--color-warn:#F59E0B;--color-warn-100:oklch(97% .03 70);--color-warn-300:oklch(88% .09 70);--color-warn-700:oklch(50% .12 70);
+--color-neutral-200:#EEF2F6;--color-neutral-300:#E2E8F0;--color-neutral-400:#CBD5E1;
+--color-neutral-500:#94A3B8;--color-neutral-600:#64748B;--color-neutral-700:#475569;--color-neutral-800:#334155}
+body{margin:0;background:#EEF2F6;font-family:var(--font-body)}
+a{color:var(--color-accent-700)}a:hover{color:var(--color-accent)}
+*{box-sizing:border-box}
+button{font-family:var(--font-body)}
+.btn{border-radius:999px!important}
+.scroll::-webkit-scrollbar{width:8px;height:8px}
+.scroll::-webkit-scrollbar-thumb{background:var(--color-neutral-400);border-radius:4px}
+@keyframes riseIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<div style="{{ paginaStyle }}">
+
+<div style="{{ cabeceraStyle }}">
+<div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600)">Diseño mobile-first · {{ modoTxt }}</div>
+<div style="margin-left:auto;display:flex;gap:2px;border:1px solid var(--color-neutral-400);border-radius:999px;padding:3px">
+<sc-for list="{{ dispositivos }}" as="d" hint-placeholder-count="4">
+<button type="button" onClick="{{ d.pick }}" style="{{ d.style }}">{{ d.label }}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="{{ marcoStyle }}" ref="{{ marcoRef }}">
+<div style="{{ appStyle }}">
+
+<div style="{{ navStyle }}">
+<div style="{{ navMarcaStyle }}">
+<span style="width:26px;height:26px;flex:none;background:var(--color-text);color:var(--color-bg);display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-size:15px;font-weight:600;border-radius:10px">V</span>
+<span style="font-family:var(--font-heading);font-size:17px;font-weight:600;letter-spacing:-0.01em">Vértice</span>
+<span style="{{ navSedeStyle }}">{{ sede }}</span>
+</div>
+<div style="{{ navListaStyle }}">
+<sc-for list="{{ menu }}" as="m" hint-placeholder-count="4">
+<button type="button" onClick="{{ m.go }}" style="{{ m.style }}">
+<span style="{{ m.iconStyle }}">{{ m.icono }}</span>
+<span style="{{ m.labelStyle }}">{{ m.label }}</span>
+<span style="{{ m.badgeStyle }}">{{ m.badge }}</span>
+</button>
+</sc-for>
+</div>
+<div style="{{ navPieStyle }}">
+<span style="width:28px;height:28px;flex:none;border-radius:50%;background:var(--color-accent-200);color:var(--color-accent-800);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">NS</span>
+<div style="min-width:0">
+<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Nuria Sáez</div>
+<div style="font-size:11px;color:var(--color-neutral-600)">Cliente y asesora</div>
+</div>
+</div>
+</div>
+
+<div class="scroll" style="{{ contenidoStyle }}">
+
+<sc-if value="{{ esReservar }}" hint-placeholder-val="{{ true }}">
+<div style="{{ contenedorStyle }}">
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+<h1 style="{{ h1Style }}">Reservar</h1>
+<span style="margin-left:auto;white-space:nowrap;font-size:12px;color:var(--color-neutral-600);font-variant-numeric:tabular-nums">Paso {{ pasoNum }} de 3</span>
+</div>
+<div style="display:flex;gap:6px;margin-top:12px">
+<sc-for list="{{ pasos }}" as="p" hint-placeholder-count="3">
+<button type="button" onClick="{{ p.go }}" disabled="{{ p.disabled }}" style="{{ p.style }}"><span style="display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.7">{{ p.num }}</span><span style="display:block;font-size:13px;font-weight:600;margin-top:3px">{{ p.label }}</span></button>
+</sc-for>
+</div>
+
+<sc-if value="{{ paso1 }}" hint-placeholder-val="{{ true }}">
+<div class="scroll" style="{{ filaFiltrosStyle }}">
+<sc-for list="{{ filtros }}" as="f" hint-placeholder-count="4">
+<button type="button" onClick="{{ f.pick }}" style="{{ f.style }}">{{ f.label }}</button>
+</sc-for>
+<span style="margin-left:auto;align-self:center;white-space:nowrap;font-size:12px;color:var(--color-neutral-600);font-variant-numeric:tabular-nums">{{ conteoServicios }}</span>
+</div>
+<div style="{{ rejillaServiciosStyle }}">
+<sc-for list="{{ servicios }}" as="s" hint-placeholder-count="6">
+<button type="button" onClick="{{ s.open }}" style="{{ s.rowStyle }}">
+<div style="display:flex;align-items:flex-start;gap:10px">
+<span style="{{ s.dotStyle }}"></span>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap">
+<span style="font-family:var(--font-heading);font-size:17px;font-weight:600;letter-spacing:-0.015em">{{ s.nombre }}</span>
+<span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ s.precio }}</span>
+</div>
+<div style="font-size:13px;line-height:1.4;color:var(--color-neutral-700);margin-top:4px;text-align:left">{{ s.desc }}</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:9px;flex-wrap:wrap">
+<span style="{{ s.tagStyle }}">{{ s.tipo }}</span>
+<span style="white-space:nowrap;font-size:12px;color:var(--color-neutral-700)">{{ s.modalidad }} · {{ s.duracion }}</span>
+<span style="{{ s.barTrackStyle }}"><span style="{{ s.barFillStyle }}"></span></span>
+<span style="font-size:12px;color:var(--color-neutral-700);font-variant-numeric:tabular-nums">{{ s.ocupacion }}</span>
+</div>
+</div>
+</div>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ paso2 }}" hint-placeholder-val="{{ false }}">
+<div style="{{ dosPanelesStyle }}">
+<div style="{{ panelCalendarioStyle }}">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+<button type="button" onClick="{{ mesAnterior }}" style="{{ navPrevStyle }}">‹</button>
+<div style="font-family:var(--font-heading);font-size:17px;font-weight:600">{{ mesTitulo }}</div>
+<button type="button" onClick="{{ mesSiguiente }}" style="{{ navNextStyle }}">›</button>
+</div>
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:12px">
+<sc-for list="{{ diasSemana }}" as="w" hint-placeholder-count="7">
+<div style="text-align:center;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600);padding-bottom:4px">{{ w.label }}</div>
+</sc-for>
+<sc-for list="{{ celdas }}" as="c" hint-placeholder-count="35">
+<button type="button" onClick="{{ c.pick }}" disabled="{{ c.disabled }}" style="{{ c.style }}">{{ c.num }}<span style="{{ c.dotStyle }}"></span></button>
+</sc-for>
+</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--color-neutral-300);font-size:13px;line-height:1.45;color:var(--color-neutral-700)">{{ sel.metaLinea }}</div>
+</div>
+<div style="{{ panelFlexStyle }}">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap">
+<div style="font-family:var(--font-heading);font-size:19px;font-weight:600">{{ fechaTitulo }}</div>
+<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600)">{{ conteoSlots }}</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:12px">
+<sc-for list="{{ slots }}" as="s" hint-placeholder-count="6">
+<button type="button" onClick="{{ s.pick }}" disabled="{{ s.disabled }}" style="{{ s.style }}">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+<span style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ s.rango }}</span>
+<span style="{{ s.badgeStyle }}">{{ s.estado }}</span>
+</div>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{ sinSlots }}" hint-placeholder-val="{{ false }}">
+<p style="padding:32px 0;text-align:center;font-size:15px;color:var(--color-neutral-600)">No hay horarios este día. Elige otra fecha del mes.</p>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ paso3 }}" hint-placeholder-val="{{ false }}">
+<div style="{{ dosPanelesStyle }}">
+<div style="{{ panelFlexStyle }}">
+<div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600);margin:0 0 10px">Paquete</div>
+<sc-for list="{{ planes }}" as="p" hint-placeholder-count="3">
+<button type="button" onClick="{{ p.pick }}" style="{{ p.style }}">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+<span style="font-family:var(--font-heading);font-size:18px;font-weight:600">{{ p.nombre }}</span>
+<span style="font-size:17px;font-weight:600;font-variant-numeric:tabular-nums">{{ p.precio }}</span>
+</div>
+<div style="font-size:13px;color:var(--color-neutral-700);margin-top:5px;text-align:left">{{ p.nota }}</div>
+</button>
+</sc-for>
+<div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600);margin:20px 0 10px">Método de pago</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ metodos }}" as="m" hint-placeholder-count="3">
+<button type="button" onClick="{{ m.pick }}" style="{{ m.style }}">{{ m.label }}</button>
+</sc-for>
+</div>
+</div>
+<div style="{{ panelResumenStyle }}">
+<div style="font-family:var(--font-heading);font-size:18px;font-weight:600;letter-spacing:-0.015em">{{ sel.nombre }}</div>
+<div style="font-size:13px;color:var(--color-neutral-700);margin-top:6px;line-height:1.5">{{ resumenReserva }}</div>
+<div style="border-top:1px solid var(--color-neutral-300);margin-top:14px;padding-top:12px;display:flex;justify-content:space-between;font-family:var(--font-heading);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums"><span>Total</span><span>{{ total }}</span></div>
+<div style="font-size:12px;color:var(--color-neutral-600);margin-top:10px;line-height:1.45">Lugar apartado 10 minutos. Cancelación sin costo hasta 12 h antes.</div>
+</div>
+</div>
+</sc-if>
+</div>
+
+<div style="{{ barraAccionStyle }}">
+<div style="font-size:13px;color:var(--color-neutral-700);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ resumenBarra }}</div>
+<button type="button" onClick="{{ avanzar }}" disabled="{{ avanzarBloqueado }}" class="btn btn-primary" style="{{ ctaStyle }}">{{ ctaTxt }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ esConfirmacion }}" hint-placeholder-val="{{ false }}">
+<div style="{{ contenedorStyle }}">
+<div style="max-width:620px;animation:riseIn .3s ease both">
+<div style="font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;color:var(--color-accent-700)">Reserva confirmada · {{ folio }}</div>
+<h1 style="{{ displayStyle }}">Lugar <em style="font-style:normal;font-weight:300;color:var(--color-neutral-600)">asegurado.</em></h1>
+<p style="margin:0 0 22px;font-size:17px;line-height:1.5;color:var(--color-neutral-700);text-wrap:pretty">{{ resumenReserva }}. Enviamos el comprobante por correo y un recordatorio 2 h antes.</p>
+<div style="display:flex;gap:44px;flex-wrap:wrap;padding:18px 0;border-top:1px solid var(--color-neutral-300);border-bottom:1px solid var(--color-neutral-300)">
+<div><div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600)">Código</div><div style="font-family:var(--font-heading);font-size:30px;font-weight:600;margin-top:8px;letter-spacing:.05em;font-variant-numeric:tabular-nums">{{ codigo }}</div></div>
+<div><div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600)">Bono</div><div style="font-family:var(--font-heading);font-size:30px;font-weight:600;margin-top:8px;font-variant-numeric:tabular-nums">{{ bono }}</div></div>
+</div>
+<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+<button type="button" onClick="{{ irReservas }}" class="btn btn-primary" style="height:44px;font-family:var(--font-body);font-size:15px;padding:0 20px">Ver mis reservas</button>
+<button type="button" onClick="{{ nuevaReserva }}" class="btn btn-ghost" style="height:44px;font-family:var(--font-body);font-size:15px;padding:0 16px">Reservar otra</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ esReservas }}" hint-placeholder-val="{{ false }}">
+<div style="{{ contenedorStyle }}">
+<h1 style="{{ h1Style }}">Mis reservas</h1>
+<p style="margin:8px 0 4px;font-size:15px;color:var(--color-neutral-700)">{{ resumenReservas }}</p>
+<div style="{{ rejillaReservasStyle }}">
+<sc-for list="{{ misReservas }}" as="r" hint-placeholder-count="4">
+<div style="display:flex;gap:14px;padding:15px 0;border-top:1px solid var(--color-neutral-300)">
+<div style="width:64px;flex:none;font-variant-numeric:tabular-nums">
+<div style="font-family:var(--font-heading);font-size:18px;font-weight:600">{{ r.hora }}</div>
+<div style="font-size:12px;color:var(--color-neutral-600);margin-top:4px">{{ r.dia }}</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:-0.015em">{{ r.titulo }}</div>
+<div style="font-size:13px;color:var(--color-neutral-700);margin-top:4px">{{ r.lugar }}</div>
+<div style="margin-top:8px"><span style="{{ r.badgeStyle }}">{{ r.estado }}</span></div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ esBonos }}" hint-placeholder-val="{{ false }}">
+<div style="{{ contenedorStyle }}">
+<h1 style="{{ h1Style }}">Bonos y pagos</h1>
+<p style="margin:8px 0 16px;font-size:15px;color:var(--color-neutral-700)">Saldo, vigencia y movimientos de tus paquetes.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+<sc-for list="{{ tarjetasBono }}" as="b" hint-placeholder-count="2">
+<div style="border:1px solid var(--color-neutral-300);border-radius:18px;padding:18px;background:var(--color-surface)">
+<div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600)">{{ b.titulo }}</div>
+<div style="font-family:var(--font-heading);font-size:34px;font-weight:600;margin-top:8px;font-variant-numeric:tabular-nums">{{ b.valor }}</div>
+<div style="font-size:13px;color:var(--color-neutral-700);margin-top:6px">{{ b.nota }}</div>
+</div>
+</sc-for>
+</div>
+<div style="margin-top:22px">
+<div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600);margin-bottom:6px">Movimientos</div>
+<sc-for list="{{ movimientos }}" as="m" hint-placeholder-count="4">
+<div style="display:flex;align-items:baseline;gap:12px;padding:12px 0;border-top:1px solid var(--color-neutral-300)">
+<span style="font-size:12px;color:var(--color-neutral-600);width:80px;flex:none;font-variant-numeric:tabular-nums">{{ m.fecha }}</span>
+<span style="flex:1;font-size:14px">{{ m.concepto }}</span>
+<span style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">{{ m.importe }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ esEquipo }}" hint-placeholder-val="{{ false }}">
+<div style="{{ contenedorStyle }}">
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+<h1 style="{{ h1Style }}">Agenda del equipo</h1>
+<div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+<button type="button" onClick="{{ semanaAnterior }}" style="{{ navPrevStyle }}">‹</button>
+<span style="font-size:14px;font-weight:600">{{ semanaTitulo }}</span>
+<button type="button" onClick="{{ semanaSiguiente }}" style="{{ navNextStyle }}">›</button>
+</div>
+</div>
+<div style="display:flex;gap:22px;flex-wrap:wrap;margin:14px 0 4px;font-variant-numeric:tabular-nums">
+<span style="font-size:13px;color:var(--color-neutral-700)"><strong style="font-family:var(--font-heading);font-size:18px;color:var(--color-text)">{{ proSesiones }}</strong> sesiones</span>
+<span style="font-size:13px;color:var(--color-neutral-700)"><strong style="font-family:var(--font-heading);font-size:18px;color:var(--color-text)">{{ proOcupadas }}</strong> lugares</span>
+<span style="font-size:13px;color:var(--color-neutral-700)"><strong style="font-family:var(--font-heading);font-size:18px;color:var(--color-warn-700)">{{ proPendientes }}</strong> por confirmar</span>
+</div>
+
+<sc-if value="{{ equipoRejilla }}" hint-placeholder-val="{{ false }}">
+<div class="scroll" style="overflow-x:auto;margin-top:10px">
+<div style="min-width:760px">
+<div style="display:grid;grid-template-columns:64px repeat(6,1fr);border-bottom:1px solid var(--color-neutral-300)">
+<div></div>
+<sc-for list="{{ columnasSemana }}" as="c" hint-placeholder-count="6">
+<div style="{{ c.headStyle }}"><span style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600)">{{ c.dow }}</span><span style="font-family:var(--font-heading);font-size:17px;font-weight:600;margin-left:6px;font-variant-numeric:tabular-nums">{{ c.num }}</span></div>
+</sc-for>
+</div>
+<sc-for list="{{ filasHora }}" as="f" hint-placeholder-count="10">
+<div style="display:grid;grid-template-columns:64px repeat(6,1fr);border-bottom:1px solid var(--color-neutral-300);min-height:60px">
+<div style="padding:6px 8px;text-align:right;font-size:11px;color:var(--color-neutral-600);font-variant-numeric:tabular-nums;border-right:1px solid var(--color-neutral-300)">{{ f.hora }}</div>
+<sc-for list="{{ f.celdas }}" as="c" hint-placeholder-count="6">
+<div style="{{ c.wrapStyle }}">
+<sc-if value="{{ c.tieneEvento }}" hint-placeholder-val="{{ false }}">
+<div style="{{ c.evStyle }}">
+<div style="font-size:12px;font-weight:600;line-height:1.2">{{ c.titulo }}</div>
+<div style="font-size:11px;margin-top:3px;opacity:.85;font-variant-numeric:tabular-nums">{{ c.meta }}</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ equipoLista }}" hint-placeholder-val="{{ true }}">
+<div style="margin-top:12px">
+<sc-for list="{{ diasEquipo }}" as="d" hint-placeholder-count="3">
+<div style="padding-top:14px">
+<div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--color-neutral-600)">{{ d.titulo }}</div>
+<sc-for list="{{ d.eventos }}" as="e" hint-placeholder-count="3">
+<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--color-neutral-300);margin-top:8px">
+<span style="width:54px;flex:none;font-family:var(--font-heading);font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ e.hora }}</span>
+<span style="{{ e.dotStyle }}"></span>
+<div style="flex:1;min-width:0">
+<div style="font-size:15px;font-weight:600">{{ e.titulo }}</div>
+<div style="font-size:13px;color:var(--color-neutral-700);margin-top:3px">{{ e.meta }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:940},&quot;verPrecios&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Contenido&quot;}}">
+const SERVICIOS = [
+  { id:'sv1', nombre:'Regularización de Matemáticas', tipo:'grupal', modalidad:'Presencial', dur:55, precio:320, cupo:6, ocupados:4, hora:8, color:'accent',
+    desc:'Grupo reducido de secundaria y bachillerato · Academia Centro' },
+  { id:'sv2', nombre:'Fisioterapia deportiva', tipo:'individual', modalidad:'Presencial', dur:50, precio:850, cupo:1, ocupados:0, hora:10, color:'accent2',
+    desc:'Valoración, terapia manual y pauta de ejercicio en casa' },
+  { id:'sv3', nombre:'Conversación en inglés B2', tipo:'recurrente', modalidad:'Virtual', dur:60, precio:260, cupo:8, ocupados:6, hora:12, color:'neutral',
+    desc:'Misma hora cada semana, corrección al cierre' },
+  { id:'sv4', nombre:'Rehabilitación de piso pélvico', tipo:'grupal', modalidad:'Presencial', dur:45, precio:400, cupo:6, ocupados:6, hora:17, color:'accent2',
+    desc:'Trabajo guiado con seguimiento clínico entre sesiones' },
+  { id:'sv5', nombre:'Química orgánica intensiva', tipo:'grupal', modalidad:'Híbrida', dur:55, precio:320, cupo:6, ocupados:1, hora:18, color:'accent',
+    desc:'Nomenclatura y mecanismos, con grabación disponible' },
+  { id:'sv6', nombre:'Asesoría de tesis', tipo:'individual', modalidad:'Virtual', dur:60, precio:700, cupo:1, ocupados:0, hora:16, color:'neutral',
+    desc:'Revisión de capítulo y ruta de titulación' },
+];
+
+const TIPO_LABEL = { individual:'Individual', grupal:'Grupal', recurrente:'Recurrente' };
+const FILTROS = ['Todos','Individual','Grupal','Recurrente'];
+const METODOS = ['Tarjeta','Transferencia','En sucursal'];
+const DOW = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+const HOY = new Date(2026, 7, 12);
+const HORAS = [8,9,10,11,12,13,16,17,18,19];
+
+const EVENTOS = [
+  { dia:0, hora:8, titulo:'Matemáticas 2º', meta:'4/6 lugares', color:'accent' },
+  { dia:0, hora:12, titulo:'Inglés B2', meta:'6/8 lugares', color:'neutral' },
+  { dia:0, hora:17, titulo:'Piso pélvico', meta:'Completo', color:'accent2' },
+  { dia:1, hora:10, titulo:'Fisio · Laura M.', meta:'Individual', color:'accent2' },
+  { dia:1, hora:18, titulo:'Química orgánica', meta:'1/6 lugares', color:'accent' },
+  { dia:2, hora:9, titulo:'Asesoría de tesis', meta:'Por confirmar', color:'neutral' },
+  { dia:2, hora:12, titulo:'Inglés B2', meta:'8/8 lugares', color:'neutral' },
+  { dia:3, hora:8, titulo:'Matemáticas 2º', meta:'5/6 lugares', color:'accent' },
+  { dia:3, hora:16, titulo:'Asesoría de tesis', meta:'Individual', color:'neutral' },
+  { dia:4, hora:11, titulo:'Fisio · Diego R.', meta:'Por confirmar', color:'accent2' },
+  { dia:4, hora:18, titulo:'Química orgánica', meta:'3/6 lugares', color:'accent' },
+  { dia:5, hora:9, titulo:'Taller de examen', meta:'12 inscritos', color:'accent' },
+];
+
+const capitaliza = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const fmtMoneda = (n) => new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN', maximumFractionDigits:0 }).format(n);
+const fmtMes = (d) => capitaliza(new Intl.DateTimeFormat('es-MX', { month:'long', year:'numeric' }).format(d));
+const fmtFecha = (d) => capitaliza(new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long' }).format(d));
+const claveDia = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+const hashDia = (d) => (d.getDate() * 7 + d.getMonth() * 13 + d.getFullYear()) % 11;
+
+class Component extends DCLogic {
+  state = {
+    seccion: 'reservar', paso: 1, filtro: 'Todos', selId: 'sv1',
+    mes: new Date(2026, 7, 1), fecha: new Date(2026, 7, 12), semana: 0,
+    slot: null, plan: 'suelto', metodo: 'Tarjeta', bono: 7, confirmada: false,
+    ancho: 390, dispositivo: 'movil', pantalla: typeof window !== 'undefined' ? window.innerWidth : 1200,
+  };
+
+  nodo = null;
+
+  medir = () => {
+    const w = this.nodo ? this.nodo.clientWidth : window.innerWidth;
+    const p = window.innerWidth;
+    const cambia = {};
+    if (w && Math.abs(w - this.state.ancho) > 2) cambia.ancho = w;
+    if (Math.abs(p - this.state.pantalla) > 2) cambia.pantalla = p;
+    if (Object.keys(cambia).length) this.setState(cambia);
+  };
+
+  refMarco = (el) => {
+    if (el === this.nodo) return;
+    if (this.ro) this.ro.disconnect();
+    this.nodo = el;
+    if (!el) return;
+    this.ro = new ResizeObserver(this.medir);
+    this.ro.observe(el);
+    this.medir();
+  };
+
+  componentDidMount() {
+    window.addEventListener('resize', this.medir);
+    this.medir();
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this.medir);
+    if (this.ro) this.ro.disconnect();
+  }
+
+  get pantallaReal() { return this.state.pantalla < 720; }
+
+  get modo() {
+    // En una pantalla real estrecha la app ocupa todo: siempre móvil.
+    if (this.pantallaReal) return 'movil';
+    // El dispositivo elegido manda; la medición real solo gobierna el modo fluido.
+    const fijo = { movil:390, tablet:768, escritorio:1280 }[this.state.dispositivo];
+    const w = fijo || this.state.ancho;
+    return w < 640 ? 'movil' : w < 1024 ? 'tablet' : 'escritorio';
+  }
+
+  color(rol) {
+    if (rol === 'accent2') return { base:'var(--color-accent-2)', soft:'var(--color-accent-2-100)', deep:'var(--color-accent-2-700)', line:'var(--color-accent-2-300)' };
+    if (rol === 'neutral') return { base:'var(--color-neutral-500)', soft:'var(--color-neutral-200)', deep:'var(--color-neutral-700)', line:'var(--color-neutral-400)' };
+    return { base:'var(--color-accent)', soft:'var(--color-accent-100)', deep:'var(--color-accent-700)', line:'var(--color-accent-300)' };
+  }
+
+  chip(on) {
+    return `padding:0 15px;height:38px;border-radius:999px;font-family:var(--font-body);font-size:13px;cursor:pointer;` +
+      (on ? `background:var(--color-accent);color:#fff;border:1px solid var(--color-accent);font-weight:600;`
+          : `background:transparent;color:var(--color-text);border:1px solid var(--color-neutral-400);`);
+  }
+
+  nav(disabled) {
+    return `width:40px;height:40px;flex:none;border-radius:999px;font-size:18px;line-height:1;cursor:${disabled ? 'not-allowed' : 'pointer'};background:transparent;border:1px solid var(--color-neutral-400);color:var(--color-text);opacity:${disabled ? .35 : 1};font-family:var(--font-heading)`;
+  }
+
+  slotsDe(servicio, fecha) {
+    if (fecha.getDay() === 0) return [];
+    const h = hashDia(fecha);
+    return [0, 2, 4, 6, 8, 10].map((off, i) => {
+      const inicio = servicio.hora + off > 20 ? servicio.hora + off - 12 : servicio.hora + off;
+      const idx = (h + i * 3) % 7;
+      const libre = idx > 2;
+      return {
+        id: `${claveDia(fecha)}-${i}`,
+        rango: `${String(Math.floor(inicio)).padStart(2,'0')}:00 – ${String(Math.floor(inicio + servicio.dur / 60)).padStart(2,'0')}:${servicio.dur % 60 ? '55' : '00'}`,
+        libre,
+        motivo: idx === 0 ? 'Lleno' : idx === 1 ? 'Ocupado' : 'No disponible',
+        cupo: servicio.tipo === 'individual' ? 1 : Math.max(1, servicio.cupo - ((h + i) % servicio.cupo)),
+        asesor: servicio.tipo === 'individual' ? 'Con Pau Ferrer' : 'Con Nuria Sáez',
+      };
+    });
+  }
+
+  renderVals() {
+    const s = this.state, modo = this.modo, movil = modo === 'movil', escritorio = modo === 'escritorio';
+    const crudo = this.pantallaReal;
+    const sel = SERVICIOS.find((x) => x.id === s.selId) || SERVICIOS[0];
+    const slots = this.slotsDe(sel, s.fecha);
+    const slotSel = slots.find((x) => x.id === s.slot) || null;
+    const gutter = movil ? 16 : escritorio ? 32 : 24;
+
+    const primero = new Date(s.mes.getFullYear(), s.mes.getMonth(), 1);
+    const offset = (primero.getDay() + 6) % 7;
+    const diasMes = new Date(s.mes.getFullYear(), s.mes.getMonth() + 1, 0).getDate();
+    const celdas = [];
+    for (let i = 0; i < offset; i++) celdas.push({ vacia: true });
+    for (let d = 1; d <= diasMes; d++) {
+      const fecha = new Date(s.mes.getFullYear(), s.mes.getMonth(), d);
+      const pasado = fecha < HOY;
+      celdas.push({ fecha, num:String(d), pasado, activo: claveDia(fecha) === claveDia(s.fecha), libres: pasado ? 0 : this.slotsDe(sel, fecha).filter((x) => x.libre).length });
+    }
+    const puedeRetroceder = s.mes.getFullYear() > HOY.getFullYear() || (s.mes.getFullYear() === HOY.getFullYear() && s.mes.getMonth() > HOY.getMonth());
+
+    const planes = [
+      { id:'suelto', nombre:'Sesión suelta', precio: fmtMoneda(sel.precio), nota:'Pagas solo esta sesión, sin compromiso.' },
+      { id:'bono5', nombre:'Paquete de 5', precio: fmtMoneda(sel.precio * 4.5), nota:`${fmtMoneda(sel.precio * 0.9)} por sesión · vigencia 3 meses.` },
+      { id:'bono10', nombre:'Paquete de 10', precio: fmtMoneda(sel.precio * 8.5), nota:`${fmtMoneda(sel.precio * 0.85)} por sesión · el más contratado.` },
+    ];
+    const planSel = planes.find((p) => p.id === s.plan);
+
+    const inicioSemana = new Date(2026, 7, 10 + s.semana * 7);
+    const columnas = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(inicioSemana.getFullYear(), inicioSemana.getMonth(), inicioSemana.getDate() + i);
+      return { dow: DOW[i], num: String(d.getDate()), hoy: claveDia(d) === claveDia(HOY) };
+    });
+
+    const esReservar = s.seccion === 'reservar';
+    const paso = s.paso;
+    const puedeAvanzar = paso === 1 ? true : paso === 2 ? !!slotSel : true;
+
+    const anchoMarco = { movil:390, tablet:768, escritorio:1280, auto:null }[s.dispositivo];
+
+    return {
+      modoTxt: `${modo} · ${{ movil:390, tablet:768, escritorio:1280 }[s.dispositivo] || s.ancho}px`,
+      dispositivos: [
+        { id:'movil', label:'Móvil' }, { id:'tablet', label:'Tablet' },
+        { id:'escritorio', label:'Escritorio' }, { id:'auto', label:'Fluido' },
+      ].map((d) => ({
+        label: d.label, pick: () => this.setState({ dispositivo: d.id }),
+        style: `padding:0 13px;height:30px;border:none;border-radius:999px;font-size:12px;cursor:pointer;font-family:var(--font-body);` +
+          (d.id === s.dispositivo ? `background:var(--color-text);color:var(--color-bg);font-weight:600;` : `background:transparent;color:var(--color-neutral-700);`),
+      })),
+      marcoRef: this.refMarco,
+      paginaStyle: crudo
+        ? 'min-height:100vh;display:flex;flex-direction:column;padding:0;font-family:var(--font-body);color:var(--color-text)'
+        : 'min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px 16px 40px;font-family:var(--font-body);color:var(--color-text)',
+      cabeceraStyle: crudo ? 'display:none' : 'width:100%;max-width:1440px;display:flex;align-items:center;gap:12px;flex-wrap:wrap',
+      marcoStyle: crudo
+        ? 'width:100%;flex:1;min-height:0;height:100dvh;background:var(--color-bg);overflow:hidden'
+        : `width:100%;${anchoMarco ? `max-width:${anchoMarco}px;` : 'max-width:1440px;'}height:${movil ? 780 : 840}px;border:1px solid var(--color-neutral-400);border-radius:24px;box-shadow:var(--shadow-lg);background:var(--color-bg);overflow:hidden`,
+      appStyle: `height:100%;display:flex;flex-direction:${movil ? 'column-reverse' : 'row'};background:var(--color-bg)`,
+
+      navStyle: movil
+        ? `flex:none;display:flex;background:var(--color-surface);border-top:1px solid var(--color-neutral-300);padding:6px 8px 10px`
+        : `width:${escritorio ? 244 : 84}px;flex:none;display:flex;flex-direction:column;background:var(--color-surface);border-right:1px solid var(--color-neutral-300);padding:14px 8px`,
+      navMarcaStyle: movil ? 'display:none' : `display:flex;align-items:center;gap:9px;padding:4px 8px 16px;flex-wrap:wrap;${escritorio ? '' : 'justify-content:center;'}`,
+      navSedeStyle: escritorio ? `width:100%;font-size:11px;color:var(--color-neutral-600)` : 'display:none',
+      navListaStyle: movil ? 'display:flex;flex:1;gap:2px' : 'display:flex;flex-direction:column;gap:2px',
+      navPieStyle: escritorio
+        ? `margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px 8px 4px;border-top:1px solid var(--color-neutral-300)`
+        : 'display:none',
+
+      menu: [
+        { id:'reservar', label:'Reservar', icono:'＋', badge:'' },
+        { id:'reservas', label:'Mis reservas', icono:'▤', badge:'3' },
+        { id:'bonos', label:'Bonos', icono:'◇', badge:`${s.bono}` },
+        { id:'equipo', label:'Equipo', icono:'▦', badge:'' },
+      ].map((m) => {
+        const on = m.id === s.seccion || (m.id === 'reservar' && s.seccion === 'confirmacion');
+        return {
+          label: m.label, icono: m.icono, badge: m.badge,
+          go: () => this.setState({ seccion: m.id, paso: m.id === 'reservar' ? 1 : s.paso }),
+          style: movil
+            ? `flex:1;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;cursor:pointer;color:${on ? 'var(--color-accent-700)' : 'var(--color-neutral-600)'}`
+            : `display:flex;align-items:center;${escritorio ? '' : 'flex-direction:column;justify-content:center;gap:3px;'}gap:${escritorio ? '10px' : '3px'};width:100%;min-height:${escritorio ? 40 : 56}px;padding:0 ${escritorio ? 10 : 4}px;border:none;border-radius:14px;cursor:pointer;font-family:var(--font-body);font-size:14px;text-align:left;` +
+              (on ? `background:var(--color-neutral-200);color:var(--color-text);font-weight:600;` : `background:transparent;color:var(--color-neutral-700);`),
+          iconStyle: `font-size:${movil ? 15 : 16}px;line-height:1`,
+          labelStyle: movil || !escritorio ? `font-size:10px;letter-spacing:.06em;${escritorio ? '' : 'text-align:center;'}` : 'flex:1',
+          badgeStyle: m.badge && escritorio ? `font-size:12px;color:var(--color-neutral-600);font-variant-numeric:tabular-nums` : 'display:none',
+        };
+      }),
+      sede: 'Academia Centro',
+
+      contenidoStyle: `flex:1;min-width:0;overflow:auto;display:flex;flex-direction:column`,
+      contenedorStyle: `padding:${movil ? '16px 16px 24px' : escritorio ? '26px 32px 32px' : '20px 24px 28px'};max-width:1180px;width:100%`,
+      h1Style: `margin:0;font-family:var(--font-heading);font-size:${movil ? 27 : escritorio ? 33 : 29}px;font-weight:700;letter-spacing:-0.025em`,
+      displayStyle: `margin:14px 0 12px;font-family:var(--font-heading);font-size:${movil ? 38 : 52}px;line-height:.95;font-weight:300;letter-spacing:-0.04em`,
+
+      esReservar, esConfirmacion: s.seccion === 'confirmacion',
+      esReservas: s.seccion === 'reservas', esBonos: s.seccion === 'bonos', esEquipo: s.seccion === 'equipo',
+      paso1: paso === 1, paso2: paso === 2, paso3: paso === 3, pasoNum: paso,
+
+      pasos: [
+        { n:1, label:'Servicio' }, { n:2, label:'Fecha y hora' }, { n:3, label:'Pago' },
+      ].map((p) => ({
+        num: `0${p.n}`, label: p.label,
+        disabled: p.n > paso,
+        go: () => { if (p.n <= paso) this.setState({ paso: p.n }); },
+        style: `flex:1;padding:8px 10px;border:none;border-top:2px solid ${p.n <= paso ? 'var(--color-accent)' : 'var(--color-neutral-400)'};background:none;text-align:left;cursor:${p.n <= paso ? 'pointer' : 'default'};font-family:var(--font-body);color:${p.n === paso ? 'var(--color-text)' : 'var(--color-neutral-600)'}`,
+      })),
+
+      filaFiltrosStyle: movil
+        ? 'display:flex;gap:8px;margin-top:18px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none'
+        : 'display:flex;gap:8px;flex-wrap:wrap;margin-top:20px',
+      filtros: FILTROS.map((f) => ({ label: f, pick: () => this.setState({ filtro: f }), style: this.chip(f === s.filtro) + (movil ? 'flex:none;' : '') })),
+      rejillaServiciosStyle: movil
+        ? 'display:grid;grid-template-columns:1fr;margin-top:6px'
+        : 'display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:0 28px;margin-top:6px',
+      conteoServicios: `${SERVICIOS.filter((x) => s.filtro === 'Todos' || TIPO_LABEL[x.tipo] === s.filtro).length} de ${SERVICIOS.length}`,
+      servicios: SERVICIOS.filter((x) => s.filtro === 'Todos' || TIPO_LABEL[x.tipo] === s.filtro).map((x) => {
+        const c = this.color(x.color);
+        return {
+          nombre: x.nombre, desc: x.desc, tipo: TIPO_LABEL[x.tipo], modalidad: x.modalidad,
+          duracion: `${x.dur} min`,
+          precio: (this.props.verPrecios ?? true) ? fmtMoneda(x.precio) : 'Con bono',
+          ocupacion: x.tipo === 'individual' ? 'Agenda abierta' : `${x.ocupados}/${x.cupo}`,
+          open: () => this.setState({ selId: x.id, paso: 2, slot: null }),
+          rowStyle: `width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--color-neutral-300);padding:15px 0;cursor:pointer;font-family:var(--font-body);color:var(--color-text)`,
+          dotStyle: `width:9px;height:9px;margin-top:6px;border-radius:50%;flex:none;background:${c.base}`,
+          tagStyle: `padding:3px 9px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;background:${c.soft};color:${c.deep};border:1px solid ${c.line}`,
+          barTrackStyle: `flex:1;min-width:50px;max-width:110px;height:6px;border-radius:3px;background:var(--color-neutral-300);display:block;overflow:hidden`,
+          barFillStyle: `display:block;height:100%;width:${x.tipo === 'individual' ? 0 : Math.round((x.ocupados / x.cupo) * 100)}%;background:${c.base}`,
+        };
+      }),
+
+      sel: { nombre: sel.nombre, metaLinea: `${sel.nombre} · ${TIPO_LABEL[sel.tipo]} · ${sel.modalidad} · ${sel.dur} min · ${fmtMoneda(sel.precio)}` },
+      dosPanelesStyle: movil
+        ? `display:flex;flex-direction:column;gap:22px;align-items:stretch;margin-top:16px`
+        : `display:flex;gap:${escritorio ? 32 : 20}px;flex-wrap:wrap;align-items:flex-start;margin-top:18px`,
+      panelFlexStyle: movil ? 'width:100%;min-width:0' : 'flex:1;min-width:0',
+      panelCalendarioStyle: movil ? `width:100%;min-width:0` : `flex:1 1 300px;max-width:${escritorio ? 340 : 100000}px;min-width:280px`,
+      panelResumenStyle: `background:var(--color-surface);border:1px solid var(--color-neutral-300);border-radius:18px;padding:20px;${movil ? 'width:100%;min-width:0' : `flex:1 1 280px;max-width:${escritorio ? 340 : 100000}px;margin-top:${escritorio ? 30 : 0}px`}`,
+
+      mesTitulo: fmtMes(s.mes),
+      diasSemana: DOW.map((label) => ({ label })),
+      navPrevStyle: this.nav(false),
+      navNextStyle: this.nav(false),
+      mesAnterior: () => { if (puedeRetroceder) this.setState({ mes: new Date(s.mes.getFullYear(), s.mes.getMonth() - 1, 1) }); },
+      mesSiguiente: () => this.setState({ mes: new Date(s.mes.getFullYear(), s.mes.getMonth() + 1, 1) }),
+      celdas: celdas.map((c) => {
+        if (c.vacia) return { num:'', disabled:true, pick:()=>{}, style:'height:42px;background:none;border:none', dotStyle:'display:none' };
+        return {
+          num: c.num, disabled: c.pasado,
+          pick: () => this.setState({ fecha: c.fecha, slot: null }),
+          style: `position:relative;height:42px;border-radius:14px;cursor:${c.pasado ? 'not-allowed' : 'pointer'};font-family:var(--font-body);font-size:14px;font-variant-numeric:tabular-nums;` +
+            (c.activo ? `background:var(--color-text);color:var(--color-bg);border:1px solid var(--color-text);font-weight:600;`
+              : c.pasado ? `background:transparent;color:var(--color-neutral-400);border:1px solid transparent;`
+              : `background:transparent;color:var(--color-text);border:1px solid var(--color-neutral-300);`),
+          dotStyle: c.pasado || c.libres === 0 ? 'display:none'
+            : `position:absolute;left:50%;bottom:4px;transform:translateX(-50%);width:${Math.min(c.libres,4)*4}px;height:2px;background:${c.activo ? 'var(--color-bg)' : 'var(--color-accent)'}`,
+        };
+      }),
+
+      fechaTitulo: fmtFecha(s.fecha),
+      conteoSlots: `${slots.filter((x) => x.libre).length} de ${slots.length} libres`,
+      sinSlots: slots.length === 0,
+      slots: slots.map((x) => ({
+        rango: x.rango,
+        estado: x.libre ? (sel.tipo === 'individual' ? 'Disponible' : `${x.cupo} lugares`) : x.motivo,
+        disabled: !x.libre,
+        pick: () => this.setState({ slot: x.id }),
+        style: `text-align:left;padding:12px 14px;min-height:64px;border-radius:16px;cursor:${x.libre ? 'pointer' : 'not-allowed'};background:${x.id === s.slot ? 'var(--color-accent-100)' : 'var(--color-bg)'};border:1px solid ${x.id === s.slot ? 'var(--color-accent)' : 'var(--color-neutral-300)'};color:var(--color-text);opacity:${x.libre ? 1 : .5};font-family:var(--font-body)`,
+        badgeStyle: `flex:none;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;` +
+          (x.libre ? `background:var(--color-accent-100);color:var(--color-accent-700);border:1px solid var(--color-accent-300);`
+                   : `background:var(--color-neutral-200);color:var(--color-neutral-700);border:1px solid var(--color-neutral-400);`),
+      })),
+
+      planes: planes.map((p) => ({
+        nombre: p.nombre, precio: p.precio, nota: p.nota,
+        pick: () => this.setState({ plan: p.id }),
+        style: `display:block;width:100%;text-align:left;padding:16px 18px;margin-bottom:10px;border-radius:16px;cursor:pointer;font-family:var(--font-body);color:var(--color-text);background:${p.id === s.plan ? 'var(--color-accent-100)' : 'var(--color-bg)'};border:1px solid ${p.id === s.plan ? 'var(--color-accent)' : 'var(--color-neutral-300)'}`,
+      })),
+      metodos: METODOS.map((m) => ({ label: m, pick: () => this.setState({ metodo: m }), style: this.chip(m === s.metodo) })),
+      total: planSel.precio,
+      resumenReserva: `${sel.nombre} · ${fmtFecha(s.fecha)}${slotSel ? ` · ${slotSel.rango}` : ''}`,
+
+      barraAccionStyle: `position:sticky;bottom:0;margin-top:auto;display:flex;align-items:center;gap:12px;padding:${movil ? '12px 16px' : '14px 32px'};background:var(--color-surface);border-top:1px solid var(--color-neutral-300)`,
+      resumenBarra: paso === 1 ? `${SERVICIOS.length} servicios disponibles` : paso === 2 ? (slotSel ? `${fmtFecha(s.fecha)} · ${slotSel.rango}` : 'Elige un horario disponible') : `${planSel.nombre} · ${planSel.precio}`,
+      avanzarBloqueado: !puedeAvanzar,
+      ctaTxt: paso === 1 ? 'Elige un servicio' : paso === 2 ? 'Continuar al pago' : 'Confirmar reserva',
+      ctaStyle: `margin-left:auto;flex:none;height:46px;font-family:var(--font-body);font-size:15px;padding:0 ${movil ? 18 : 24}px`,
+      avanzar: () => {
+        if (paso === 2 && slotSel) this.setState({ paso: 3 });
+        else if (paso === 3) this.setState((st) => ({ seccion:'confirmacion', confirmada:true, bono: st.plan === 'bono10' ? 10 : st.plan === 'bono5' ? 5 : Math.max(0, st.bono - 1) }));
+      },
+      nuevaReserva: () => this.setState({ seccion:'reservar', paso:1, slot:null }),
+      irReservas: () => this.setState({ seccion:'reservas' }),
+      folio:'AV-4821', codigo:'7K2M', bono: s.bono,
+
+      rejillaReservasStyle: movil
+        ? 'display:grid;grid-template-columns:1fr;margin-top:12px'
+        : 'display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:0 28px;margin-top:12px',
+      resumenReservas: s.confirmada ? 'Todo listo. 4 sesiones próximas.' : '3 sesiones próximas · 1 pendiente de pago',
+      misReservas: [
+        s.confirmada
+          ? { hora: slotSel ? slotSel.rango.split(' ')[0] : '10:00', dia: `${DOW[(s.fecha.getDay()+6)%7]} ${s.fecha.getDate()}`, titulo: sel.nombre, lugar: sel.modalidad, estado:'Confirmada', tono:'ok' }
+          : { hora:'19:00', dia:'Jue 13', titulo:'Conversación en inglés B2', lugar:'Virtual · Zoom', estado:'Confirmada', tono:'ok' },
+        { hora:'10:30', dia:'Vie 14', titulo:'Fisioterapia deportiva', lugar:'Clínica Pau Ferrer', estado:'Pago pendiente · 08:42', tono:'aviso' },
+        { hora:'17:00', dia:'Lun 17', titulo:'Rehabilitación de piso pélvico', lugar:'Clínica Pau Ferrer', estado:'En lista de espera · nº 2', tono:'espera' },
+        { hora:'08:00', dia:'Mar 18', titulo:'Regularización de Matemáticas', lugar:'Academia Centro', estado:'Confirmada', tono:'ok' },
+      ].map((r) => ({
+        ...r,
+        badgeStyle: `display:inline-block;padding:4px 10px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;` +
+          (r.tono === 'ok' ? `background:var(--color-accent-2-100);color:var(--color-accent-2-800);border:1px solid var(--color-accent-2-300);`
+            : r.tono === 'aviso' ? `background:var(--color-warn-100);color:var(--color-warn-700);border:1px solid var(--color-warn-300);`
+            : `background:var(--color-neutral-200);color:var(--color-neutral-700);border:1px solid var(--color-neutral-400);`),
+      })),
+
+      tarjetasBono: [
+        { titulo:'Saldo disponible', valor:`${s.bono} clases`, nota:'Academia Vértice · vence el 30 nov' },
+        { titulo:'Gasto del mes', valor: fmtMoneda(2160), nota:'3 sesiones y 1 paquete' },
+      ],
+      movimientos: [
+        { fecha:'12 ago', concepto:'Paquete de 10 · Matemáticas', importe: fmtMoneda(2720) },
+        { fecha:'08 ago', concepto:'Sesión suelta · Fisioterapia', importe: fmtMoneda(850) },
+        { fecha:'01 ago', concepto:'Inglés B2 · recurrente', importe: fmtMoneda(260) },
+        { fecha:'28 jul', concepto:'Reembolso · clase cancelada', importe:`- ${fmtMoneda(320)}` },
+      ],
+
+      semanaTitulo: `${inicioSemana.getDate()} – ${inicioSemana.getDate() + 5} ${new Intl.DateTimeFormat('es-MX',{month:'short'}).format(inicioSemana)}`,
+      semanaAnterior: () => this.setState({ semana: Math.max(0, s.semana - 1) }),
+      semanaSiguiente: () => this.setState({ semana: s.semana + 1 }),
+      proSesiones: EVENTOS.length, proOcupadas: 58, proPendientes: 2,
+      equipoRejilla: !movil, equipoLista: movil,
+      columnasSemana: columnas.map((c) => ({
+        dow: c.dow, num: c.num,
+        headStyle: `padding:10px 12px;display:flex;align-items:baseline;border-left:1px solid var(--color-neutral-300);${c.hoy ? 'background:var(--color-neutral-200);' : ''}`,
+      })),
+      filasHora: HORAS.map((h) => ({
+        hora: `${String(h).padStart(2,'0')}:00`,
+        celdas: columnas.map((col, di) => {
+          const ev = EVENTOS.find((e) => e.dia === di && e.hora === h);
+          const c = ev ? this.color(ev.color) : null;
+          return {
+            tieneEvento: !!ev, titulo: ev ? ev.titulo : '', meta: ev ? ev.meta : '',
+            wrapStyle: `border-left:1px solid var(--color-neutral-300);padding:4px`,
+            evStyle: ev ? `padding:8px 10px;border-radius:10px;font-family:var(--font-body);background:${c.soft};color:${c.deep};border:1px solid ${c.line};border-left:3px solid ${c.base}` : 'display:none',
+          };
+        }),
+      })),
+      diasEquipo: columnas.slice(0, 4).map((col, di) => ({
+        titulo: `${col.dow} ${col.num}`,
+        eventos: EVENTOS.filter((e) => e.dia === di).map((e) => ({
+          hora: `${String(e.hora).padStart(2,'0')}:00`, titulo: e.titulo, meta: e.meta,
+          dotStyle: `width:8px;height:8px;margin-top:6px;border-radius:50%;flex:none;background:${this.color(e.color).base}`,
+        })),
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

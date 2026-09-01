@@ -1,0 +1,15 @@
+<!-- @dsCard group="Spacing" viewport="700x190" subtitle="Casi ausente: el borde de 1px separa, no la sombra" name="Elevación" -->
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body{margin:0;padding:18px 20px;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:var(--text-caption)}
+.row{display:flex;gap:var(--space-3);align-items:flex-start}
+.sw{flex:1;min-width:0}
+.chip{height:56px;border-radius:var(--radius-md);border:1px solid rgba(51,65,85,.08)}
+.lab{margin-top:var(--space-2);font-size:var(--text-micro);font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums}
+.hex{font-size:var(--text-micro);color:var(--color-text-muted);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.eyebrow{font-size:var(--text-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase;font-weight:var(--weight-semibold);color:var(--color-text-muted)}
+</style></head><body><div style="display:flex;gap:var(--space-9);align-items:flex-start">
+<div><div style="width:132px;height:62px;background:var(--color-surface);border-radius:var(--radius-2xl);border:var(--border-hairline)"></div><div class="lab">Borde 1px</div><div class="hex">por defecto</div></div><div><div style="width:132px;height:62px;background:var(--color-surface);border-radius:var(--radius-2xl);box-shadow:var(--shadow-sm)"></div><div class="lab">shadow-sm</div><div class="hex">casi nunca</div></div><div><div style="width:132px;height:62px;background:var(--color-surface);border-radius:var(--radius-2xl);box-shadow:var(--shadow-md)"></div><div class="lab">shadow-md</div><div class="hex">diálogo</div></div><div><div style="width:132px;height:62px;background:var(--color-surface);border-radius:var(--radius-2xl);box-shadow:var(--shadow-lg)"></div><div class="lab">shadow-lg</div><div class="hex">marco de maqueta</div></div>
+</div>
+<div class="hex" style="margin-top:var(--space-5)">Sombras tintadas de slate, nunca negro puro. Si dudas, usa borde.</div></body></html>

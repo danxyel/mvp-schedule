@@ -1,0 +1,38 @@
+:root {
+  --font-heading: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-body:    'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  /* Escala. Los display se usan solo en confirmaciones y portadas. */
+  --text-display:    52px;
+  --text-display-sm: 38px;   /* mismo rol en móvil */
+  --text-h1:         33px;
+  --text-h1-sm:      27px;   /* móvil */
+  --text-h2:         20px;
+  --text-h3:         18px;
+  --text-title:      16px;   /* títulos de fila / tarjeta */
+  --text-body:       15px;
+  --text-body-sm:    14px;
+  --text-meta:       13px;
+  --text-caption:    12px;
+  --text-micro:      11px;
+  --text-eyebrow:    10px;   /* siempre en versalitas + tracking */
+
+  --weight-light:    300;
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --leading-tight:  1.2;
+  --leading-snug:   1.35;
+  --leading-normal: 1.5;
+  --leading-display: .95;
+
+  --track-display:  -0.04em;
+  --track-h1:       -0.025em;
+  --track-title:    -0.015em;
+  --track-eyebrow:  0.18em;
+  --track-badge:    0.12em;
+
+  --num-tabular: tabular-nums;
+}

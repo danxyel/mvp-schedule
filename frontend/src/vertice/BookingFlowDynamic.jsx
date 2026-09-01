@@ -190,10 +190,16 @@ export function BookingFlowDynamic() {
           throw reservaErr
         }
 
-        navigate(
-          `/t/${tenantSlug}/confirmar/${reserva.codigo_confirmacion}`,
-          { state: { reserva } }
-        )
+        // Si hay checkout (pago requerido), redirigir al checkout
+        if (reserva.checkout?.url) {
+          window.location.href = reserva.checkout.url
+        } else {
+          // Si no hay pago, ir a confirmación
+          navigate(
+            `/t/${tenantSlug}/confirmar/${reserva.codigo_confirmacion}`,
+            { state: { reserva } }
+          )
+        }
       } catch (err) {
         setError(err.message || err.detail?.detail || 'Error al crear reserva')
         console.error('Error creando reserva:', err)

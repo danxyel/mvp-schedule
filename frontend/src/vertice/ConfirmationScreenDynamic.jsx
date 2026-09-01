@@ -146,13 +146,13 @@ export function ConfirmationScreenDynamic() {
                         margin: 'var(--space-1) 0 0 0',
                       }}
                     >
-                      {new Date(reserva.fecha_inicio).toLocaleDateString('es-MX', {
+                      {new Date(reserva.fecha_hora_inicio).toLocaleDateString('es-MX', {
                         weekday: 'long',
                         day: 'numeric',
                         month: 'long',
                       })}{' '}
                       a las{' '}
-                      {new Date(reserva.fecha_inicio).toLocaleTimeString('es-MX', {
+                      {new Date(reserva.fecha_hora_inicio).toLocaleTimeString('es-MX', {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}

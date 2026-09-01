@@ -15,7 +15,8 @@ export function ConfirmationScreenDynamic() {
 
     const fetchReserva = async () => {
       try {
-        const { data } = await client.GET(`/api/v1/reservas/${codigo}`)
+        const { data, error: fetchErr } = await client.GET(`/reservas/${codigo}`)
+        if (fetchErr) throw fetchErr
         setReserva(data)
       } catch (err) {
         console.error('Error cargando reserva:', err)

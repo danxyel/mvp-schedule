@@ -17,9 +17,13 @@ export function SeleccionServicioVertice() {
     const fetchServicios = async () => {
       try {
         setLoading(true)
-        const { data } = await client.GET('/api/v1/servicios', {
-          params: { query: { tenant_slug: tenantSlug, activo: true } },
-        })
+        const { data, error: fetchErr } = await client.GET(
+          '/api/v2/{tenant_slug}/servicios',
+          {
+            params: { path: { tenant_slug: tenantSlug } },
+          }
+        )
+        if (fetchErr) throw fetchErr
         setServicios(data || [])
         setError(null)
       } catch (err) {

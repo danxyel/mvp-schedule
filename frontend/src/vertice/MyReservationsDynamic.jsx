@@ -14,7 +14,8 @@ export function MyReservationsDynamic() {
     const fetchReservas = async () => {
       try {
         setLoading(true)
-        const { data } = await client.GET('/api/v1/mis-reservas')
+        const { data, error: fetchErr } = await client.GET('/mis-reservas')
+        if (fetchErr) throw fetchErr
         setReservas(data || [])
         setError(null)
       } catch (err) {

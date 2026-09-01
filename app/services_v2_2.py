@@ -1441,7 +1441,7 @@ def inscribir_cliente_en_serie(
 
     acceso_token_plano = None
     if cliente.password_hash is None:
-        acceso_token_plano = generar_token_acceso(cliente)
+        acceso_token_plano = crear_jwt_guest(cliente.id)
 
     return {"inscripcion": inscripcion, "cliente": cliente, "acceso_token_plano": acceso_token_plano}
 

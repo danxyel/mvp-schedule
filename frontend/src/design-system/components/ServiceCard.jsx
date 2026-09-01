@@ -1,5 +1,7 @@
 import React from 'react'
-import { Button, Badge, CapacityBar } from './index'
+import { Button } from './Button'
+import { Badge } from './Badge'
+import { CapacityBar } from './CapacityBar'
 
 export function ServiceCard({
   nombre,

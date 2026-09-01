@@ -148,6 +148,18 @@ class CreadoPorTipo(str, PyEnum):
     ADMIN = "admin"; ALUMNO = "alumno"; SISTEMA = "sistema"
 
 
+class ModalidadCobro(str, PyEnum):
+    SESION = "sesion"; PAQUETE = "paquete"
+
+
+class EstadoSerie(str, PyEnum):
+    ACTIVA = "activa"; COMPLETADA = "completada"; CANCELADA = "cancelada"
+
+
+class EstadoInscripcion(str, PyEnum):
+    INVITADA = "invitada"; CONFIRMADA = "confirmada"; CANCELADA = "cancelada"
+
+
 class EstadoSolicitud(str, PyEnum):
     PENDIENTE = "pendiente"
     ACEPTADA = "aceptada"
@@ -160,6 +172,11 @@ class TipoCampoFormulario(str, PyEnum):
     TELEFONO = "telefono"; FECHA = "fecha"; SELECT = "select"
     MULTISELECT = "multiselect"; CHECKBOX = "checkbox"; RADIO = "radio"
     ARCHIVO = "archivo"; RATING = "rating"
+
+
+class TipoFormulario(str, PyEnum):
+    INTAKE = "intake"
+    SATISFACCION = "satisfaccion"
 
 
 ESTADOS_OCUPAN_CUPO = (
@@ -200,6 +217,7 @@ class Tenant(Base):
     activo: Mapped[bool] = mapped_column(default=True)
     plan: Mapped[PlanTenant] = mapped_column(SQLEnum(PlanTenant), default=PlanTenant.STARTER)
     logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    logo_public_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     color_primario: Mapped[str] = mapped_column(String(7), default="#2563eb")
     nombre_empresa: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), default="America/Mexico_City")
@@ -219,14 +237,15 @@ class Tenant(Base):
     remitente_nombre: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     stripe_account_id: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
     stripe_public_key: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
-    mp_access_token: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
-    mp_public_key: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    pago_config: Mapped[Optional[dict]] = mapped_column(EncryptedJSON, nullable=True)
+    google_meet_config: Mapped[Optional[dict]] = mapped_column(EncryptedJSON, nullable=True)
 
     max_asesores: Mapped[int] = mapped_column(default=5)
     max_sedes: Mapped[int] = mapped_column(default=1)
     max_servicios: Mapped[int] = mapped_column(default=10)
     max_clientes: Mapped[int] = mapped_column(default=500)
     max_reservas_mes: Mapped[int] = mapped_column(default=1000)
+    max_reservas_serie: Mapped[int] = mapped_column(default=20)
     config_json: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'::json"))
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -267,6 +286,11 @@ class Usuario(Base):
     email_verificado: Mapped[bool] = mapped_column(default=False)
     verificado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     ultimo_login_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    activo: Mapped[bool] = mapped_column(default=True)
+    desactivado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    purgado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    acceso_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    acceso_token_expira_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -376,14 +400,22 @@ class Servicio(Base, TenantScopedMixin):
     moneda: Mapped[str] = mapped_column(String(3), default="MXN")
     politica_cancelacion_hs: Mapped[Optional[int]] = mapped_column(nullable=True)
     requiere_confirmacion: Mapped[bool] = mapped_column(default=False)
+    permite_solicitudes: Mapped[bool] = mapped_column(default=False)
     permitir_reagendar: Mapped[bool] = mapped_column(default=True)
     visible_web: Mapped[bool] = mapped_column(default=True)
     imagen_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     metodo_pago: Mapped[Optional[MetodoPago]] = mapped_column(SQLEnum(MetodoPago), nullable=True)
+    drive_folder_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     pago_requerido: Mapped[bool] = mapped_column(default=True)
+    cobro_por_sesion_habilitado: Mapped[bool] = mapped_column(default=True)
+    cobro_por_paquete_habilitado: Mapped[bool] = mapped_column(default=False)
+    precio_paquete: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     creacion_por_alumno: Mapped[bool] = mapped_column(default=False)
     formulario_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("formularios.id", ondelete="SET NULL"), nullable=True
+    )
+    encuesta_satisfaccion_formulario_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("formularios.id", ondelete="SET NULL"), nullable=True,
     )
     config_json: Mapped[dict] = mapped_column(JSON, default=dict)
     activo: Mapped[bool] = mapped_column(default=True)
@@ -396,6 +428,10 @@ class Servicio(Base, TenantScopedMixin):
         CheckConstraint("cupo_minimo >= 1", name="ck_servicio_cupo_min"),
         CheckConstraint("cupo_maximo >= cupo_minimo", name="ck_servicio_cupo_coherente"),
         CheckConstraint("precio IS NULL OR precio >= 0", name="ck_servicio_precio_no_negativo"),
+        CheckConstraint(
+            "precio_paquete IS NULL OR precio_paquete >= 0",
+            name="ck_servicio_precio_paquete_no_negativo",
+        ),
         CheckConstraint("buffer_antes_min >= 0 AND buffer_despues_min >= 0", name="ck_servicio_buffers"),
         CheckConstraint(
             "tipo_agenda <> 'INDIVIDUAL' OR cupo_maximo = 1",
@@ -432,10 +468,14 @@ class Sesion(Base, TenantScopedMixin):
     creado_por_tipo: Mapped[CreadoPorTipo] = mapped_column(SQLEnum(CreadoPorTipo), default=CreadoPorTipo.ADMIN)
     meet_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     meet_generado_auto: Mapped[bool] = mapped_column(default=False)
+    meet_space_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     google_event_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     ics_uid: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     notas_internas: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    drive_recording_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    drive_transcript_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    contenido_enviado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     version_id: Mapped[int] = mapped_column(default=1, nullable=False)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -491,6 +531,9 @@ class Reserva(Base, TenantScopedMixin):
     motivo_cancelacion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     checked_in: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    serie_id: Mapped[Optional[int]] = mapped_column(ForeignKey("series_reservas.id", ondelete="SET NULL"), nullable=True)
+    inscripcion_id: Mapped[Optional[int]] = mapped_column(ForeignKey("inscripciones_serie.id", ondelete="SET NULL"), nullable=True)
+    modalidad_cobro: Mapped[Optional[ModalidadCobro]] = mapped_column(SQLEnum(ModalidadCobro), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -512,6 +555,7 @@ class Reserva(Base, TenantScopedMixin):
             name="ck_reserva_hold_solo_en_espera",
         ),
         Index("idx_reservas_sesion", "sesion_id"),
+        Index("idx_reservas_inscripcion", "inscripcion_id"),
         Index("idx_reservas_estado", "tenant_id", "estado"),
         Index("idx_reservas_folio", "tenant_id", "folio"),
         Index("idx_reservas_cliente", "tenant_id", "creado_por_usuario_id"),
@@ -530,6 +574,8 @@ class Reserva(Base, TenantScopedMixin):
     servicio: Mapped["Servicio"] = relationship()
     creado_por: Mapped["Usuario"] = relationship(foreign_keys=[creado_por_usuario_id], back_populates="reservas_creadas")
     beneficiario: Mapped[Optional["Beneficiario"]] = relationship(back_populates="reservas")
+    serie: Mapped[Optional["SerieReserva"]] = relationship(back_populates="reservas")
+    inscripcion: Mapped[Optional["InscripcionSerie"]] = relationship(back_populates="reservas")
     respuestas_formulario: Mapped[List["RespuestaFormulario"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
     integrantes: Mapped[List["ReservaIntegrante"]] = relationship(back_populates="reserva", cascade="all, delete-orphan")
 
@@ -551,6 +597,10 @@ class SolicitudReserva(Base, TenantScopedMixin):
     asesor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
     motivo_rechazo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     reserva_id: Mapped[Optional[int]] = mapped_column(ForeignKey("reservas.id", ondelete="SET NULL"), nullable=True)
+    serie_id: Mapped[Optional[int]] = mapped_column(ForeignKey("series_reservas.id", ondelete="SET NULL"), nullable=True)
+    alternativa_aceptada_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("solicitud_alternativas.id", ondelete="SET NULL"), nullable=True
+    )
     resuelto_por_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
     resuelto_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -559,6 +609,89 @@ class SolicitudReserva(Base, TenantScopedMixin):
         Index("idx_solicitudes_estado", "tenant_id", "estado"),
         Index("idx_solicitudes_cliente", "tenant_id", "cliente_usuario_id", "creado_en"),
     )
+
+
+class SolicitudAlternativa(Base, TenantScopedMixin):
+    __tablename__ = "solicitud_alternativas"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    solicitud_id: Mapped[int] = mapped_column(ForeignKey("solicitudes_reserva.id", ondelete="CASCADE"))
+    fecha_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        Index("idx_solicitud_alternativas_solicitud", "solicitud_id"),
+    )
+
+
+# ============================================================
+# 7c. INSCRIPCIÓN A SERIE — invitación de un cliente a un patrón recurrente
+# El admin (o confirmar_solicitud_como_serie) solo crea la invitación
+# (estado=invitada, modalidad_cobro=NULL); el cliente elige modalidad +
+# método de pago desde su portal (POST /mis-series/{id}/confirmar), lo que
+# genera las N reservas y pasa la inscripción a confirmada.
+# ============================================================
+class InscripcionSerie(Base):
+    __tablename__ = "inscripciones_serie"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    serie_id: Mapped[int] = mapped_column(ForeignKey("series_reservas.id", ondelete="CASCADE"))
+    cliente_usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="RESTRICT"))
+    modalidad_cobro: Mapped[Optional[ModalidadCobro]] = mapped_column(SQLEnum(ModalidadCobro), nullable=True)
+    estado: Mapped[EstadoInscripcion] = mapped_column(SQLEnum(EstadoInscripcion), default=EstadoInscripcion.INVITADA)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("serie_id", "cliente_usuario_id", name="uq_inscripcion_serie_cliente"),
+        CheckConstraint("modalidad_cobro IN ('SESION', 'PAQUETE')", name="ck_inscripcion_modalidad"),
+        CheckConstraint("estado IN ('INVITADA', 'CONFIRMADA', 'CANCELADA')", name="ck_inscripcion_estado"),
+        Index("idx_inscripciones_serie_serie", "serie_id"),
+        Index("idx_inscripciones_serie_cliente", "tenant_id", "cliente_usuario_id"),
+    )
+
+    tenant: Mapped["Tenant"] = relationship()
+    serie: Mapped["SerieReserva"] = relationship(back_populates="inscripciones")
+    cliente: Mapped["Usuario"] = relationship()
+    reservas: Mapped[List["Reserva"]] = relationship(back_populates="inscripcion")
+
+
+# ============================================================
+# 7d. SERIE DE RESERVAS — patrón de horario recurrente (Sprint 2 #11)
+# Ya no guarda cliente ni precio: eso vive en InscripcionSerie.
+# Cada reserva mantiene su ciclo de vida individual.
+# ============================================================
+class SerieReserva(Base, TenantScopedMixin):
+    __tablename__ = "series_reservas"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    servicio_id: Mapped[int] = mapped_column(ForeignKey("servicios.id", ondelete="RESTRICT"))
+    asesor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuario_tenants.id", ondelete="SET NULL"), nullable=True)
+
+    # Patrón de recurrencia
+    frecuencia: Mapped[str] = mapped_column(String(20))  # "semanal", "quincenal", "mensual"
+    dia_semana: Mapped[Optional[int]] = mapped_column(nullable=True)  # 0=lunes, 6=domingo
+    hora_inicio: Mapped[time] = mapped_column(Time)
+    duracion_minutos: Mapped[int] = mapped_column(default=60)
+    num_repeticiones: Mapped[int] = mapped_column(default=1)
+    fecha_inicio: Mapped[date] = mapped_column(Date)
+
+    # Estado
+    estado: Mapped[EstadoSerie] = mapped_column(SQLEnum(EstadoSerie), default=EstadoSerie.ACTIVA)
+    drive_folder_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        CheckConstraint("num_repeticiones >= 1", name="ck_serie_repeticiones_minimo"),
+        CheckConstraint("num_repeticiones <= 50", name="ck_serie_repeticiones_maximo"),
+        CheckConstraint("dia_semana IS NULL OR (dia_semana >= 0 AND dia_semana <= 6)", name="ck_serie_dia_semana_rango"),
+        CheckConstraint("duracion_minutos > 0", name="ck_serie_duracion_positiva"),
+        Index("idx_series_estado", "tenant_id", "estado"),
+    )
+
+    tenant: Mapped["Tenant"] = relationship()
+    servicio: Mapped["Servicio"] = relationship()
+    asesor: Mapped[Optional["UsuarioTenant"]] = relationship()
+    reservas: Mapped[List["Reserva"]] = relationship(back_populates="serie")
+    inscripciones: Mapped[List["InscripcionSerie"]] = relationship(back_populates="serie")
 
 
 # ============================================================
@@ -643,6 +776,7 @@ class Formulario(Base, TenantScopedMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     servicio_id: Mapped[Optional[int]] = mapped_column(ForeignKey("servicios.id", ondelete="CASCADE"), nullable=True)
     nombre: Mapped[str] = mapped_column(String(255))
+    tipo: Mapped[TipoFormulario] = mapped_column(SQLEnum(TipoFormulario), default=TipoFormulario.INTAKE)
     activo: Mapped[bool] = mapped_column(default=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     tenant: Mapped["Tenant"] = relationship(back_populates="formularios")
@@ -659,6 +793,7 @@ class CampoFormulario(Base):
     placeholder: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     requerido: Mapped[bool] = mapped_column(default=False)
     opciones: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    grupo_matriz: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     validacion_regex: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     ayuda: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     activo: Mapped[bool] = mapped_column(default=True)
@@ -679,6 +814,21 @@ class RespuestaFormulario(Base):
     __table_args__ = (UniqueConstraint("reserva_id", "campo_id", name="uq_respuesta_campo"),)
     reserva: Mapped["Reserva"] = relationship(back_populates="respuestas_formulario")
     campo: Mapped["CampoFormulario"] = relationship(back_populates="respuestas")
+
+
+class EncuestaEnvio(Base, TenantScopedMixin):
+    __tablename__ = "encuesta_envios"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    formulario_id: Mapped[int] = mapped_column(ForeignKey("formularios.id", ondelete="CASCADE"))
+    reserva_id: Mapped[int] = mapped_column(ForeignKey("reservas.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    respondido_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    tenant: Mapped["Tenant"] = relationship()
+    formulario: Mapped["Formulario"] = relationship()
+    reserva: Mapped["Reserva"] = relationship()
 
 
 # ============================================================

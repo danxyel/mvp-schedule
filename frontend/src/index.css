@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+@theme {
+  --color-brand-50:  var(--tenant-brand-50,  var(--color-indigo-50));
+  --color-brand-100: var(--tenant-brand-100, var(--color-indigo-100));
+  --color-brand-200: var(--tenant-brand-200, var(--color-indigo-200));
+  --color-brand-300: var(--tenant-brand-300, var(--color-indigo-300));
+  --color-brand-400: var(--tenant-brand-400, var(--color-indigo-400));
+  --color-brand-500: var(--tenant-brand-500, var(--color-indigo-500));
+  --color-brand-600: var(--tenant-brand-600, var(--color-indigo-600));
+  --color-brand-700: var(--tenant-brand-700, var(--color-indigo-700));
+  --color-brand-800: var(--tenant-brand-800, var(--color-indigo-800));
+  --color-brand-900: var(--tenant-brand-900, var(--color-indigo-900));
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MVP Schedule",
-    "description": "Sistema de agendamiento multitenant · v2.2",
+    "description": "Sistema de agendamiento multitenant \u00b7 v2.2",
     "version": "2.2.0"
   },
   "paths": {
@@ -84,6 +84,127 @@
         }
       }
     },
+    "/auth/activar-cuenta/validar": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Validar Token Activacion",
+        "description": "Chequeo de solo lectura \u2014 no consume el token ni dice de qui\u00e9n es.\n\nPermite que la pantalla de activaci\u00f3n avise \"enlace inv\u00e1lido o\nvencido\" antes de que el usuario llene el formulario de contrase\u00f1a.",
+        "operationId": "validar_token_activacion_auth_activar_cuenta_validar_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/activar-cuenta": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Activar Cuenta",
+        "description": "Activa una cuenta sin contrase\u00f1a (invitado de reserva, vinculado por\nadmin/superadmin, inscrito en serie) usando el token de un solo uso\nmandado por email. Global \u2014 no depende de tenant_slug: el token ya\nidentifica al usuario sin ambig\u00fcedad, y la respuesta reusa la misma\nresoluci\u00f3n de membres\u00eda que /auth/login (auto-login inmediato).",
+        "operationId": "activar_cuenta_auth_activar_cuenta_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_activar_cuenta_auth_activar_cuenta_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/recuperar-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Recuperar Password",
+        "description": "Autoservicio: manda un enlace para restablecer contrase\u00f1a si el\ncorreo pertenece a una cuenta activa que YA tiene contrase\u00f1a.\n\nResponde SIEMPRE el mismo mensaje gen\u00e9rico, exista o no la cuenta,\ntenga o no ya password, est\u00e9 o no activa \u2014 anti-enumeraci\u00f3n.",
+        "operationId": "recuperar_password_auth_recuperar_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_recuperar_password_auth_recuperar_password_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tenants/publicos": {
       "get": {
         "tags": [
@@ -103,6 +224,160 @@
                   "type": "array",
                   "title": "Response Listar Tenants Publicos Tenants Publicos Get"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/encuestas/validar": {
+      "get": {
+        "tags": [
+          "Encuestas"
+        ],
+        "summary": "Validar Encuesta",
+        "description": "Devuelve el formulario asociado a un token de encuesta v\u00e1lido.",
+        "operationId": "validar_encuesta_encuestas_validar_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EncuestaValidarOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/encuestas/responder": {
+      "post": {
+        "tags": [
+          "Encuestas"
+        ],
+        "summary": "Responder Encuesta",
+        "description": "Guarda las respuestas de una encuesta de satisfacci\u00f3n y consume el token.",
+        "operationId": "responder_encuesta_encuestas_responder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EncuestaResponderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/mercadopago/redirect": {
+      "get": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Mercadopago Redirect",
+        "description": "Redirige al frontend despu\u00e9s de que el cliente vuelve de MercadoPago.\n\nEl flujo de reserva permite pagar como invitado (sin cuenta, sin token\nen sessionStorage) \u2014 por eso NO podemos mandar a rutas protegidas como\n/mis-reservas/{folio}: un invitado nunca tuvo sesi\u00f3n, as\u00ed que\nProtectedRoute lo rebota a /login. Para \"reserva:\" resolvemos el\ntenant_slug y el codigo_confirmacion desde la BD y mandamos a la ruta\np\u00fablica /t/{tenant_slug}/r/{folio}, que ya est\u00e1 pensada para\nmostrarse sin login (folio + c\u00f3digo).",
+        "operationId": "mercadopago_redirect_api_v2_mercadopago_redirect_get",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reference"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "pending",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/webhooks/mercadopago": {
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Webhook Mercadopago",
+        "description": "Recibe notificaciones de MercadoPago. No conf\u00eda en el payload:\nre-consulta el pago directo a la API de MP antes de marcar nada pagado.",
+        "operationId": "webhook_mercadopago_api_v2_webhooks_mercadopago_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -138,6 +413,62 @@
                     "$ref": "#/components/schemas/ServicioPublicOut"
                   },
                   "title": "Response Listar Servicios Publicos Api V2  Tenant Slug  Servicios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/servicios/{servicio_id}/sesiones-abiertas": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Sesiones Abiertas Servicio",
+        "operationId": "sesiones_abiertas_servicio_api_v2__tenant_slug__servicios__servicio_id__sesiones_abiertas_get",
+        "parameters": [
+          {
+            "name": "servicio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Servicio Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SesionListOut"
+                  },
+                  "title": "Response Sesiones Abiertas Servicio Api V2  Tenant Slug  Servicios  Servicio Id  Sesiones Abiertas Get"
                 }
               }
             }
@@ -599,7 +930,7 @@
           "Agenda v2.2"
         ],
         "summary": "Consultar Reserva Publica",
-        "description": "Consulta pública de reserva mediante folio + código de confirmación.\n\nNo requiere autenticación. Devuelve vista limitada (sin meet_url, notas, sede, asesor).\nRate limited a 10 requests/minuto por IP.",
+        "description": "Consulta p\u00fablica de reserva mediante folio + c\u00f3digo de confirmaci\u00f3n.\n\nNo requiere autenticaci\u00f3n. Devuelve vista limitada (sin meet_url, notas, sede, asesor).\nRate limited a 10 requests/minuto por IP.",
         "operationId": "consultar_reserva_publica_api_v2__tenant_slug__reservas__folio__publica_get",
         "parameters": [
           {
@@ -641,6 +972,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReservaPublicaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/reclamar-cuenta": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Reclamar Cuenta",
+        "description": "Autoservicio: manda el correo de activaci\u00f3n si el email pertenece a\nun usuario vinculado activo a ESTE tenant y sin contrase\u00f1a todav\u00eda.\n\nResponde SIEMPRE el mismo mensaje gen\u00e9rico exista o no el email, est\u00e9 o\nno vinculado a este tenant, tenga o no ya contrase\u00f1a \u2014 anti-enumeraci\u00f3n.\nRate limited a 5/minuto por IP (mismo l\u00edmite que /auth/login).",
+        "operationId": "reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post",
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
                 }
               }
             }
@@ -850,6 +1234,192 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/mis-solicitudes/{solicitud_id}/alternativas/{alternativa_id}/aceptar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Aceptar Alternativa Solicitud Endpoint",
+        "operationId": "aceptar_alternativa_solicitud_endpoint_api_v2__tenant_slug__mis_solicitudes__solicitud_id__alternativas__alternativa_id__aceptar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "solicitud_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Solicitud Id"
+            }
+          },
+          {
+            "name": "alternativa_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Alternativa Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudAceptarAlternativaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/mis-series": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Mis Series",
+        "operationId": "listar_mis_series_api_v2__tenant_slug__mis_series_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InscripcionSerieClienteOut"
+                  },
+                  "title": "Response Listar Mis Series Api V2  Tenant Slug  Mis Series Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/mis-series/{inscripcion_id}/confirmar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Confirmar Mi Inscripcion Serie",
+        "description": "El cliente elige modalidad_cobro/metodo_pago para una invitaci\u00f3n\nsuya pendiente. Genera las N reservas y la pasa a CONFIRMADA.",
+        "operationId": "confirmar_mi_inscripcion_serie_api_v2__tenant_slug__mis_series__inscripcion_id__confirmar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmarInscripcionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InscripcionSerieClienteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/reservas": {
       "get": {
         "tags": [
@@ -886,10 +1456,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas)",
+              "description": "Filtra por fecha de la sesi\u00f3n. Default: hoy (omitir junto con estado para listar todas las fechas)",
               "title": "Fecha"
             },
-            "description": "Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas)"
+            "description": "Filtra por fecha de la sesi\u00f3n. Default: hoy (omitir junto con estado para listar todas las fechas)"
           },
           {
             "name": "estado",
@@ -908,6 +1478,26 @@
               "title": "Estado"
             },
             "description": "Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 50
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente",
+              "title": "Q"
+            },
+            "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente"
           },
           {
             "name": "limit",
@@ -1148,6 +1738,26 @@
               ],
               "title": "Servicio Id"
             }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 50
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente",
+              "title": "Q"
+            },
+            "description": "Busca por folio, c\u00f3digo de confirmaci\u00f3n, nombre o email del cliente"
           }
         ],
         "responses": {
@@ -1235,6 +1845,74 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Confirmar Solicitud Como Serie Admin",
+        "description": "Convierte una solicitud pendiente en una serie de reservas recurrentes.",
+        "operationId": "confirmar_solicitud_como_serie_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_serie_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "solicitud_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Solicitud Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudConfirmarSerieIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SerieReservaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar": {
       "post": {
         "tags": [
@@ -1285,6 +1963,404 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SolicitudAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/series": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Serie Admin",
+        "description": "Crea el patr\u00f3n de horario de una serie recurrente.",
+        "operationId": "crear_serie_admin_api_v2__tenant_slug__admin_series_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SerieReservaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SerieReservaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Series Admin",
+        "description": "Lista todas las series de reservas del tenant.",
+        "operationId": "listar_series_admin_api_v2__tenant_slug__admin_series_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EstadoSerie"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por estado",
+              "title": "Estado"
+            },
+            "description": "Filtrar por estado"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SerieReservaOut"
+                  },
+                  "title": "Response Listar Series Admin Api V2  Tenant Slug  Admin Series Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Inscribir Cliente En Serie Admin",
+        "description": "Inscribe un cliente a una serie recurrente existente.",
+        "operationId": "inscribir_cliente_en_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InscripcionSerieCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InscripcionSerieOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Detalle Serie Admin",
+        "description": "Detalle de una serie de reservas, incluyendo sus inscripciones.",
+        "operationId": "detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SerieReservaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/pago-local": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Registrar Pago Inscripcion Local",
+        "description": "Registra el pago de un paquete para un cliente espec\u00edfico de una serie.",
+        "operationId": "registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoLocalIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/cancelar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Cancelar Invitacion Serie Admin",
+        "description": "Retira una invitaci\u00f3n a serie que sigue pendiente (INVITADA).",
+        "operationId": "cancelar_invitacion_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__cancelar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "serie_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Serie Id"
+            }
+          },
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InscripcionSerieOut"
                 }
               }
             }
@@ -1569,6 +2645,676 @@
               "type": "integer",
               "exclusiveMinimum": 0,
               "title": "Servicio Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/sesiones": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Sesiones Por Servicio Admin",
+        "operationId": "listar_sesiones_por_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__sesiones_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "servicio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Servicio Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desde"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionesPaginadasOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Formularios Admin",
+        "operationId": "listar_formularios_admin_api_v2__tenant_slug__admin_formularios_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TipoFormularioEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por tipo de formulario",
+              "title": "Tipo"
+            },
+            "description": "Filtrar por tipo de formulario"
+          },
+          {
+            "name": "activo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por estado activo",
+              "title": "Activo"
+            },
+            "description": "Filtrar por estado activo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FormularioListAdminOut"
+                  },
+                  "title": "Response Listar Formularios Admin Api V2  Tenant Slug  Admin Formularios Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Formulario Admin",
+        "operationId": "crear_formulario_admin_api_v2__tenant_slug__admin_formularios_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormularioAdminIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Obtener Formulario Admin",
+        "operationId": "obtener_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Actualizar Formulario Admin",
+        "operationId": "actualizar_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormularioAdminUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/respuestas": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Listar Respuestas Formulario Admin",
+        "operationId": "listar_respuestas_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__respuestas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EncuestaRespuestaClienteOut"
+                  },
+                  "title": "Response Listar Respuestas Formulario Admin Api V2  Tenant Slug  Admin Formularios  Formulario Id  Respuestas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Crear Campos Formulario Admin",
+        "operationId": "crear_campos_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampoFormularioBulkAdminIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampoFormularioAdminOut"
+                  },
+                  "title": "Response Crear Campos Formulario Admin Api V2  Tenant Slug  Admin Formularios  Formulario Id  Campos Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}": {
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Actualizar Campo Formulario Admin",
+        "operationId": "actualizar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "campo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Campo Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampoFormularioAdminUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampoFormularioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}/desactivar": {
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Desactivar Campo Formulario Admin",
+        "operationId": "desactivar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__desactivar_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "campo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Campo Id"
             }
           },
           {
@@ -2095,7 +3841,7 @@
           "Agenda v2.2"
         ],
         "summary": "Crear Horario Servicio",
-        "description": "Define la franja general del servicio (ventana de propuesta del cliente).\n\nSolo aplica a servicios con requiere_confirmacion=True: el cliente\npropone un horario dentro de esta franja y el staff valida la\ndisponibilidad real del asesor al asignarlo. Para servicios con\nconfirmación automática NO aplica: su disponibilidad sale del horario\nde cada asesor vinculado. Se responde 422 si el servicio no es de\nconfirmación manual.",
+        "description": "Define la franja general del servicio (ventana de propuesta del cliente).\n\nSolo aplica a servicios con requiere_confirmacion=True: el cliente\npropone un horario dentro de esta franja y el staff valida la\ndisponibilidad real del asesor al asignarlo. Para servicios con\nconfirmaci\u00f3n autom\u00e1tica NO aplica: su disponibilidad sale del horario\nde cada asesor vinculado. Se responde 422 si el servicio no es de\nconfirmaci\u00f3n manual.",
         "operationId": "crear_horario_servicio_api_v2__tenant_slug__admin_servicios__servicio_id__horarios_post",
         "security": [
           {
@@ -2847,6 +4593,763 @@
         }
       }
     },
+    "/api/v2/{tenant_slug}/admin/mercadopago/conectar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Conectar Mercadopago",
+        "description": "Conecta la cuenta de MercadoPago del tenant usando un Access Token\npegado directamente por el admin.",
+        "operationId": "conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MercadoPagoConectarIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MercadoPagoEstadoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/mercadopago/desconectar": {
+      "delete": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Desconectar Mercadopago",
+        "description": "Desconecta la cuenta de MercadoPago del tenant. No revoca el token en\nel lado de MercadoPago; el admin debe regenerarlo desde su panel.",
+        "operationId": "desconectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_desconectar_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MercadoPagoEstadoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/mercadopago/estado": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Estado Mercadopago",
+        "description": "Devuelve si el tenant tiene conectada una cuenta de MercadoPago.",
+        "operationId": "estado_mercadopago_api_v2__tenant_slug__admin_mercadopago_estado_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MercadoPagoEstadoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/google-meet/conectar": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Conectar Google Meet",
+        "description": "Conecta el buz\u00f3n de Google Meet del tenant v\u00eda service account + Domain-Wide Delegation.",
+        "operationId": "conectar_google_meet_api_v2__tenant_slug__admin_google_meet_conectar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleMeetConectarIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleMeetEstadoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/google-meet/desconectar": {
+      "delete": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Desconectar Google Meet",
+        "description": "Desconecta la configuraci\u00f3n de Google Meet del tenant. No revoca la\ndelegaci\u00f3n de dominio del lado de Google.",
+        "operationId": "desconectar_google_meet_api_v2__tenant_slug__admin_google_meet_desconectar_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleMeetEstadoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/google-meet/estado": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Estado Google Meet",
+        "description": "Devuelve si el tenant tiene conectado un buz\u00f3n de Google Meet.",
+        "operationId": "estado_google_meet_api_v2__tenant_slug__admin_google_meet_estado_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleMeetEstadoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/google-meet/revisar-contenido": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Revisar Contenido Google Meet",
+        "description": "Dispara manualmente el mismo job que corre APScheduler cada 10 min\n(organiza carpetas de Drive, renombra archivos, otorga permisos y manda\nel correo de contenido para sesiones virtuales ya terminadas). Pensado\ncomo bot\u00f3n de emergencia mientras el backend est\u00e9 en un plan de Render\nque se duerme por inactividad \u2014 mientras est\u00e1 dormido, el scheduler en\nproceso tampoco corre, as\u00ed que el contenido se queda sin procesar hasta\nque algo despierta al servicio.",
+        "operationId": "revisar_contenido_google_meet_api_v2__tenant_slug__admin_google_meet_revisar_contenido_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          },
+          {
+            "name": "folio",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Si viene, fuerza el reprocesamiento de la sesi\u00f3n de ESE folio espec\u00edfico, sin importar si ya tiene contenido_enviado_en marcado o si fecha_hora_fin todav\u00eda no cumple el margen. \u00dasalo cuando una sesi\u00f3n se qued\u00f3 a medias (ej. carpetas creadas pero correo nunca sali\u00f3 porque el proceso se interrumpi\u00f3 despu\u00e9s de marcarla como ya procesada).",
+              "title": "Folio"
+            },
+            "description": "Si viene, fuerza el reprocesamiento de la sesi\u00f3n de ESE folio espec\u00edfico, sin importar si ya tiene contenido_enviado_en marcado o si fecha_hora_fin todav\u00eda no cumple el margen. \u00dasalo cuando una sesi\u00f3n se qued\u00f3 a medias (ej. carpetas creadas pero correo nunca sali\u00f3 porque el proceso se interrumpi\u00f3 despu\u00e9s de marcarla como ya procesada)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/tenant/metodo-pago-default": {
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Actualizar Metodo Pago Default",
+        "description": "Permite al admin del tenant cambiar el m\u00e9todo de pago por default.",
+        "operationId": "actualizar_metodo_pago_default_api_v2__tenant_slug__admin_tenant_metodo_pago_default_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetodoPagoDefaultIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/reservas/{folio}/checkout": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Checkout Reserva",
+        "description": "Cliente logueado: genera una preferencia de MercadoPago para una\nreserva confirmada o en espera de pago con pago pendiente (auto-compra\npost-asignaci\u00f3n, o reintento del link de pago original).",
+        "operationId": "checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "folio",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 32,
+              "title": "Folio"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutUrlOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/inscripciones/{inscripcion_id}/checkout": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Checkout Inscripcion",
+        "description": "Cliente logueado: genera una preferencia de MercadoPago para pagar\nun paquete de serie completo.",
+        "operationId": "checkout_inscripcion_api_v2__tenant_slug__inscripciones__inscripcion_id__checkout_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "inscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Inscripcion Id"
+            }
+          },
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutUrlOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/personalizacion": {
+      "get": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Obtener Personalizacion",
+        "description": "Devuelve el color primario y logo actuales del tenant.",
+        "operationId": "obtener_personalizacion_api_v2__tenant_slug__admin_personalizacion_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalizacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Actualizar Color Personalizacion",
+        "description": "Actualiza \u00fanicamente el color primario del tenant (formato #RRGGBB).",
+        "operationId": "actualizar_color_personalizacion_api_v2__tenant_slug__admin_personalizacion_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalizacionColorIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalizacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/{tenant_slug}/admin/personalizacion/logo": {
+      "post": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Subir Logo Personalizacion",
+        "description": "Sube un logo de tenant a Cloudinary y reemplaza el anterior si exist\u00eda.",
+        "operationId": "subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalizacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Agenda v2.2"
+        ],
+        "summary": "Quitar Logo Personalizacion",
+        "description": "Elimina el logo del tenant en Cloudinary y vuelve al avatar de inicial.",
+        "operationId": "quitar_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalizacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/superadmin/tenants": {
       "get": {
         "tags": [
@@ -3032,6 +5535,335 @@
         }
       }
     },
+    "/api/v2/superadmin/usuarios": {
+      "get": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Listar Usuarios Global",
+        "operationId": "listar_usuarios_global_api_v2_superadmin_usuarios_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Busca por email o nombre",
+              "title": "Q"
+            },
+            "description": "Busca por email o nombre"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuariosGlobalPaginadosOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}": {
+      "get": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Detalle Usuario Global",
+        "operationId": "detalle_usuario_global_api_v2_superadmin_usuarios__usuario_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioGlobalDetalleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/vincular": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Vincular Usuario Global",
+        "operationId": "vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}/desvincular/{tenant_id}": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Desvincular Usuario Global",
+        "operationId": "desvincular_usuario_global_api_v2_superadmin_usuarios__usuario_id__desvincular__tenant_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}/desactivar": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Desactivar Usuario Global",
+        "description": "Desactiva la cuenta completa: bloquea login, desvincula de todos los\ntenants (soft) y cancela sus reservas activas / solicitudes pendientes.\n\nReversible \u2014 no borra nada. `purgar` es el paso irreversible aparte.",
+        "operationId": "desactivar_usuario_global_api_v2_superadmin_usuarios__usuario_id__desactivar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/superadmin/usuarios/{usuario_id}/purgar": {
+      "post": {
+        "tags": [
+          "Superadmin"
+        ],
+        "summary": "Purgar Usuario Global",
+        "description": "Anonimiza la cuenta (UPDATE, no DELETE) \u2014 ver decisi\u00f3n en HANDOFF.md:\nlas FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son\nRESTRICT y no se tocan, as\u00ed que purgar no puede ser un DELETE FROM\nusuarios real sin romper esas tablas. Solo se permite si la cuenta lleva\n30+ d\u00edas desactivada. Irreversible.",
+        "operationId": "purgar_usuario_global_api_v2_superadmin_usuarios__usuario_id__purgar_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -3113,7 +5945,7 @@
           "nombre"
         ],
         "title": "AsesorPublicOut",
-        "description": "Datos de asesor visibles al público. Sin email, sin comisión, sin metadata."
+        "description": "Datos de asesor visibles al p\u00fablico. Sin email, sin comisi\u00f3n, sin metadata."
       },
       "AsesorServicioOut": {
         "properties": {
@@ -3176,7 +6008,7 @@
             "type": "integer",
             "exclusiveMinimum": 0.0,
             "title": "Asesor Id",
-            "description": "UsuarioTenant (rol asesor/admin) a asignar a la sesión"
+            "description": "UsuarioTenant (rol asesor/admin) a asignar a la sesi\u00f3n"
           }
         },
         "additionalProperties": false,
@@ -3308,6 +6140,25 @@
           "creado_en"
         ],
         "title": "BloqueoOut"
+      },
+      "Body_activar_cuenta_auth_activar_cuenta_post": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "Body_activar_cuenta_auth_activar_cuenta_post"
       },
       "Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post": {
         "properties": {
@@ -3463,6 +6314,33 @@
         ],
         "title": "Body_login_auth_login_post"
       },
+      "Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"
+      },
+      "Body_recuperar_password_auth_recuperar_password_post": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "Body_recuperar_password_auth_recuperar_password_post"
+      },
       "Body_register_auth_register_post": {
         "properties": {
           "email": {
@@ -3499,6 +6377,383 @@
           "nombre"
         ],
         "title": "Body_register_auth_register_post"
+      },
+      "Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post": {
+        "properties": {
+          "logo": {
+            "type": "string",
+            "format": "binary",
+            "title": "Logo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "logo"
+        ],
+        "title": "Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post"
+      },
+      "Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "nombre",
+          "rol",
+          "tenant_id"
+        ],
+        "title": "Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"
+      },
+      "CampoFormularioAdminIn": {
+        "properties": {
+          "tipo": {
+            "$ref": "#/components/schemas/TipoCampoFormularioEnum"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "requerido": {
+            "type": "boolean",
+            "title": "Requerido",
+            "default": false
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "validacion_regex": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion Regex"
+          },
+          "ayuda": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ayuda"
+          },
+          "orden": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Orden",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipo",
+          "label"
+        ],
+        "title": "CampoFormularioAdminIn"
+      },
+      "CampoFormularioAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "formulario_id": {
+            "type": "integer",
+            "title": "Formulario Id"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "requerido": {
+            "type": "boolean",
+            "title": "Requerido"
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "validacion_regex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion Regex"
+          },
+          "ayuda": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ayuda"
+          },
+          "orden": {
+            "type": "integer",
+            "title": "Orden"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "formulario_id",
+          "tipo",
+          "label",
+          "requerido",
+          "orden",
+          "activo",
+          "creado_en"
+        ],
+        "title": "CampoFormularioAdminOut"
+      },
+      "CampoFormularioAdminUpdate": {
+        "properties": {
+          "tipo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipoCampoFormularioEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "requerido": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requerido"
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "validacion_regex": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion Regex"
+          },
+          "ayuda": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ayuda"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden"
+          },
+          "activo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CampoFormularioAdminUpdate"
+      },
+      "CampoFormularioBulkAdminIn": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CampoFormularioAdminIn"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CampoFormularioBulkAdminIn"
       },
       "CanalEnum": {
         "type": "string",
@@ -3559,6 +6814,24 @@
         ],
         "title": "CheckoutUrlOut"
       },
+      "ConfirmarInscripcionIn": {
+        "properties": {
+          "modalidad_cobro": {
+            "$ref": "#/components/schemas/ModalidadCobroEnum"
+          },
+          "metodo_pago": {
+            "$ref": "#/components/schemas/MetodoPagoEnum",
+            "default": "local"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "modalidad_cobro"
+        ],
+        "title": "ConfirmarInscripcionIn",
+        "description": "El cliente confirma su invitaci\u00f3n: elige modalidad y m\u00e9todo de pago."
+      },
       "DisponibilidadDiaOut": {
         "properties": {
           "fecha": {
@@ -3574,6 +6847,14 @@
             "type": "string",
             "title": "Timezone"
           },
+          "requiere_confirmacion": {
+            "type": "boolean",
+            "title": "Requiere Confirmacion"
+          },
+          "permite_solicitudes": {
+            "type": "boolean",
+            "title": "Permite Solicitudes"
+          },
           "slots": {
             "items": {
               "$ref": "#/components/schemas/SlotDisponible"
@@ -3587,9 +6868,255 @@
           "fecha",
           "servicio_id",
           "timezone",
+          "requiere_confirmacion",
+          "permite_solicitudes",
           "slots"
         ],
         "title": "DisponibilidadDiaOut"
+      },
+      "EncuestaCampoOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "requerido": {
+            "type": "boolean",
+            "title": "Requerido"
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "ayuda": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ayuda"
+          },
+          "orden": {
+            "type": "integer",
+            "title": "Orden"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "label",
+          "requerido",
+          "orden"
+        ],
+        "title": "EncuestaCampoOut"
+      },
+      "EncuestaResponderIn": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "respuestas": {
+            "type": "object",
+            "title": "Respuestas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "respuestas"
+        ],
+        "title": "EncuestaResponderIn"
+      },
+      "EncuestaRespuestaCampoOut": {
+        "properties": {
+          "campo_id": {
+            "type": "integer",
+            "title": "Campo Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor"
+          },
+          "grupo_matriz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Matriz"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "opciones": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opciones"
+          },
+          "orden": {
+            "type": "integer",
+            "title": "Orden"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo_id",
+          "label",
+          "tipo",
+          "orden"
+        ],
+        "title": "EncuestaRespuestaCampoOut"
+      },
+      "EncuestaRespuestaClienteOut": {
+        "properties": {
+          "reserva_id": {
+            "type": "integer",
+            "title": "Reserva Id"
+          },
+          "cliente_nombre": {
+            "type": "string",
+            "title": "Cliente Nombre"
+          },
+          "cliente_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Email"
+          },
+          "respondido_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Respondido En"
+          },
+          "respuestas": {
+            "items": {
+              "$ref": "#/components/schemas/EncuestaRespuestaCampoOut"
+            },
+            "type": "array",
+            "title": "Respuestas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reserva_id",
+          "cliente_nombre",
+          "respondido_en",
+          "respuestas"
+        ],
+        "title": "EncuestaRespuestaClienteOut"
+      },
+      "EncuestaValidarOut": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "formulario_id": {
+            "type": "integer",
+            "title": "Formulario Id"
+          },
+          "formulario_nombre": {
+            "type": "string",
+            "title": "Formulario Nombre"
+          },
+          "reserva_id": {
+            "type": "integer",
+            "title": "Reserva Id"
+          },
+          "campos": {
+            "items": {
+              "$ref": "#/components/schemas/EncuestaCampoOut"
+            },
+            "type": "array",
+            "title": "Campos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "formulario_id",
+          "formulario_nombre",
+          "reserva_id",
+          "campos"
+        ],
+        "title": "EncuestaValidarOut"
+      },
+      "EstadoInscripcionEnum": {
+        "type": "string",
+        "enum": [
+          "invitada",
+          "confirmada",
+          "cancelada"
+        ],
+        "title": "EstadoInscripcionEnum"
       },
       "EstadoPagoEnum": {
         "type": "string",
@@ -3612,6 +7139,24 @@
           "completada"
         ],
         "title": "EstadoReservaEnum"
+      },
+      "EstadoSerie": {
+        "type": "string",
+        "enum": [
+          "activa",
+          "completada",
+          "cancelada"
+        ],
+        "title": "EstadoSerie"
+      },
+      "EstadoSerieEnum": {
+        "type": "string",
+        "enum": [
+          "activa",
+          "completada",
+          "cancelada"
+        ],
+        "title": "EstadoSerieEnum"
       },
       "EstadoSesionEnum": {
         "type": "string",
@@ -3643,6 +7188,191 @@
           "cancelada"
         ],
         "title": "EstadoSolicitudEnum"
+      },
+      "FormularioAdminIn": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Nombre"
+          },
+          "tipo": {
+            "$ref": "#/components/schemas/TipoFormularioEnum",
+            "default": "satisfaccion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nombre"
+        ],
+        "title": "FormularioAdminIn"
+      },
+      "FormularioAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "campos": {
+            "items": {
+              "$ref": "#/components/schemas/CampoFormularioAdminOut"
+            },
+            "type": "array",
+            "title": "Campos",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "nombre",
+          "tipo",
+          "activo",
+          "creado_en"
+        ],
+        "title": "FormularioAdminOut"
+      },
+      "FormularioAdminUpdate": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "activo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FormularioAdminUpdate"
+      },
+      "FormularioListAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "num_campos": {
+            "type": "integer",
+            "title": "Num Campos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "nombre",
+          "tipo",
+          "activo",
+          "creado_en",
+          "num_campos"
+        ],
+        "title": "FormularioListAdminOut"
+      },
+      "GoogleMeetConectarIn": {
+        "properties": {
+          "impersonar_email": {
+            "type": "string",
+            "format": "email",
+            "title": "Impersonar Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "impersonar_email"
+        ],
+        "title": "GoogleMeetConectarIn"
+      },
+      "GoogleMeetEstadoOut": {
+        "properties": {
+          "conectado": {
+            "type": "boolean",
+            "title": "Conectado"
+          },
+          "impersonar_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impersonar Email"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conectado",
+          "tenant_id"
+        ],
+        "title": "GoogleMeetEstadoOut"
       },
       "HTTPValidationError": {
         "properties": {
@@ -3698,6 +7428,364 @@
         ],
         "title": "HorarioAsesorOut"
       },
+      "InscripcionSerieClienteOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "serie_id": {
+            "type": "integer",
+            "title": "Serie Id"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoInscripcionEnum"
+          },
+          "modalidad_cobro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalidadCobroEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "frecuencia": {
+            "type": "string",
+            "title": "Frecuencia"
+          },
+          "dia_semana": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "num_repeticiones": {
+            "type": "integer",
+            "title": "Num Repeticiones"
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Inicio"
+          },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado"
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado"
+          },
+          "precio_sesion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Sesion"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
+          "num_reservas_creadas": {
+            "type": "integer",
+            "title": "Num Reservas Creadas",
+            "default": 0
+          },
+          "estado_pago": {
+            "type": "string",
+            "title": "Estado Pago",
+            "default": "pendiente"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "serie_id",
+          "estado",
+          "servicio_id",
+          "frecuencia",
+          "hora_inicio",
+          "num_repeticiones",
+          "fecha_inicio",
+          "cobro_por_sesion_habilitado",
+          "cobro_por_paquete_habilitado",
+          "creado_en"
+        ],
+        "title": "InscripcionSerieClienteOut",
+        "description": "Vista de una inscripci\u00f3n a serie para el cliente due\u00f1o (GET /mis-series).\n\nTrae lo que el cliente necesita para decidir c\u00f3mo confirmar: el\nservicio, el patr\u00f3n de horario, las modalidades habilitadas y sus\nprecios (sesi\u00f3n = servicio.precio, paquete = servicio.precio_paquete)."
+      },
+      "InscripcionSerieCreate": {
+        "properties": {
+          "cliente_usuario_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Cliente Usuario Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cliente_usuario_id"
+        ],
+        "title": "InscripcionSerieCreate",
+        "description": "Invita a un cliente a una serie recurrente existente.\n\nYa no se captura modalidad de cobro ni m\u00e9todo de pago aqu\u00ed \u2014 eso lo\nelige el cliente desde su portal (POST /mis-series/{id}/confirmar).\nEsto solo crea la invitaci\u00f3n (estado=invitada); no genera reservas."
+      },
+      "InscripcionSerieOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "serie_id": {
+            "type": "integer",
+            "title": "Serie Id"
+          },
+          "cliente_usuario_id": {
+            "type": "integer",
+            "title": "Cliente Usuario Id"
+          },
+          "nombre_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Cliente"
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoInscripcionEnum"
+          },
+          "modalidad_cobro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalidadCobroEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "num_reservas_creadas": {
+            "type": "integer",
+            "title": "Num Reservas Creadas",
+            "default": 0
+          },
+          "num_reservas_omitidas": {
+            "type": "integer",
+            "title": "Num Reservas Omitidas",
+            "default": 0
+          },
+          "fechas_omitidas": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechas Omitidas"
+          },
+          "estado_pago": {
+            "type": "string",
+            "title": "Estado Pago"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "serie_id",
+          "cliente_usuario_id",
+          "estado",
+          "estado_pago",
+          "creado_en"
+        ],
+        "title": "InscripcionSerieOut",
+        "description": "Vista de una inscripci\u00f3n a serie (admin)."
+      },
+      "MembresiaGlobalOut": {
+        "properties": {
+          "ut_id": {
+            "type": "integer",
+            "title": "Ut Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "tenant_nombre": {
+            "type": "string",
+            "title": "Tenant Nombre"
+          },
+          "tenant_slug": {
+            "type": "string",
+            "title": "Tenant Slug"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "fecha_vinculacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Vinculacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ut_id",
+          "tenant_id",
+          "tenant_nombre",
+          "tenant_slug",
+          "rol",
+          "activo",
+          "fecha_vinculacion"
+        ],
+        "title": "MembresiaGlobalOut"
+      },
+      "MercadoPagoConectarIn": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "minLength": 10,
+            "title": "Access Token"
+          },
+          "public_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "MercadoPagoConectarIn"
+      },
+      "MercadoPagoEstadoOut": {
+        "properties": {
+          "conectado": {
+            "type": "boolean",
+            "title": "Conectado"
+          },
+          "mp_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mp User Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "metodo_pago_default": {
+            "type": "string",
+            "title": "Metodo Pago Default",
+            "default": "local"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conectado",
+          "tenant_id"
+        ],
+        "title": "MercadoPagoEstadoOut"
+      },
+      "MetodoPagoDefaultIn": {
+        "properties": {
+          "metodo_pago_default": {
+            "type": "string",
+            "pattern": "^(online|local|registro)$",
+            "title": "Metodo Pago Default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metodo_pago_default"
+        ],
+        "title": "MetodoPagoDefaultIn"
+      },
       "MetodoPagoEnum": {
         "type": "string",
         "enum": [
@@ -3706,6 +7794,14 @@
           "registro"
         ],
         "title": "MetodoPagoEnum"
+      },
+      "ModalidadCobroEnum": {
+        "type": "string",
+        "enum": [
+          "sesion",
+          "paquete"
+        ],
+        "title": "ModalidadCobroEnum"
       },
       "ModalidadEnum": {
         "type": "string",
@@ -3774,7 +7870,7 @@
             "type": "string",
             "pattern": "^(efectivo|transferencia)$",
             "title": "Metodo",
-            "description": "Método de cobro presencial del staff",
+            "description": "M\u00e9todo de cobro presencial del staff",
             "default": "efectivo"
           },
           "monto": {
@@ -3809,6 +7905,54 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PagoLocalIn"
+      },
+      "PersonalizacionColorIn": {
+        "properties": {
+          "color_primario": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Color Primario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "color_primario"
+        ],
+        "title": "PersonalizacionColorIn"
+      },
+      "PersonalizacionOut": {
+        "properties": {
+          "color_primario": {
+            "type": "string",
+            "title": "Color Primario"
+          },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "color_primario",
+          "nombre",
+          "slug"
+        ],
+        "title": "PersonalizacionOut"
       },
       "ReagendarSesionIn": {
         "properties": {
@@ -3992,7 +8136,7 @@
               }
             ],
             "title": "Sesion Id",
-            "description": "ID de la sesión existente a la que el cliente eligió unirse. Si se omite, el sistema busca o crea una sesión."
+            "description": "ID de la sesi\u00f3n existente a la que el cliente eligi\u00f3 unirse. Si se omite, el sistema busca o crea una sesi\u00f3n."
           },
           "asesor_id": {
             "anyOf": [
@@ -4136,7 +8280,18 @@
           "sesion_creada": {
             "type": "boolean",
             "title": "Sesion Creada",
-            "description": "True si se creó una sesión nueva; False si el cliente se unió a una existente."
+            "description": "True si se cre\u00f3 una sesi\u00f3n nueva; False si el cliente se uni\u00f3 a una existente."
+          },
+          "activacion_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activacion Url"
           }
         },
         "type": "object",
@@ -4147,7 +8302,7 @@
           "sesion_creada"
         ],
         "title": "ReservaCreateResponse",
-        "description": "Respuesta del POST /reservas.\n\nv2.1 devolvía `SesionOut`, un nombre que nunca se importó en el router: el\nendpoint lanzaba NameError DESPUÉS de haber creado la reserva y cobrado."
+        "description": "Respuesta del POST /reservas.\n\nv2.1 devolv\u00eda `SesionOut`, un nombre que nunca se import\u00f3 en el router: el\nendpoint lanzaba NameError DESPU\u00c9S de haber creado la reserva y cobrado."
       },
       "ReservaOut": {
         "properties": {
@@ -4282,6 +8437,38 @@
             ],
             "title": "Notas Cliente"
           },
+          "serie_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serie Id"
+          },
+          "inscripcion_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inscripcion Id"
+          },
+          "modalidad_cobro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalidadCobroEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -4389,7 +8576,7 @@
           "creado_en"
         ],
         "title": "ReservaPublicaOut",
-        "description": "Vista pública de reserva (solo lectura, sin datos sensibles).\n\nAccesible sin autenticación mediante folio + codigo_confirmacion.\nNo incluye: meet_url, notas_cliente, sede, asesor (privados)."
+        "description": "Vista p\u00fablica de reserva (solo lectura, sin datos sensibles).\n\nAccesible sin autenticaci\u00f3n mediante folio + codigo_confirmacion.\nNo incluye: meet_url, notas_cliente, sede, asesor (privados)."
       },
       "ReservaResumenAdminOut": {
         "properties": {
@@ -4532,6 +8719,229 @@
         ],
         "title": "SedeOut"
       },
+      "SerieReservaCreate": {
+        "properties": {
+          "servicio_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Servicio Id"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "frecuencia": {
+            "type": "string",
+            "pattern": "^(semanal|quincenal|mensual)$",
+            "title": "Frecuencia"
+          },
+          "dia_semana": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Duracion Minutos",
+            "default": 60
+          },
+          "num_repeticiones": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Num Repeticiones",
+            "default": 1
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Inicio"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "servicio_id",
+          "frecuencia",
+          "hora_inicio",
+          "fecha_inicio"
+        ],
+        "title": "SerieReservaCreate",
+        "description": "Crear el patr\u00f3n de horario de una serie recurrente.\n\nLas modalidades de cobro y el precio de paquete se heredan del servicio.\nLa inscripci\u00f3n de clientes es un paso posterior."
+      },
+      "SerieReservaOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "nombre_asesor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Asesor"
+          },
+          "frecuencia": {
+            "type": "string",
+            "title": "Frecuencia"
+          },
+          "dia_semana": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "title": "Duracion Minutos"
+          },
+          "num_repeticiones": {
+            "type": "integer",
+            "title": "Num Repeticiones"
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Inicio"
+          },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado"
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSerieEnum"
+          },
+          "num_inscripciones": {
+            "type": "integer",
+            "title": "Num Inscripciones",
+            "default": 0
+          },
+          "num_reservas_creadas_total": {
+            "type": "integer",
+            "title": "Num Reservas Creadas Total",
+            "default": 0
+          },
+          "inscripciones": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InscripcionSerieOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inscripciones"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "actualizado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Actualizado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "servicio_id",
+          "frecuencia",
+          "hora_inicio",
+          "duracion_minutos",
+          "num_repeticiones",
+          "fecha_inicio",
+          "cobro_por_sesion_habilitado",
+          "cobro_por_paquete_habilitado",
+          "estado",
+          "creado_en",
+          "actualizado_en"
+        ],
+        "title": "SerieReservaOut",
+        "description": "Vista de una serie de reservas."
+      },
       "ServicioAdminIn": {
         "properties": {
           "nombre": {
@@ -4647,6 +9057,31 @@
             "title": "Pago Requerido",
             "default": true
           },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado",
+            "default": true
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado",
+            "default": false
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
           "visible_web": {
             "type": "boolean",
             "title": "Visible Web",
@@ -4656,6 +9091,22 @@
             "type": "boolean",
             "title": "Requiere Confirmacion",
             "default": false
+          },
+          "permite_solicitudes": {
+            "type": "boolean",
+            "title": "Permite Solicitudes",
+            "default": false
+          },
+          "encuesta_satisfaccion_formulario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encuesta Satisfaccion Formulario Id"
           }
         },
         "additionalProperties": false,
@@ -4768,10 +9219,47 @@
             "type": "boolean",
             "title": "Pago Requerido"
           },
+          "cobro_por_sesion_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Sesion Habilitado",
+            "default": true
+          },
+          "cobro_por_paquete_habilitado": {
+            "type": "boolean",
+            "title": "Cobro Por Paquete Habilitado",
+            "default": false
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
           "requiere_confirmacion": {
             "type": "boolean",
             "title": "Requiere Confirmacion",
             "default": false
+          },
+          "permite_solicitudes": {
+            "type": "boolean",
+            "title": "Permite Solicitudes",
+            "default": false
+          },
+          "encuesta_satisfaccion_formulario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encuesta Satisfaccion Formulario Id"
           },
           "visible_web": {
             "type": "boolean",
@@ -4995,6 +9483,43 @@
             ],
             "title": "Pago Requerido"
           },
+          "cobro_por_sesion_habilitado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cobro Por Sesion Habilitado"
+          },
+          "cobro_por_paquete_habilitado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cobro Por Paquete Habilitado"
+          },
+          "precio_paquete": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Paquete"
+          },
           "visible_web": {
             "anyOf": [
               {
@@ -5016,12 +9541,34 @@
               }
             ],
             "title": "Requiere Confirmacion"
+          },
+          "permite_solicitudes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permite Solicitudes"
+          },
+          "encuesta_satisfaccion_formulario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encuesta Satisfaccion Formulario Id"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "ServicioAdminUpdate",
-        "description": "PATCH parcial. `activo` NO se edita aquí: se usa activar/desactivar."
+        "description": "PATCH parcial. `activo` NO se edita aqu\u00ed: se usa activar/desactivar."
       },
       "ServicioPublicOut": {
         "properties": {
@@ -5083,6 +9630,11 @@
               }
             ],
             "title": "Imagen Url"
+          },
+          "tiene_sesiones_abiertas": {
+            "type": "boolean",
+            "title": "Tiene Sesiones Abiertas",
+            "default": false
           }
         },
         "type": "object",
@@ -5437,7 +9989,7 @@
           "lugares_disponibles"
         ],
         "title": "SesionDetailOut",
-        "description": "Detalle público de una sesión.\n\nELIMINADO respecto de v2.1: la lista `reservas` con folio y estado de cada\ninscrito, y `notas_internas`. El endpoint era anónimo y sesion_id es\nautoincremental, así que cualquiera podía iterar IDs, cosechar folios y\nconsultar el historial de pago ajeno. Para la vista completa existe\nSesionAdminOut, detrás de autenticación con rol."
+        "description": "Detalle p\u00fablico de una sesi\u00f3n.\n\nELIMINADO respecto de v2.1: la lista `reservas` con folio y estado de cada\ninscrito, y `notas_internas`. El endpoint era an\u00f3nimo y sesion_id es\nautoincremental, as\u00ed que cualquiera pod\u00eda iterar IDs, cosechar folios y\nconsultar el historial de pago ajeno. Para la vista completa existe\nSesionAdminOut, detr\u00e1s de autenticaci\u00f3n con rol."
       },
       "SesionListOut": {
         "properties": {
@@ -5602,6 +10154,141 @@
         ],
         "title": "SlotDisponible"
       },
+      "SolicitudAceptarAlternativaOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "servicio_id": {
+            "type": "integer",
+            "title": "Servicio Id"
+          },
+          "servicio_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Servicio Nombre"
+          },
+          "fecha_hora_propuesta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora Propuesta"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "title": "Duracion Minutos"
+          },
+          "notas_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notas Cliente"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSolicitudEnum"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "reserva_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserva Id"
+          },
+          "alternativas": {
+            "items": {
+              "$ref": "#/components/schemas/SolicitudAlternativaOut"
+            },
+            "type": "array",
+            "title": "Alternativas"
+          },
+          "alternativa_aceptada_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternativa Aceptada Id"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "folio_reserva": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folio Reserva"
+          },
+          "sesion_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sesion Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "servicio_id",
+          "fecha_hora_propuesta",
+          "duracion_minutos",
+          "estado",
+          "creado_en"
+        ],
+        "title": "SolicitudAceptarAlternativaOut",
+        "description": "El cliente acept\u00f3 una fecha alternativa; la reserva ya fue creada."
+      },
       "SolicitudAdminOut": {
         "properties": {
           "id": {
@@ -5679,6 +10366,24 @@
             ],
             "title": "Reserva Id"
           },
+          "alternativas": {
+            "items": {
+              "$ref": "#/components/schemas/SolicitudAlternativaOut"
+            },
+            "type": "array",
+            "title": "Alternativas"
+          },
+          "alternativa_aceptada_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternativa Aceptada Id"
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -5732,6 +10437,17 @@
               }
             ],
             "title": "Resuelto En"
+          },
+          "serie_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serie Id"
           }
         },
         "type": "object",
@@ -5745,7 +10461,26 @@
           "cliente_usuario_id"
         ],
         "title": "SolicitudAdminOut",
-        "description": "Vista del staff: agrega datos del cliente y de resolución."
+        "description": "Vista del staff: agrega datos del cliente y de resoluci\u00f3n."
+      },
+      "SolicitudAlternativaOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "fecha_hora": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Hora"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "fecha_hora"
+        ],
+        "title": "SolicitudAlternativaOut"
       },
       "SolicitudConfirmarOut": {
         "properties": {
@@ -5824,6 +10559,24 @@
             ],
             "title": "Reserva Id"
           },
+          "alternativas": {
+            "items": {
+              "$ref": "#/components/schemas/SolicitudAlternativaOut"
+            },
+            "type": "array",
+            "title": "Alternativas"
+          },
+          "alternativa_aceptada_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternativa Aceptada Id"
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -5878,6 +10631,17 @@
             ],
             "title": "Resuelto En"
           },
+          "serie_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serie Id"
+          },
           "folio_reserva": {
             "anyOf": [
               {
@@ -5912,7 +10676,67 @@
           "cliente_usuario_id"
         ],
         "title": "SolicitudConfirmarOut",
-        "description": "El staff confirmó la solicitud: la Reserva PENDIENTE ya existe y el\nstaff la termina de confirmar vía POST /admin/reservas/{id}/asignar-asesor."
+        "description": "El staff confirm\u00f3 la solicitud: la Reserva PENDIENTE ya existe y el\nstaff la termina de confirmar v\u00eda POST /admin/reservas/{id}/asignar-asesor."
+      },
+      "SolicitudConfirmarSerieIn": {
+        "properties": {
+          "frecuencia": {
+            "type": "string",
+            "pattern": "^(semanal|quincenal|mensual)$",
+            "title": "Frecuencia"
+          },
+          "dia_semana": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dia Semana"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio"
+          },
+          "duracion_minutos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Duracion Minutos",
+            "default": 60
+          },
+          "num_repeticiones": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Num Repeticiones",
+            "default": 1
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "frecuencia",
+          "hora_inicio"
+        ],
+        "title": "SolicitudConfirmarSerieIn",
+        "description": "Par\u00e1metros para convertir una solicitud en una serie recurrente.\n\nLa fecha de inicio, servicio y cliente se toman de la solicitud. El\nstaff define el patr\u00f3n de recurrencia \u2014 las modalidades de cobro y el\nprecio de paquete se heredan del servicio. NO elige la modalidad ni el\nm\u00e9todo de pago del cliente: eso lo hace el cliente desde su portal\n(POST /mis-series/{id}/confirmar), igual que en el camino de inscribir\ndirectamente. Confirmar una solicitud como serie solo crea la serie +\nuna invitaci\u00f3n (estado=invitada) para el cliente."
       },
       "SolicitudCreate": {
         "properties": {
@@ -5946,7 +10770,7 @@
           "fecha_hora_propuesta"
         ],
         "title": "SolicitudCreate",
-        "description": "El cliente propone una fecha/hora libre para un servicio con\n`requiere_confirmacion=True`. No reserva nada todavía."
+        "description": "El cliente propone una fecha/hora libre para un servicio con\n`requiere_confirmacion=True`. No reserva nada todav\u00eda."
       },
       "SolicitudOut": {
         "properties": {
@@ -6025,6 +10849,24 @@
             ],
             "title": "Reserva Id"
           },
+          "alternativas": {
+            "items": {
+              "$ref": "#/components/schemas/SolicitudAlternativaOut"
+            },
+            "type": "array",
+            "title": "Alternativas"
+          },
+          "alternativa_aceptada_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternativa Aceptada Id"
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -6041,7 +10883,7 @@
           "creado_en"
         ],
         "title": "SolicitudOut",
-        "description": "Vista del cliente: sin datos de resolución internos."
+        "description": "Vista del cliente: sin datos de resoluci\u00f3n internos."
       },
       "SolicitudRechazarIn": {
         "properties": {
@@ -6056,6 +10898,22 @@
               }
             ],
             "title": "Motivo"
+          },
+          "alternativas": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternativas"
           }
         },
         "additionalProperties": false,
@@ -6109,6 +10967,11 @@
             "type": "integer",
             "title": "Max Reservas Mes"
           },
+          "max_reservas_serie": {
+            "type": "integer",
+            "title": "Max Reservas Serie",
+            "default": 20
+          },
           "creado_en": {
             "type": "string",
             "format": "date-time",
@@ -6134,6 +10997,16 @@
               }
             ],
             "title": "Smtp Config"
+          },
+          "pago_configurado": {
+            "type": "boolean",
+            "title": "Pago Configurado",
+            "default": false
+          },
+          "metodo_pago_default": {
+            "type": "string",
+            "title": "Metodo Pago Default",
+            "default": "local"
           }
         },
         "type": "object",
@@ -6211,6 +11084,13 @@
             "minimum": 1.0,
             "title": "Max Reservas Mes",
             "default": 1000
+          },
+          "max_reservas_serie": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Reservas Serie",
+            "default": 20
           }
         },
         "type": "object",
@@ -6385,6 +11265,19 @@
             ],
             "title": "Max Reservas Mes"
           },
+          "max_reservas_serie": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Reservas Serie"
+          },
           "smtp_config": {
             "anyOf": [
               {
@@ -6395,6 +11288,18 @@
               }
             ],
             "title": "Smtp Config"
+          },
+          "metodo_pago_default": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(online|local|registro)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metodo Pago Default"
           }
         },
         "type": "object",
@@ -6419,6 +11324,32 @@
           "otro"
         ],
         "title": "TipoBloqueoEnum"
+      },
+      "TipoCampoFormularioEnum": {
+        "type": "string",
+        "enum": [
+          "texto",
+          "textarea",
+          "numero",
+          "email",
+          "telefono",
+          "fecha",
+          "select",
+          "multiselect",
+          "checkbox",
+          "radio",
+          "archivo",
+          "rating"
+        ],
+        "title": "TipoCampoFormularioEnum"
+      },
+      "TipoFormularioEnum": {
+        "type": "string",
+        "enum": [
+          "intake",
+          "satisfaccion"
+        ],
+        "title": "TipoFormularioEnum"
       },
       "UsuarioAdminOut": {
         "properties": {
@@ -6485,6 +11416,204 @@
           "fecha_vinculacion"
         ],
         "title": "UsuarioAdminOut"
+      },
+      "UsuarioGlobalDetalleOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "desactivado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desactivado En"
+          },
+          "purgado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purgado En"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "total_tenants": {
+            "type": "integer",
+            "title": "Total Tenants",
+            "default": 0
+          },
+          "tenants": {
+            "items": {
+              "$ref": "#/components/schemas/MembresiaGlobalOut"
+            },
+            "type": "array",
+            "title": "Tenants",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "nombre",
+          "activo",
+          "creado_en"
+        ],
+        "title": "UsuarioGlobalDetalleOut"
+      },
+      "UsuarioGlobalOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "desactivado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desactivado En"
+          },
+          "purgado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purgado En"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "total_tenants": {
+            "type": "integer",
+            "title": "Total Tenants",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "nombre",
+          "activo",
+          "creado_en"
+        ],
+        "title": "UsuarioGlobalOut"
+      },
+      "UsuariosGlobalPaginadosOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsuarioGlobalOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "paginacion": {
+            "$ref": "#/components/schemas/PaginacionOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "paginacion"
+        ],
+        "title": "UsuariosGlobalPaginadosOut"
       },
       "ValidationError": {
         "properties": {

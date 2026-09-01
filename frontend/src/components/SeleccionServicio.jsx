@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
+import { errorMensaje } from '../utils/errores'
+import { Badge, Button, Card } from './ui'
+
 const MODALIDAD_INFO = {
   virtual: { icon: '💻', label: 'Virtual' },
   presencial: { icon: '📍', label: 'Presencial' },
@@ -8,13 +11,9 @@ const MODALIDAD_INFO = {
 }
 
 const TIPO_INFO = {
-  individual: { label: 'Individual', className: 'border-blue-200 bg-blue-100 text-blue-700' },
-  grupal: { label: 'Grupal', className: 'border-purple-200 bg-purple-100 text-purple-700' },
-  recurrente: { label: 'Recurrente', className: 'border-orange-200 bg-orange-100 text-orange-700' },
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
+  individual: { label: 'Individual', tono: 'info' },
+  grupal: { label: 'Grupal', tono: 'warning' },
+  recurrente: { label: 'Recurrente', tono: 'neutral' },
 }
 
 function formatPrecio(precio, moneda) {
@@ -39,7 +38,7 @@ export default function SeleccionServicio() {
       '/api/v2/{tenant_slug}/servicios',
       {
         params: { path: { tenant_slug: tenantSlug } },
-      },
+      }
     )
     if (fetchErr) {
       setError(errorMensaje(fetchErr))
@@ -69,25 +68,21 @@ export default function SeleccionServicio() {
 
   if (error) {
     return (
-      <div className="w-full max-w-xl rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+      <Card className="w-full max-w-xl text-center">
         <p className="mb-1 font-semibold text-red-700">No se pudieron cargar los servicios</p>
         <p className="mb-4 text-sm text-red-600">{error}</p>
-        <button
-          type="button"
-          onClick={fetchServicios}
-          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
-        >
+        <Button variant="danger" onClick={fetchServicios} fullWidth={false}>
           Intentar de nuevo
-        </button>
-      </div>
+        </Button>
+      </Card>
     )
   }
 
   if (servicios.length === 0) {
     return (
-      <div className="w-full max-w-xl rounded-lg border border-gray-200 bg-white p-10 text-center">
+      <Card className="w-full max-w-xl text-center" padding="md">
         <p className="text-gray-500">No hay servicios disponibles.</p>
-      </div>
+      </Card>
     )
   }
 
@@ -98,23 +93,13 @@ export default function SeleccionServicio() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {servicios.map((s) => {
           const mod = MODALIDAD_INFO[s.modalidad] ?? { icon: '🕐', label: s.modalidad }
-          const tipo = TIPO_INFO[s.tipo_agenda] ?? {
-            label: s.tipo_agenda,
-            className: 'border-gray-200 bg-gray-100 text-gray-600',
-          }
+          const tipo = TIPO_INFO[s.tipo_agenda] ?? { label: s.tipo_agenda, tono: 'neutral' }
           const precio = formatPrecio(s.precio, s.moneda)
           return (
-            <div
-              key={s.id}
-              className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
-            >
+            <Card key={s.id} padding="md" className="flex flex-col transition hover:shadow-md">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <h3 className="text-lg font-semibold text-gray-900">{s.nombre}</h3>
-                <span
-                  className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${tipo.className}`}
-                >
-                  {tipo.label}
-                </span>
+                <Badge tono={tipo.tono}>{tipo.label}</Badge>
               </div>
               {s.descripcion && <p className="mb-4 text-sm text-gray-600">{s.descripcion}</p>}
               <div className="mb-4 space-y-1 text-sm text-gray-700">
@@ -124,20 +109,28 @@ export default function SeleccionServicio() {
                 </p>
                 <p>
                   <span className="mr-2">{mod.icon}</span>
-                  {mod.label}
+                  <Badge tono="neutral">{mod.label}</Badge>
                 </p>
               </div>
-              <div className="mt-auto flex items-center justify-between">
+              {s.tiene_sesiones_abiertas && (
+                <Link
+                  to={`/t/${tenantSlug}/servicio/${s.id}/sesiones-abiertas`}
+                  className="mb-2 block rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-center text-xs font-medium text-green-700 hover:bg-green-100"
+                >
+                  Ya hay sesiones abiertas — únete
+                </Link>
+              )}
+              <div className="mt-auto flex items-center justify-between gap-3">
                 <span className="text-base font-bold text-gray-900">{precio ?? 'Sin costo'}</span>
-                <button
+                <Button
                   type="button"
                   onClick={() => navigate(`/t/${tenantSlug}/servicio/${s.id}`)}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                  fullWidth={false}
                 >
                   Agendar
-                </button>
+                </Button>
               </div>
-            </div>
+            </Card>
           )
         })}
       </div>

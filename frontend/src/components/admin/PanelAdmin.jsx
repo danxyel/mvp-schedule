@@ -1,11 +1,18 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import GestionServicios from './GestionServicios'
 import GestionUsuarios from './GestionUsuarios'
+import GestionEncuestas from './GestionEncuestas'
+import SeriesTab from './SeriesTab'
+import CrearSerieModal from './CrearSerieModal'
+import MercadoPagoTab from './MercadoPagoTab'
+import GoogleMeetTab from './GoogleMeetTab'
+import GestionPersonalizacion from './GestionPersonalizacion'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
+import { errorMensaje } from '../../utils/errores'
 const SESION_BADGE = {
   abierta: 'bg-green-100 text-green-700 border-green-200',
   confirmada: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -112,11 +119,6 @@ function getHoraMin(utcString, timezone) {
   return `${get('hour') ?? '00'}:${get('minute') ?? '00'}`
 }
 
-function errorMensaje(err) {
-  if (err?.detail && typeof err.detail === 'string') return err.detail
-  return err?.mensaje ?? err?.detail?.mensaje ?? err?.message ?? JSON.stringify(err)
-}
-
 function Badge({ value, map, labelMap }) {
   return (
     <span
@@ -126,414 +128,6 @@ function Badge({ value, map, labelMap }) {
     >
       {labelMap[value] ?? value}
     </span>
-  )
-}
-
-function SesionesTab({ tenantSlug, token }) {
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  const [offset, setOffset] = useState(0)
-  const [items, setItems] = useState([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [accionError, setAccionError] = useState(null)
-  const [verInscritos, setVerInscritos] = useState(null)
-  const [checkinFolio, setCheckinFolio] = useState(null)
-  const [checkinErrores, setCheckinErrores] = useState({})
-  const [reagendar, setReagendar] = useState(null)
-  const [reagendarError, setReagendarError] = useState(null)
-  const [reagendarLoading, setReagendarLoading] = useState(false)
-
-  const fetchSesiones = useCallback(async () => {
-    const { data, error: fetchErr } = await client.GET(
-      '/api/v2/{tenant_slug}/servicios/{servicio_id}/sesiones',
-      {
-        params: {
-          path: { tenant_slug: tenantSlug, servicio_id: 1 },
-          query: { limit: LIMIT, offset },
-        },
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    if (fetchErr) {
-      setError(fetchErr)
-      setLoading(false)
-      return
-    }
-    setItems(data.items)
-    setTotal(data.paginacion.total)
-    setLoading(false)
-  }, [tenantSlug, token, offset])
-
-  useEffect(() => {
-    fetchSesiones()
-  }, [fetchSesiones])
-
-  const irPagina = (nuevaOffset) => {
-    setLoading(true)
-    setOffset(nuevaOffset)
-  }
-
-  const reintentar = () => {
-    setLoading(true)
-    setError(null)
-    fetchSesiones()
-  }
-
-  const abrirInscritos = async (sesion) => {
-    setVerInscritos({ sesion, reservas: [], loading: true, error: null })
-    const { data, error: fetchErr } = await client.GET(
-      '/api/v2/{tenant_slug}/sesiones/{sesion_id}/admin',
-      {
-        params: { path: { tenant_slug: tenantSlug, sesion_id: sesion.id } },
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    if (fetchErr) {
-      setVerInscritos({ sesion, reservas: [], loading: false, error: fetchErr })
-      return
-    }
-    const reservas = data?.reservas ?? []
-    setVerInscritos({ sesion, reservas, loading: false, error: null })
-  }
-
-  const hacerCheckinInscrito = async (folio) => {
-    setCheckinFolio(folio)
-    setCheckinErrores((prev) => ({ ...prev, [folio]: null }))
-    const { error: fetchErr, response } = await client.POST(
-      '/api/v2/{tenant_slug}/reservas/{folio}/checkin',
-      {
-        params: { path: { tenant_slug: tenantSlug, folio } },
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    setCheckinFolio(null)
-    if (fetchErr) {
-      if (response?.status === 409) {
-        setCheckinErrores((prev) => ({ ...prev, [folio]: 'Ya registrado' }))
-        return
-      }
-      setCheckinErrores((prev) => ({ ...prev, [folio]: errorMensaje(fetchErr) }))
-      return
-    }
-    setVerInscritos((prev) => ({
-      ...prev,
-      reservas: prev.reservas.map((x) =>
-        x.folio === folio ? { ...x, estado: 'completada' } : x,
-      ),
-    }))
-  }
-
-  const completarSesion = async (sesion) => {
-    const hora = formatFechaHora(sesion.fecha_hora_inicio, sesion.timezone)
-    if (!window.confirm(`¿Completar la sesión del ${hora}?`)) return
-
-    setAccionError(null)
-    const { error: fetchErr } = await client.POST(
-      '/api/v2/{tenant_slug}/sesiones/{sesion_id}/completar',
-      {
-        params: { path: { tenant_slug: tenantSlug, sesion_id: sesion.id } },
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    if (fetchErr) {
-      setAccionError(fetchErr)
-      return
-    }
-    fetchSesiones()
-  }
-
-  const abrirReagendar = (sesion) => {
-    setReagendar({
-      sesion,
-      fecha: toDateInputValue(new Date(sesion.fecha_hora_inicio)),
-      hora: getHoraMin(sesion.fecha_hora_inicio, sesion.timezone),
-    })
-    setReagendarError(null)
-  }
-
-  const guardarReagendar = async () => {
-    if (!reagendar?.fecha || !reagendar?.hora) return
-    setReagendarLoading(true)
-    setReagendarError(null)
-    const nuevaFechaHora = `${reagendar.fecha}T${reagendar.hora}${getLocalOffset()}`
-
-    const { error: fetchErr } = await client.POST(
-      '/api/v2/{tenant_slug}/sesiones/{sesion_id}/reagendar',
-      {
-        params: { path: { tenant_slug: tenantSlug, sesion_id: reagendar.sesion.id } },
-        body: { nueva_fecha_hora_inicio: nuevaFechaHora, motivo: null },
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-    setReagendarLoading(false)
-    if (fetchErr) {
-      setReagendarError(fetchErr)
-      return
-    }
-    setReagendar(null)
-    fetchSesiones()
-  }
-
-  if (loading) {
-    return (
-      <div className="animate-pulse space-y-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-12 rounded-lg bg-gray-100" />
-        ))}
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-        <p className="mb-1 font-semibold text-red-700">Error al cargar sesiones</p>
-        <p className="mb-4 text-sm text-red-600">{errorMensaje(error)}</p>
-        <button
-          type="button"
-          onClick={reintentar}
-          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
-        >
-          Intentar de nuevo
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      {accionError && (
-        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {errorMensaje(accionError)}
-        </p>
-      )}
-
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-4 py-3 font-medium">Fecha/Hora</th>
-              <th className="px-4 py-3 font-medium">Asesor</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3 font-medium">Inscritos/Cupo</th>
-              <th className="px-4 py-3 text-right font-medium">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {items.map((s) => (
-              <tr key={s.id} className="transition hover:bg-gray-50">
-                <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                  {formatFechaHora(s.fecha_hora_inicio, s.timezone)}
-                </td>
-                <td className="px-4 py-3 text-gray-700">{s.asesor?.nombre ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <Badge value={s.estado} map={SESION_BADGE} labelMap={SESION_LABEL} />
-                </td>
-                <td className="px-4 py-3 text-gray-700">
-                  {s.inscritos ?? 0}/{s.cupo_maximo ?? 0}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right">
-                  <div className="flex justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => abrirInscritos(s)}
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
-                    >
-                      Ver inscritos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => abrirReagendar(s)}
-                      disabled={s.estado === 'completada' || s.estado === 'cancelada'}
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Reagendar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => completarSesion(s)}
-                      disabled={s.estado === 'completada' || s.estado === 'cancelada'}
-                      className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Completar
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
-                  No hay sesiones.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-4 flex items-center justify-center gap-4">
-        <button
-          type="button"
-          disabled={offset === 0}
-          onClick={() => irPagina(Math.max(0, offset - LIMIT))}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          &larr; Anterior
-        </button>
-        <span className="text-sm text-gray-500">
-          {offset + 1}&ndash;{offset + items.length} de {total}
-        </span>
-        <button
-          type="button"
-          disabled={offset + items.length >= total}
-          onClick={() => irPagina(offset + LIMIT)}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Siguiente &rarr;
-        </button>
-      </div>
-
-      {verInscritos && (
-        <Modal title="Inscritos" onClose={() => setVerInscritos(null)} maxWidth="max-w-2xl">
-          {verInscritos.loading && (
-            <div className="animate-pulse space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-9 rounded bg-gray-100" />
-              ))}
-            </div>
-          )}
-
-          {verInscritos.error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {errorMensaje(verInscritos.error)}
-            </p>
-          )}
-
-          {!verInscritos.loading && !verInscritos.error && verInscritos.reservas.length === 0 && (
-            <p className="py-6 text-center text-sm text-gray-500">
-              Aún no hay inscritos en esta sesión.
-            </p>
-          )}
-
-          {!verInscritos.loading && !verInscritos.error && verInscritos.reservas.length > 0 && (
-            <div className="max-h-[60vh] overflow-x-auto overflow-y-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
-                    <th className="px-2 py-2 font-medium">Nombre</th>
-                    <th className="hidden px-2 py-2 font-medium sm:table-cell">Email</th>
-                    <th className="px-2 py-2 font-medium">Estado</th>
-                    <th className="px-2 py-2 font-medium">Folio</th>
-                    <th className="px-2 py-2 text-right font-medium">Check-in</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {verInscritos.reservas.map((r) => (
-                    <tr key={r.folio}>
-                      <td className="whitespace-nowrap px-2 py-2 text-gray-700">
-                        {r.nombre_cliente ?? '—'}
-                        {checkinErrores[r.folio] && (
-                          <span className="ml-2 text-xs font-medium text-red-600">
-                            {checkinErrores[r.folio]}
-                          </span>
-                        )}
-                      </td>
-                      <td className="hidden px-2 py-2 text-gray-700 sm:table-cell">
-                        {r.email_cliente ?? '—'}
-                      </td>
-                      <td className="px-2 py-2">
-                        <Badge value={r.estado} map={RESERVA_BADGE} labelMap={RESERVA_LABEL} />
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 font-mono text-xs text-gray-600">
-                        {r.folio}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-right">
-                        {r.estado === 'confirmada' && (
-                          <button
-                            type="button"
-                            onClick={() => hacerCheckinInscrito(r.folio)}
-                            disabled={checkinFolio !== null}
-                            className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {checkinFolio === r.folio ? 'Registrando...' : 'Check-in'}
-                          </button>
-                        )}
-                        {r.estado === 'completada' && (
-                          <span className="inline-flex shrink-0 items-center rounded-full border border-green-200 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                            Asistió ✓
-                          </span>
-                        )}
-                        {r.estado === 'cancelada' && (
-                          <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                            Cancelada
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {reagendar && (
-        <Modal title="Reagendar sesión" onClose={() => setReagendar(null)}>
-          <p className="mb-4 text-sm text-gray-600">
-            Sesión actual:{' '}
-            {formatFechaHora(reagendar.sesion.fecha_hora_inicio, reagendar.sesion.timezone)}
-          </p>
-
-          <div className="mb-4 flex justify-center">
-            <SelectorFecha
-              value={new Date(`${reagendar.fecha}T00:00:00`)}
-              onChange={(day) =>
-                setReagendar((prev) => ({ ...prev, fecha: toDateInputValue(day) }))
-              }
-              minDate={hoy}
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Nueva hora</label>
-            <input
-              type="time"
-              value={reagendar.hora}
-              onChange={(e) => setReagendar((prev) => ({ ...prev, hora: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {reagendarError && (
-            <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {errorMensaje(reagendarError)}
-            </p>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setReagendar(null)}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={guardarReagendar}
-              disabled={reagendarLoading || !reagendar.fecha || !reagendar.hora}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {reagendarLoading ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
-        </Modal>
-      )}
-    </div>
   )
 }
 
@@ -582,13 +176,25 @@ function ReservasTab({ tenantSlug, token }) {
   const [pagoMonto, setPagoMonto] = useState('')
   const [pagoReferencia, setPagoReferencia] = useState('')
   const [pagoEnviando, setPagoEnviando] = useState(false)
+  const [qInput, setQInput] = useState('')
+  const [q, setQ] = useState('')
+  const debounceRef = useRef(null)
+
+  const onChangeQ = (valor) => {
+    setQInput(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setQ(valor.trim())
+      setOffset(0)
+    }, 400)
+  }
 
   const fetchReservas = useCallback(async () => {
     const query = {
-      fecha,
       limit: LIMIT_RESERVAS,
       offset,
       ...(estado !== 'todas' ? { estado } : {}),
+      ...(q ? { q } : { fecha }),
     }
     console.log('Fetching reservas del día...')
     const { data, error: fetchErr } = await client.GET(
@@ -606,7 +212,7 @@ function ReservasTab({ tenantSlug, token }) {
     setItems(data.items)
     setTotal(data.paginacion.total)
     setLoading(false)
-  }, [tenantSlug, token, fecha, estado, offset])
+  }, [tenantSlug, token, fecha, estado, offset, q])
 
   useEffect(() => {
     fetchReservas()
@@ -647,7 +253,11 @@ function ReservasTab({ tenantSlug, token }) {
     )
     setCheckinFolio(null)
     if (fetchErr) {
-      setAccionError(fetchErr)
+      if (fetchErr?.detail?.codigo === 'pago_pendiente') {
+        setAccionError({ mensaje: 'Pago pendiente — regístralo antes de hacer check-in' })
+      } else {
+        setAccionError(fetchErr)
+      }
       return
     }
     setItems((prev) => prev.map((r) => (r.folio === folio ? { ...r, estado: 'completada' } : r)))
@@ -769,12 +379,13 @@ function ReservasTab({ tenantSlug, token }) {
           <span className="relative">
             <button
               type="button"
+              disabled={Boolean(q)}
               onClick={() => setPickerAbierto((v) => !v)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             >
               {fecha}
             </button>
-            {pickerAbierto && (
+            {pickerAbierto && !q && (
               <>
                 <div
                   className="fixed inset-0 z-40"
@@ -807,6 +418,13 @@ function ReservasTab({ tenantSlug, token }) {
             ))}
           </select>
         </label>
+        <input
+          type="text"
+          value={qInput}
+          onChange={(e) => onChangeQ(e.target.value)}
+          placeholder="Buscar por folio, código o cliente..."
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
+        />
       </div>
 
       {items.length > 0 && (
@@ -1119,7 +737,7 @@ function formatFechaHoraLocal(utcString) {
   }).format(new Date(utcString))
 }
 
-function SolicitudesTab({ tenantSlug, token }) {
+function SolicitudesTab({ tenantSlug, token, onIrAPendientes }) {
   const [estado, setEstado] = useState('pendiente')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1128,12 +746,27 @@ function SolicitudesTab({ tenantSlug, token }) {
   const [rechazando, setRechazando] = useState(null)
   const [rechazarModal, setRechazarModal] = useState(null)
   const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [alternativasRechazo, setAlternativasRechazo] = useState([])
   const [rechazandoLoading, setRechazandoLoading] = useState(false)
   const [errores, setErrores] = useState({})
   const [exito, setExito] = useState(null)
+  const [serieModal, setSerieModal] = useState(null)
+  const [qInput, setQInput] = useState('')
+  const [q, setQ] = useState('')
+  const debounceRef = useRef(null)
+
+  const onChangeQ = (valor) => {
+    setQInput(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setQ(valor.trim())
+    }, 400)
+  }
 
   const fetchSolicitudes = useCallback(async () => {
-    const query = estado !== 'todas' ? { estado } : {}
+    const query = {
+      ...(q ? { q } : (estado !== 'todas' ? { estado } : {})),
+    }
     const { data, error: fetchErr } = await client.GET(
       '/api/v2/{tenant_slug}/admin/solicitudes',
       {
@@ -1148,7 +781,7 @@ function SolicitudesTab({ tenantSlug, token }) {
     }
     setItems(data ?? [])
     setLoading(false)
-  }, [tenantSlug, token, estado])
+  }, [tenantSlug, token, estado, q])
 
   useEffect(() => {
     fetchSolicitudes()
@@ -1203,12 +836,14 @@ function SolicitudesTab({ tenantSlug, token }) {
   const abrirRechazar = (s) => {
     setRechazarModal(s)
     setMotivoRechazo(s.motivo_rechazo ?? '')
+    setAlternativasRechazo([])
     setErrores((prev) => ({ ...prev, [s.id]: null }))
   }
 
   const cerrarRechazar = () => {
     setRechazarModal(null)
     setMotivoRechazo('')
+    setAlternativasRechazo([])
     setRechazandoLoading(false)
   }
 
@@ -1218,11 +853,17 @@ function SolicitudesTab({ tenantSlug, token }) {
     setRechazandoLoading(true)
     setErrores((prev) => ({ ...prev, [rechazarModal.id]: null }))
     setExito(null)
+    const alternativas = alternativasRechazo
+      .filter((v) => v.trim() !== '')
+      .map((v) => `${v}:00${getLocalOffset()}`)
     const { error: fetchErr, response } = await client.POST(
       '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar',
       {
         params: { path: { tenant_slug: tenantSlug, solicitud_id: rechazarModal.id } },
-        body: { motivo: motivoRechazo.trim() || null },
+        body: {
+          motivo: motivoRechazo.trim() || null,
+          alternativas: alternativas.length > 0 ? alternativas : undefined,
+        },
         headers: { Authorization: `Bearer ${token}` },
       },
     )
@@ -1289,12 +930,28 @@ function SolicitudesTab({ tenantSlug, token }) {
             ))}
           </select>
         </label>
+        <input
+          type="text"
+          value={qInput}
+          onChange={(e) => onChangeQ(e.target.value)}
+          placeholder="Buscar por folio, código o cliente..."
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
+        />
       </div>
 
       {exito && (
-        <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-          {exito.mensaje}
-        </p>
+        <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          <p className="inline">{exito.mensaje}</p>
+          {exito.folio && onIrAPendientes && (
+            <button
+              type="button"
+              onClick={onIrAPendientes}
+              className="ml-2 font-medium text-green-800 underline hover:text-green-900"
+            >
+              Ver en Pendientes →
+            </button>
+          )}
+        </div>
       )}
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -1353,6 +1010,14 @@ function SolicitudesTab({ tenantSlug, token }) {
                         </button>
                         <button
                           type="button"
+                          onClick={() => setSerieModal(s)}
+                          disabled={confirmando === s.id || rechazando === s.id}
+                          className="rounded-lg border border-orange-300 px-2.5 py-1.5 text-xs font-medium text-orange-700 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Serie
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => abrirRechazar(s)}
                           disabled={confirmando === s.id || rechazando === s.id}
                           className="rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1377,13 +1042,29 @@ function SolicitudesTab({ tenantSlug, token }) {
             {items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
-                  No hay solicitudes en este filtro.
+                  {q
+                    ? 'No se encontró ninguna solicitud con ese folio, código o cliente.'
+                    : 'No hay solicitudes en este filtro.'}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {serieModal && (
+        <CrearSerieModal
+          servicio={{ id: serieModal.servicio_id, nombre: serieModal.servicio_nombre, duracion_minutos: serieModal.duracion_minutos }}
+          solicitud={serieModal}
+          onClose={() => setSerieModal(null)}
+          onCreado={() => {
+            setExito({ folio: null, mensaje: 'Serie creada desde la solicitud.' })
+            window.setTimeout(() => setExito(null), 4000)
+            setSerieModal(null)
+            fetchSolicitudes()
+          }}
+        />
+      )}
 
       {rechazarModal && (
         <Modal title="Rechazar solicitud" onClose={cerrarRechazar} maxWidth="max-w-sm">
@@ -1409,6 +1090,50 @@ function SolicitudesTab({ tenantSlug, token }) {
           <p className="mb-3 text-right text-xs text-gray-400">
             {motivoRechazo.length}/500
           </p>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Opciones alternativas (opcional)
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              El cliente podrá aceptar una de estas fechas desde su portal.
+            </p>
+            <div className="space-y-2">
+              {alternativasRechazo.map((valor, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={valor}
+                    onChange={(e) =>
+                      setAlternativasRechazo((prev) =>
+                        prev.map((v, i) => (i === idx ? e.target.value : v))
+                      )
+                    }
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAlternativasRechazo((prev) => prev.filter((_, i) => i !== idx))
+                    }
+                    className="rounded-lg border border-gray-300 px-2 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+                    title="Quitar opción"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            {alternativasRechazo.length < 10 && (
+              <button
+                type="button"
+                onClick={() => setAlternativasRechazo((prev) => [...prev, ''])}
+                className="mt-2 text-sm font-medium text-blue-600 transition hover:text-blue-800"
+              >
+                + Agregar otra opción
+              </button>
+            )}
+          </div>
 
           {errores[rechazarModal.id] && (
             <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -1457,14 +1182,31 @@ function PendientesTab({ tenantSlug, token }) {
   const [reprogramar, setReprogramar] = useState(null)
   const [reprogramarLoading, setReprogramarLoading] = useState(false)
   const [reprogramarError, setReprogramarError] = useState(null)
+  const [qInput, setQInput] = useState('')
+  const [q, setQ] = useState('')
+  const debounceRef = useRef(null)
+
+  const onChangeQ = (valor) => {
+    setQInput(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setQ(valor.trim())
+      setOffset(0)
+    }, 400)
+  }
 
   const fetchPendientes = useCallback(async () => {
+    const query = {
+      limit: LIMIT_RESERVAS,
+      offset,
+      ...(q ? { q } : { estado: 'pendiente' }),
+    }
     const { data, error: fetchErr } = await client.GET(
       '/api/v2/{tenant_slug}/admin/reservas',
       {
         params: {
           path: { tenant_slug: tenantSlug },
-          query: { estado: 'pendiente', limit: LIMIT_RESERVAS, offset },
+          query,
         },
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -1477,7 +1219,7 @@ function PendientesTab({ tenantSlug, token }) {
     setItems(data.items)
     setTotal(data.paginacion.total)
     setLoading(false)
-  }, [tenantSlug, token, offset])
+  }, [tenantSlug, token, offset, q])
 
   useEffect(() => {
     fetchPendientes()
@@ -1612,6 +1354,16 @@ function PendientesTab({ tenantSlug, token }) {
 
   return (
     <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={qInput}
+          onChange={(e) => onChangeQ(e.target.value)}
+          placeholder="Buscar por folio, código o cliente..."
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
+        />
+      </div>
+
       {exito && (
         <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
           {exito.mensaje} — {exito.folio}
@@ -1701,7 +1453,9 @@ function PendientesTab({ tenantSlug, token }) {
             {items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
-                  No hay reservas pendientes de confirmación.
+                  {q
+                    ? 'No se encontró ninguna reserva con ese folio, código o cliente.'
+                    : 'No hay reservas pendientes de confirmación.'}
                 </td>
               </tr>
             )}
@@ -1797,11 +1551,87 @@ function PendientesTab({ tenantSlug, token }) {
   )
 }
 
+function TabButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+        active
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function TabGroup({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="px-1 text-[10px] font-medium uppercase tracking-wider text-gray-400">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1">{children}</div>
+    </div>
+  )
+}
+
 export default function PanelAdmin() {
   const navigate = useNavigate()
   const tenantSlug = sessionStorage.getItem('tenantSlug')
   const token = sessionStorage.getItem('token')
-  const [tab, setTab] = useState('sesiones')
+  const [tab, setTab] = useState('reservas')
+  const [nuevoServicio, setNuevoServicio] = useState(null)
+  const [pendientesCount, setPendientesCount] = useState(null)
+  const [solicitudesCount, setSolicitudesCount] = useState(null)
+
+  const fetchConteos = useCallback(async () => {
+    const [pendientesRes, solicitudesRes] = await Promise.all([
+      client.GET('/api/v2/{tenant_slug}/admin/reservas', {
+        params: {
+          path: { tenant_slug: tenantSlug },
+          query: { estado: 'pendiente', limit: 1, offset: 0 },
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      client.GET('/api/v2/{tenant_slug}/admin/solicitudes', {
+        params: { path: { tenant_slug: tenantSlug }, query: { estado: 'pendiente' } },
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+    setPendientesCount(
+      pendientesRes.error
+        ? null
+        : (pendientesRes.data?.paginacion?.total ?? pendientesRes.data?.items?.length ?? 0),
+    )
+    setSolicitudesCount(
+      solicitudesRes.error
+        ? null
+        : (solicitudesRes.data?.length ?? 0),
+    )
+  }, [tenantSlug, token])
+
+  useEffect(() => {
+    fetchConteos()
+  }, [fetchConteos])
+
+  useEffect(() => {
+    if (tab === 'pendientes' || tab === 'solicitudes') {
+      fetchConteos()
+    }
+  }, [tab, fetchConteos])
+
+  const cambiarTab = (nuevaTab) => {
+    setNuevoServicio(null)
+    setTab(nuevaTab)
+  }
+
+  const irACrearSerie = (servicio) => {
+    setNuevoServicio(servicio)
+    setTab('series')
+  }
 
   return (
     <div className="mx-auto min-w-0 max-w-4xl">
@@ -1816,85 +1646,80 @@ export default function PanelAdmin() {
         </button>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1">
-        <button
-          type="button"
-          onClick={() => setTab('sesiones')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'sesiones'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Sesiones
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('pendientes')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'pendientes'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Pendientes
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('solicitudes')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'solicitudes'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Solicitudes
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('reservas')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'reservas'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Reservas del día
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('servicios')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'servicios'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Servicios
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('usuarios')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-            tab === 'usuarios'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Usuarios
-        </button>
+      <div className="mb-4 flex flex-wrap items-start gap-x-6 gap-y-3">
+        <TabGroup label="Operación diaria">
+          <TabButton active={tab === 'reservas'} onClick={() => cambiarTab('reservas')}>
+            Sesiones
+          </TabButton>
+          <TabButton active={tab === 'pendientes'} onClick={() => cambiarTab('pendientes')}>
+            Pendientes
+            {pendientesCount ? (
+              <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {pendientesCount}
+              </span>
+            ) : null}
+          </TabButton>
+          <TabButton active={tab === 'solicitudes'} onClick={() => cambiarTab('solicitudes')}>
+            Solicitudes
+            {solicitudesCount ? (
+              <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
+                {solicitudesCount}
+              </span>
+            ) : null}
+          </TabButton>
+        </TabGroup>
+
+        <TabGroup label="Series recurrentes">
+          <TabButton active={tab === 'servicios'} onClick={() => cambiarTab('servicios')}>
+            Servicios
+          </TabButton>
+          <TabButton active={tab === 'series'} onClick={() => cambiarTab('series')}>
+            Series
+          </TabButton>
+        </TabGroup>
+
+        <TabGroup label="Cuenta">
+          <TabButton active={tab === 'usuarios'} onClick={() => cambiarTab('usuarios')}>
+            Usuarios
+          </TabButton>
+          <TabButton active={tab === 'pagos'} onClick={() => cambiarTab('pagos')}>
+            Pagos
+          </TabButton>
+          <TabButton active={tab === 'meet'} onClick={() => cambiarTab('meet')}>
+            Meet
+          </TabButton>
+          <TabButton active={tab === 'encuestas'} onClick={() => cambiarTab('encuestas')}>
+            Encuestas
+          </TabButton>
+          <TabButton active={tab === 'personalizacion'} onClick={() => cambiarTab('personalizacion')}>
+            Personalización
+          </TabButton>
+        </TabGroup>
       </div>
 
-      {tab === 'sesiones' ? (
-        <SesionesTab tenantSlug={tenantSlug} token={token} />
+      {tab === 'reservas' ? (
+        <ReservasTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'pendientes' ? (
         <PendientesTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'solicitudes' ? (
-        <SolicitudesTab tenantSlug={tenantSlug} token={token} />
-      ) : tab === 'reservas' ? (
-        <ReservasTab tenantSlug={tenantSlug} token={token} />
+        <SolicitudesTab tenantSlug={tenantSlug} token={token} onIrAPendientes={() => setTab('pendientes')} />
+      ) : tab === 'series' ? (
+        <SeriesTab
+          tenantSlug={tenantSlug}
+          token={token}
+          servicioInicial={nuevoServicio}
+          onLimpiarServicioInicial={() => setNuevoServicio(null)}
+        />
       ) : tab === 'servicios' ? (
-        <GestionServicios tenantSlug={tenantSlug} token={token} />
+        <GestionServicios tenantSlug={tenantSlug} token={token} onIrACrearSerie={irACrearSerie} onIrAEncuestas={() => cambiarTab('encuestas')} />
+      ) : tab === 'encuestas' ? (
+        <GestionEncuestas tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'pagos' ? (
+        <MercadoPagoTab tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'meet' ? (
+        <GoogleMeetTab tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'personalizacion' ? (
+        <GestionPersonalizacion tenantSlug={tenantSlug} token={token} />
       ) : (
         <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}

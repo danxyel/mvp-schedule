@@ -5,35 +5,49 @@ v2.2.1: hash determinista, buffers en disponibilidad, respuestas_formulario,
 """
 
 import hashlib
+import hmac
 import html
 import re
+import secrets
 import uuid
 import random
 import string
 import logging
 import os
 import smtplib
-from datetime import datetime, timedelta, timezone, date
+import socket
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone, date, time
 from decimal import Decimal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional, List, Dict, Any, Tuple
 from zoneinfo import ZoneInfo
 
+import httpx
+import mercadopago
+from urllib.parse import quote
+
 from sqlalchemy import and_, or_, func, select, update, text
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sede, Servicio, Sesion, Reserva,
-    SolicitudReserva, EstadoSolicitud,
+    SolicitudReserva, SolicitudAlternativa, EstadoSolicitud,
+    SerieReserva, InscripcionSerie, ModalidadCobro, EstadoSerie, EstadoInscripcion,
     HorarioDisponibilidad, HorarioBloqueo, Bitacora, AsesorServicio,
-    CampoFormulario, RespuestaFormulario,
+    CampoFormulario, RespuestaFormulario, EncuestaEnvio,
     EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
-    TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad,
+    TipoFlujo, CreadoPorTipo, RolUsuario, TipoAgenda, Modalidad, Canal,
     ESTADOS_OCUPAN_CUPO, ESTADOS_SESION_ACTIVA, utcnow,
 )
-from app.schemas_v2_2 import ReservaCreate, SolicitudCreate, CheckoutUrlOut
+from app.schemas_v2_2 import (
+    ReservaCreate, SolicitudCreate, SerieReservaCreate, InscripcionSerieCreate,
+    ConfirmarInscripcionIn, ModalidadCobroEnum, MetodoPagoEnum, CanalEnum,
+    SolicitudConfirmarSerieIn, validar_modalidad_cobro, CheckoutUrlOut,
+)
 
 log = logging.getLogger(__name__)
 
@@ -158,6 +172,81 @@ def registrar_bitacora(
         ip_address=ip,
         user_agent=user_agent,
     ))
+
+
+# ============================================================
+# TOKEN DE ACCESO — genérico, un solo uso
+# Hoy solo lo usa activación de cuenta; el nombre no dice "activacion" a
+# propósito para poder reusarlo el día que exista "olvidé mi contraseña".
+# ============================================================
+def generar_token_acceso(usuario: Usuario, horas_expira: int = 48) -> str:
+    """Genera un token de un solo uso y lo asocia al usuario (solo el hash se persiste).
+
+    Devuelve el valor en claro — es responsabilidad del caller mandarlo por
+    email antes de que la sesión termine; no se puede recuperar después.
+    """
+    token = secrets.token_urlsafe(32)
+    usuario.acceso_token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    usuario.acceso_token_expira_en = utcnow() + timedelta(hours=horas_expira)
+    return token
+
+
+def _generar_token_encuesta(
+    db: Session,
+    tenant_id: int,
+    formulario_id: int,
+    reserva_id: int,
+    dias_expira: int = 30,
+) -> str:
+    """Genera un token de un solo uso para responder una encuesta de satisfacción.
+
+    El hash se guarda en EncuestaEnvio; el caller debe hacer db.commit().
+    Devuelve el token en claro para incluirlo en el correo.
+    """
+    token = secrets.token_urlsafe(32)
+    envio = EncuestaEnvio(
+        tenant_id=tenant_id,
+        formulario_id=formulario_id,
+        reserva_id=reserva_id,
+        token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        expira_en=utcnow() + timedelta(days=dias_expira),
+    )
+    db.add(envio)
+    return token
+
+
+def validar_token_acceso(usuario: Optional[Usuario], token: str) -> bool:
+    if usuario is None or not usuario.acceso_token_hash or not usuario.acceso_token_expira_en:
+        return False
+    if usuario.acceso_token_expira_en < utcnow():
+        return False
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(usuario.acceso_token_hash, token_hash)
+
+
+def limpiar_token_acceso(usuario: Usuario) -> None:
+    usuario.acceso_token_hash = None
+    usuario.acceso_token_expira_en = None
+
+
+def buscar_usuario_por_token_acceso(db: Session, token: str) -> Optional[Usuario]:
+    """Busca entre los usuarios con token vigente cuál corresponde a este token.
+
+    No hay forma de indexar por el token en claro (solo se guarda el hash),
+    así que se filtra primero por expiración (barato, indexable a futuro) y
+    se compara el hash en memoria — el universo de usuarios con un token de
+    acceso vigente en un momento dado es pequeño.
+    """
+    candidatos = db.execute(
+        select(Usuario).where(
+            Usuario.acceso_token_hash.is_not(None),
+            Usuario.acceso_token_expira_en > utcnow(),
+        )
+    ).scalars().all()
+    for usuario in candidatos:
+        if validar_token_acceso(usuario, token):
+            return usuario
+    return None
 
 
 # ============================================================
@@ -456,7 +545,10 @@ def listar_slots_disponibles(
 
     sesiones = list(db.execute(
         select(Sesion)
-        .options(joinedload(Sesion.servicio))
+        .options(
+            joinedload(Sesion.servicio),
+            joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+        )
         .where(
             Sesion.tenant_id == tenant.id,
             Sesion.fecha_hora_inicio < fin_dia,
@@ -464,6 +556,17 @@ def listar_slots_disponibles(
             Sesion.estado.in_(ESTADOS_SESION_ACTIVA),
         )
     ).scalars().unique().all())
+
+    def _asesor_de_sesion(s: Optional[Sesion]) -> Optional[Dict[str, Any]]:
+        if s is None or s.asesor is None:
+            return None
+        a = s.asesor
+        return {
+            "id": a.id,
+            "nombre": a.usuario.nombre if a.usuario else "Asesor",
+            "avatar_url": a.usuario.avatar_url if a.usuario else None,
+            "bio": a.bio,
+        }
 
     dur = timedelta(minutes=servicio.duracion_minutos)
     paso = timedelta(minutes=servicio.config_json.get("intervalo_slots_min", servicio.duracion_minutos))
@@ -547,7 +650,12 @@ def listar_slots_disponibles(
                     "sesion_existente_id": sesion_existente.id if sesion_existente else None,
                     "cupo_disponible": cupo,
                     "motivo_no_disponible": motivo,
-                    "asesor": None,
+                    # Antes siempre None: una sesión ya existente (ej. de una
+                    # serie recurrente ya confirmada por el admin, con
+                    # asesor asignado desde su creación) se mostraba igual
+                    # que un slot nuevo sin asignar, disparando el aviso de
+                    # "se te asignará un asesor" aunque ya hubiera uno real.
+                    "asesor": _asesor_de_sesion(sesion_existente),
                 })
 
         slots.sort(key=lambda s: s["fecha_hora_inicio"])
@@ -555,6 +663,8 @@ def listar_slots_disponibles(
             "fecha": inicio_dia,
             "servicio_id": servicio.id,
             "timezone": tzname,
+            "requiere_confirmacion": servicio.requiere_confirmacion,
+            "permite_solicitudes": servicio.permite_solicitudes,
             "slots": slots,
         }
 
@@ -642,6 +752,8 @@ def listar_slots_disponibles(
         "fecha": inicio_dia,
         "servicio_id": servicio.id,
         "timezone": tzname,
+        "requiere_confirmacion": servicio.requiere_confirmacion,
+        "permite_solicitudes": servicio.permite_solicitudes,
         "slots": slots,
     }
 
@@ -698,14 +810,14 @@ def _persistir_respuestas_formulario(
     db: Session,
     tenant_id: int,
     reserva: Reserva,
-    servicio: Servicio,
+    formulario_id: Optional[int],
     respuestas: Dict[str, Any],
 ) -> None:
-    if not servicio.formulario_id or not respuestas:
+    if not formulario_id or not respuestas:
         return
 
     campos = list(db.execute(
-        select(CampoFormulario).where(CampoFormulario.formulario_id == servicio.formulario_id)
+        select(CampoFormulario).where(CampoFormulario.formulario_id == formulario_id)
     ).scalars().all())
     campos_dict = {str(c.id): c for c in campos}
 
@@ -730,6 +842,8 @@ def crear_reserva(
     usuario_actual: Optional[Usuario] = None,
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
+    generar_token_activacion: bool = True,
+    forzar_pendiente: bool = False,
 ) -> Dict[str, Any]:
     tenant_id = tenant.id
 
@@ -745,6 +859,8 @@ def crear_reserva(
     ).scalar_one_or_none()
     if servicio is None:
         raise ReservaError("Servicio no encontrado o no disponible")
+
+    confirmacion_manual = servicio.requiere_confirmacion or forzar_pendiente
 
     inicio = _a_utc(payload.fecha_hora_inicio)
     fin = inicio + timedelta(minutes=servicio.duracion_minutos)
@@ -762,6 +878,10 @@ def crear_reserva(
             db, payload.email_invitado, payload.nombre_invitado, payload.telefono_invitado
         )
     _vincular_a_tenant(db, usuario.id, tenant_id)
+
+    acceso_token_plano = None
+    if generar_token_activacion and usuario.password_hash is None:
+        acceso_token_plano = generar_token_acceso(usuario)
 
     _lock_franja(db, tenant_id, servicio.id, inicio)
 
@@ -786,12 +906,16 @@ def crear_reserva(
             asesor_id=payload.asesor_id, bloquear=True,
         )
         if sesion is None:
-            if servicio.tipo_agenda == TipoAgenda.GRUPAL and not servicio.creacion_por_alumno:
+            if (
+                servicio.tipo_agenda == TipoAgenda.GRUPAL
+                and not servicio.creacion_por_alumno
+                and not confirmacion_manual
+            ):
                 raise ReservaError(
                     "No hay sesiones programadas en ese horario",
                     codigo="sin_sesion_disponible",
                 )
-            if servicio.requiere_confirmacion:
+            if confirmacion_manual:
                 # Asignación manual de asesor: la sesión se crea SIN asesor y la
                 # reserva queda PENDIENTE. El staff asigna asesor al confirmar
                 # vía POST /admin/reservas/{reserva_id}/asignar-asesor. Aquí solo
@@ -836,7 +960,7 @@ def crear_reserva(
     precio = servicio.precio or Decimal("0.00")
     requiere_pago = servicio.pago_requerido and precio > 0
 
-    if servicio.requiere_confirmacion:
+    if confirmacion_manual:
         estado = EstadoReserva.PENDIENTE
         estado_pago = EstadoPagoReserva.PENDIENTE
         hold_expira = None
@@ -861,7 +985,7 @@ def crear_reserva(
         beneficiario_id=payload.beneficiario_id,
         estado=estado,
         estado_pago=estado_pago,
-        tipo_flujo=TipoFlujo.MANUAL if servicio.requiere_confirmacion else TipoFlujo.AUTO,
+        tipo_flujo=TipoFlujo.MANUAL if confirmacion_manual else TipoFlujo.AUTO,
         hold_expira_en=hold_expira,
         folio=generar_folio(tenant_id),
         codigo_confirmacion=generar_codigo_confirmacion(),
@@ -886,7 +1010,7 @@ def crear_reserva(
         raise
 
     if payload.respuestas_formulario:
-        _persistir_respuestas_formulario(db, tenant_id, reserva, servicio, payload.respuestas_formulario)
+        _persistir_respuestas_formulario(db, tenant_id, reserva, servicio.formulario_id, payload.respuestas_formulario)
 
     actualizar_estado_sesion(db, sesion.id, tenant_id)
 
@@ -903,7 +1027,7 @@ def crear_reserva(
         ip=ip, user_agent=user_agent,
     )
 
-    if servicio.requiere_confirmacion:
+    if confirmacion_manual:
         # Nada se dispara post-commit: el email y el calendario se disparan
         # hasta que el staff confirma (asigna asesor) en
         # POST /admin/reservas/{reserva_id}/asignar-asesor.
@@ -915,7 +1039,11 @@ def crear_reserva(
     else:
         tareas = {
             "checkout": metodo == MetodoPago.ONLINE.value and requiere_pago,
-            "sincronizar_calendario": sesion_creada,
+            "sincronizar_calendario": (
+                sesion_creada
+                and reserva.estado == EstadoReserva.CONFIRMADA
+                and reserva.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+            ),
             "enviar_confirmacion": True,
         }
 
@@ -926,6 +1054,7 @@ def crear_reserva(
         "usuario": usuario,
         "sesion_creada": sesion_creada,
         "tareas_post_commit": tareas,
+        "acceso_token_plano": acceso_token_plano,
         "mensaje": (
             "Reserva pendiente de confirmación" if estado == EstadoReserva.PENDIENTE
             else "Reserva confirmada" if estado == EstadoReserva.CONFIRMADA
@@ -959,9 +1088,9 @@ def crear_solicitud_reserva(
     ).scalar_one_or_none()
     if servicio is None:
         raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
-    if not servicio.requiere_confirmacion:
+    if not servicio.permite_solicitudes:
         raise ReservaError(
-            "Este servicio no requiere confirmación; reserva directamente.",
+            "Este servicio no permite proponer fechas alternativas.",
             codigo="no_requiere_confirmacion",
         )
 
@@ -1004,6 +1133,637 @@ def crear_solicitud_reserva(
     return solicitud
 
 
+def aceptar_alternativa_solicitud(
+    db: Session,
+    tenant: Tenant,
+    solicitud: SolicitudReserva,
+    alternativa: SolicitudAlternativa,
+    cliente: Usuario,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Dict[str, Any]:
+    """El cliente acepta una fecha alternativa ofrecida por el staff.
+
+    La solicitud debe estar en estado RECHAZADA, la alternativa debe
+    pertenecer a ella, y no debe haberse aceptado otra antes. Crea la
+    reserva real con la misma lógica que confirmar_solicitud_admin.
+    """
+    tenant_id = tenant.id
+
+    if solicitud.estado != EstadoSolicitud.RECHAZADA:
+        raise ReservaError("La solicitud no está rechazada", codigo="solicitud_no_rechazada")
+    if alternativa.solicitud_id != solicitud.id:
+        raise ReservaError("La alternativa no pertenece a la solicitud", codigo="alternativa_invalida")
+    if solicitud.alternativa_aceptada_id is not None:
+        raise ReservaError("Ya se aceptó una alternativa para esta solicitud", codigo="alternativa_ya_resuelta")
+
+    servicio = db.get(Servicio, solicitud.servicio_id)
+    if servicio is None or not servicio.activo:
+        raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
+
+    payload = ReservaCreate(
+        servicio_id=solicitud.servicio_id,
+        fecha_hora_inicio=alternativa.fecha_hora,
+        sesion_id=None,
+        asesor_id=None,
+        sede_id=None,
+        notas_cliente=solicitud.notas_cliente,
+        canal=CanalEnum.WEB,
+    )
+    resultado = crear_reserva(
+        db, tenant, payload, usuario_actual=cliente, ip=ip, user_agent=user_agent,
+        generar_token_activacion=False, forzar_pendiente=True,
+    )
+    reserva = resultado["reserva"]
+    sesion = resultado["sesion"]
+
+    solicitud.estado = EstadoSolicitud.ACEPTADA
+    solicitud.reserva_id = reserva.id
+    solicitud.alternativa_aceptada_id = alternativa.id
+    solicitud.resuelto_en = utcnow()
+
+    registrar_bitacora(
+        db, tenant_id, "solicitud_reserva", solicitud.id, "solicitud_reserva_alternativa_aceptada",
+        usuario_id=cliente.id,
+        detalles={
+            "alternativa_id": alternativa.id,
+            "reserva_id": reserva.id,
+            "folio": reserva.folio,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+
+    return {
+        "solicitud": solicitud,
+        "reserva": reserva,
+        "sesion": sesion,
+    }
+
+
+# ============================================================
+# SERIES DE RESERVAS — reservas recurrentes (Sprint 2 #11)
+# ============================================================
+def generar_fechas_recurrencia(
+    fecha_inicio: date,
+    dia_semana: Optional[int],
+    frecuencia: str,
+    num_repeticiones: int,
+) -> List[date]:
+    """Genera lista de fechas según patrón de recurrencia.
+    
+    Args:
+        fecha_inicio: Fecha de inicio de la serie
+        dia_semana: Día de la semana (0=lunes, 6=domingo). Si es None, usa fecha_inicio
+        frecuencia: "semanal", "quincenal", o "mensual"
+        num_repeticiones: Número de fechas a generar
+    
+    Returns:
+        Lista de fechas ordenadas
+    """
+    from datetime import timedelta
+
+    fechas = []
+    
+    # Si dia_semana está definido, ajustar fecha_inicio a ese día
+    if dia_semana is not None:
+        dias_hasta = (dia_semana - fecha_inicio.weekday()) % 7
+        # Si la fecha_inicio ya es el día correcto, usarla; sino avanzar al siguiente
+        if dias_hasta > 0 or fecha_inicio.weekday() != dia_semana:
+            fecha_inicio = fecha_inicio + timedelta(days=dias_hasta)
+    
+    fecha_actual = fecha_inicio
+
+    for _ in range(num_repeticiones):
+        fechas.append(fecha_actual)
+
+        # Avanzar según frecuencia
+        if frecuencia == "semanal":
+            fecha_actual = fecha_actual + timedelta(weeks=1)
+        elif frecuencia == "quincenal":
+            fecha_actual = fecha_actual + timedelta(weeks=2)
+        elif frecuencia == "mensual":
+            # Avanzar un mes (manejar cambio de mes)
+            mes_siguiente = fecha_actual.month + 1
+            anio = fecha_actual.year
+            if mes_siguiente > 12:
+                mes_siguiente = 1
+                anio += 1
+            try:
+                fecha_actual = fecha_actual.replace(year=anio, month=mes_siguiente)
+            except ValueError:
+                # Si el día no existe en el mes siguiente (ej. 31 -> febrero)
+                # usar el último día del mes
+                import calendar
+                ultimo_dia = calendar.monthrange(anio, mes_siguiente)[1]
+                fecha_actual = fecha_actual.replace(year=anio, month=mes_siguiente, day=ultimo_dia)
+
+    return fechas
+
+
+def crear_serie(
+    db: Session,
+    tenant: Tenant,
+    payload: SerieReservaCreate,
+    registrado_por: Optional[Usuario] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> SerieReserva:
+    """Crea el patrón de horario de una serie recurrente.
+
+    No genera reservas ni inscripciones; eso se hace en
+    inscribir_cliente_en_serie().
+    """
+    from datetime import datetime as dt
+
+    tenant_id = tenant.id
+
+    if payload.num_repeticiones > tenant.max_reservas_serie:
+        raise ReservaError(
+            f"El número de repeticiones ({payload.num_repeticiones}) excede el máximo permitido ({tenant.max_reservas_serie})",
+            codigo="serie_demasiado_larga",
+        )
+
+    servicio = db.execute(
+        select(Servicio).where(
+            Servicio.tenant_id == tenant_id,
+            Servicio.id == payload.servicio_id,
+            Servicio.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
+
+    if payload.asesor_id:
+        asesor = db.execute(
+            select(UsuarioTenant).where(
+                UsuarioTenant.tenant_id == tenant_id,
+                UsuarioTenant.id == payload.asesor_id,
+                UsuarioTenant.activo.is_(True),
+                UsuarioTenant.rol.in_([RolUsuario.ASESOR, RolUsuario.ADMIN]),
+            )
+        ).scalar_one_or_none()
+        if asesor is None:
+            raise ReservaError("Asesor no encontrado o inactivo", codigo="asesor_no_encontrado")
+
+    fecha_inicio_date = payload.fecha_inicio.date() if isinstance(payload.fecha_inicio, dt) else payload.fecha_inicio
+
+    serie = SerieReserva(
+        tenant_id=tenant_id,
+        servicio_id=payload.servicio_id,
+        asesor_id=payload.asesor_id,
+        frecuencia=payload.frecuencia,
+        dia_semana=payload.dia_semana,
+        hora_inicio=payload.hora_inicio,
+        duracion_minutos=payload.duracion_minutos,
+        num_repeticiones=payload.num_repeticiones,
+        fecha_inicio=fecha_inicio_date,
+    )
+    db.add(serie)
+    db.flush()
+
+    registrar_bitacora(
+        db, tenant_id, "serie_reserva", serie.id, "serie_reserva_creada",
+        usuario_id=registrado_por.id if registrado_por is not None else None,
+        detalles={
+            "servicio_id": servicio.id,
+            "num_repeticiones": payload.num_repeticiones,
+            "asesor_id": payload.asesor_id,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+
+    return serie
+
+
+def inscribir_cliente_en_serie(
+    db: Session,
+    tenant: Tenant,
+    serie_id: int,
+    payload: InscripcionSerieCreate,
+    registrado_por: Optional[Usuario] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Invita a un cliente a una serie existente — NO genera reservas.
+
+    El cliente elige modalidad_cobro/metodo_pago desde su portal
+    (confirmar_inscripcion_serie()), que es lo que de verdad genera las N
+    reservas. Si el cliente ya tenía una invitación CANCELADA para esta
+    misma serie, se reactiva en vez de bloquear (mismo criterio que ya se
+    aplicó para re-vincular un UsuarioTenant desvinculado — ver HANDOFF
+    2026-08-03 — evita el mismo tipo de bug: una fila vieja bloqueando un
+    reintento legítimo para siempre).
+
+    Devuelve {"inscripcion", "cliente", "acceso_token_plano"} — el caller
+    (router) manda el correo de invitación/activación post-commit.
+    """
+    tenant_id = tenant.id
+
+    serie = db.execute(
+        select(SerieReserva).where(
+            SerieReserva.tenant_id == tenant_id,
+            SerieReserva.id == serie_id,
+        )
+    ).scalar_one_or_none()
+    if serie is None:
+        raise ReservaError("Serie no encontrada", codigo="serie_no_encontrada")
+    if serie.estado == EstadoSerie.CANCELADA:
+        raise ReservaError("La serie está cancelada", codigo="serie_cancelada")
+
+    cliente = db.get(Usuario, payload.cliente_usuario_id)
+    if cliente is None:
+        raise ReservaError("Cliente no encontrado", codigo="cliente_no_encontrado")
+
+    # Validar que el cliente pertenezca al tenant (rol cliente)
+    ut_cliente = db.execute(
+        select(UsuarioTenant).where(
+            UsuarioTenant.tenant_id == tenant_id,
+            UsuarioTenant.usuario_id == payload.cliente_usuario_id,
+            UsuarioTenant.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if ut_cliente is None:
+        raise ReservaError("El cliente no está vinculado a este tenant", codigo="cliente_no_vinculado")
+
+    inscripcion_existente = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.serie_id == serie_id,
+            InscripcionSerie.cliente_usuario_id == payload.cliente_usuario_id,
+        )
+    ).scalar_one_or_none()
+
+    if inscripcion_existente is not None:
+        if inscripcion_existente.estado != EstadoInscripcion.CANCELADA:
+            raise ReservaError("El cliente ya está inscrito en esta serie", codigo="cliente_ya_inscrito")
+        inscripcion = inscripcion_existente
+        inscripcion.estado = EstadoInscripcion.INVITADA
+        inscripcion.modalidad_cobro = None
+        accion_bitacora = "inscripcion_serie_reinvitada"
+    else:
+        inscripcion = InscripcionSerie(
+            tenant_id=tenant_id,
+            serie_id=serie_id,
+            cliente_usuario_id=payload.cliente_usuario_id,
+            estado=EstadoInscripcion.INVITADA,
+        )
+        db.add(inscripcion)
+        accion_bitacora = "inscripcion_serie_invitada"
+    db.flush()
+
+    registrar_bitacora(
+        db, tenant_id, "inscripcion_serie", inscripcion.id, accion_bitacora,
+        usuario_id=registrado_por.id if registrado_por is not None else None,
+        detalles={"serie_id": serie.id, "cliente_usuario_id": payload.cliente_usuario_id},
+        ip=ip, user_agent=user_agent,
+    )
+
+    acceso_token_plano = None
+    if cliente.password_hash is None:
+        acceso_token_plano = generar_token_acceso(cliente)
+
+    return {"inscripcion": inscripcion, "cliente": cliente, "acceso_token_plano": acceso_token_plano}
+
+
+def _generar_reservas_de_inscripcion(
+    db: Session,
+    tenant: Tenant,
+    serie: SerieReserva,
+    inscripcion: InscripcionSerie,
+    cliente: Usuario,
+    metodo_pago: MetodoPagoEnum,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Tuple[List[Reserva], List[Dict[str, Any]]]:
+    """Genera las N reservas de una inscripción ya confirmada (una por
+    fecha del patrón de la serie). Asume `inscripcion.modalidad_cobro` ya
+    fue asignado por el caller. Reutiliza crear_reserva() con
+    generar_token_activacion=False — el token de activación, si aplica, ya
+    se resolvió al invitar, no aquí. Si una fecha falla, se salta y
+    continúa (éxito parcial reportado). No hace commit.
+    """
+    from datetime import datetime as dt
+    from app.schemas_v2_2 import ReservaCreate
+
+    servicio = db.get(Servicio, serie.servicio_id)
+    tzname = _tz_del_contexto(tenant, servicio, servicio.sede if servicio else None)
+
+    fechas = generar_fechas_recurrencia(
+        fecha_inicio=serie.fecha_inicio,
+        dia_semana=serie.dia_semana,
+        frecuencia=serie.frecuencia,
+        num_repeticiones=serie.num_repeticiones,
+    )
+
+    reservas_creadas: List[Reserva] = []
+    fechas_omitidas: List[Dict[str, Any]] = []
+
+    precio_por_reserva = None
+    if inscripcion.modalidad_cobro == ModalidadCobro.PAQUETE and servicio.precio_paquete is not None and fechas:
+        precio_por_reserva = servicio.precio_paquete / Decimal(len(fechas))
+
+    for fecha in fechas:
+        try:
+            fecha_hora = dt.combine(fecha, serie.hora_inicio, tzinfo=ZoneInfo(tzname))
+
+            reserva_payload = ReservaCreate(
+                servicio_id=serie.servicio_id,
+                fecha_hora_inicio=fecha_hora,
+                asesor_id=serie.asesor_id,
+                metodo_pago=MetodoPago(metodo_pago.value),
+                canal=Canal.ADMIN,
+            )
+
+            resultado = crear_reserva(
+                db, tenant, reserva_payload, cliente, ip=ip, user_agent=user_agent,
+                generar_token_activacion=False,
+            )
+            reserva = resultado["reserva"]
+
+            reserva.serie_id = serie.id
+            reserva.inscripcion_id = inscripcion.id
+            reserva.modalidad_cobro = inscripcion.modalidad_cobro.value
+            if precio_por_reserva is not None:
+                reserva.precio_final = precio_por_reserva
+
+            # FIX: crear_reserva() decidió estado/estado_pago/hold usando
+            # servicio.precio (precio por sesión suelta), que no es el precio
+            # real de una reserva generada desde una inscripción de serie.
+            # Sobreescribimos con el precio real: paquete divide el total,
+            # sesión usa servicio.precio. Nunca hold ni EN_ESPERA aquí — el
+            # cliente ya confirmó su lugar; pagar es un paso aparte.
+            precio_real = (
+                precio_por_reserva
+                if inscripcion.modalidad_cobro == ModalidadCobro.PAQUETE
+                else servicio.precio
+            )
+            reserva.estado = EstadoReserva.CONFIRMADA
+            reserva.estado_pago = (
+                EstadoPagoReserva.EXENTO
+                if (not servicio.pago_requerido or not precio_real or precio_real <= 0)
+                else EstadoPagoReserva.PENDIENTE
+            )
+            reserva.hold_expira_en = None
+
+            reservas_creadas.append(reserva)
+
+        except ReservaError as e:
+            fechas_omitidas.append({
+                "fecha": fecha.isoformat(),
+                "razon": e.mensaje,
+                "codigo": e.codigo,
+            })
+            continue
+        except IntegrityError:
+            fechas_omitidas.append({
+                "fecha": fecha.isoformat(),
+                "razon": "Conflicto de base de datos",
+                "codigo": "conflicto_db",
+            })
+            continue
+        except StaleDataError:
+            fechas_omitidas.append({
+                "fecha": fecha.isoformat(),
+                "razon": "Conflicto de concurrencia",
+                "codigo": "conflicto_concurrencia",
+            })
+            continue
+
+    return reservas_creadas, fechas_omitidas
+
+
+def confirmar_inscripcion_serie(
+    db: Session,
+    tenant: Tenant,
+    inscripcion_id: int,
+    cliente: Usuario,
+    payload: ConfirmarInscripcionIn,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Dict[str, Any]:
+    """El cliente confirma su invitación: elige modalidad + método de pago,
+    lo que genera las N reservas y pasa la inscripción a CONFIRMADA.
+    """
+    tenant_id = tenant.id
+
+    inscripcion = db.execute(
+        select(InscripcionSerie)
+        .where(InscripcionSerie.tenant_id == tenant_id, InscripcionSerie.id == inscripcion_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if inscripcion is None:
+        raise ReservaError("Invitación no encontrada", codigo="inscripcion_no_encontrada")
+    if inscripcion.cliente_usuario_id != cliente.id:
+        raise ReservaError("Esta invitación no te pertenece", codigo="permiso_denegado")
+    if inscripcion.estado != EstadoInscripcion.INVITADA:
+        raise ReservaError("Esta invitación ya fue resuelta", codigo="inscripcion_no_pendiente")
+
+    serie = db.execute(
+        select(SerieReserva).where(SerieReserva.tenant_id == tenant_id, SerieReserva.id == inscripcion.serie_id)
+    ).scalar_one_or_none()
+    if serie is None or serie.estado == EstadoSerie.CANCELADA:
+        raise ReservaError("La serie está cancelada", codigo="serie_cancelada")
+
+    servicio = db.get(Servicio, serie.servicio_id)
+
+    # Estado inconsistente del servicio (no un error del cliente):
+    # cobro_por_paquete_habilitado=True pero el servicio no tiene precio de paquete.
+    if payload.modalidad_cobro == ModalidadCobroEnum.PAQUETE and (
+        servicio is None or servicio.precio_paquete is None
+    ):
+        raise ReservaError(
+            "El servicio no tiene un precio de paquete configurado",
+            codigo="servicio_sin_precio_paquete",
+        )
+
+    try:
+        validar_modalidad_cobro(
+            payload.modalidad_cobro,
+            servicio.precio_paquete if servicio else None,
+            servicio.cobro_por_sesion_habilitado if servicio else False,
+            servicio.cobro_por_paquete_habilitado if servicio else False,
+        )
+    except ValueError as e:
+        raise ReservaError(str(e), codigo="modalidad_no_permitida")
+
+    inscripcion.modalidad_cobro = payload.modalidad_cobro
+
+    reservas_creadas, fechas_omitidas = _generar_reservas_de_inscripcion(
+        db, tenant, serie, inscripcion, cliente, payload.metodo_pago, ip=ip, user_agent=user_agent,
+    )
+
+    inscripcion.estado = EstadoInscripcion.CONFIRMADA
+
+    registrar_bitacora(
+        db, tenant_id, "inscripcion_serie", inscripcion.id, "inscripcion_serie_confirmada",
+        usuario_id=cliente.id,
+        detalles={
+            "serie_id": serie.id,
+            "modalidad_cobro": payload.modalidad_cobro.value,
+            "metodo_pago": payload.metodo_pago.value,
+            "num_reservas_creadas": len(reservas_creadas),
+            "num_reservas_omitidas": len(fechas_omitidas),
+            "fechas_omitidas": fechas_omitidas,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+
+    return {
+        "inscripcion": inscripcion,
+        "num_reservas_creadas": len(reservas_creadas),
+        "num_reservas_omitidas": len(fechas_omitidas),
+        "fechas_omitidas": fechas_omitidas,
+    }
+
+
+def cancelar_invitacion_serie(
+    db: Session,
+    tenant: Tenant,
+    serie_id: int,
+    inscripcion_id: int,
+    staff: UsuarioTenant,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> InscripcionSerie:
+    """El staff retira una invitación que sigue pendiente (INVITADA).
+
+    No aplica a invitaciones ya CONFIRMADA — esas ya generaron reservas
+    reales; para deshacerlas se cancelan las reservas, no la inscripción.
+    """
+    inscripcion = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.serie_id == serie_id,
+            InscripcionSerie.id == inscripcion_id,
+        )
+    ).scalar_one_or_none()
+    if inscripcion is None:
+        raise ReservaError("Invitación no encontrada", codigo="inscripcion_no_encontrada")
+    if inscripcion.estado != EstadoInscripcion.INVITADA:
+        raise ReservaError(
+            "Solo se puede cancelar una invitación pendiente",
+            codigo="inscripcion_no_pendiente",
+        )
+
+    inscripcion.estado = EstadoInscripcion.CANCELADA
+
+    registrar_bitacora(
+        db, tenant.id, "inscripcion_serie", inscripcion.id, "inscripcion_serie_invitacion_cancelada",
+        usuario_id=staff.usuario_id,
+        detalles={"serie_id": serie_id},
+        ip=ip, user_agent=user_agent,
+    )
+
+    return inscripcion
+
+
+def confirmar_solicitud_como_serie(
+    db: Session,
+    tenant: Tenant,
+    solicitud_id: int,
+    payload: SolicitudConfirmarSerieIn,
+    staff: UsuarioTenant,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Convierte una SolicitudReserva pendiente en una SerieReserva + una
+    invitación (INVITADA) para el cliente de la solicitud — no genera
+    reservas todavía. La fecha de inicio, servicio y cliente se toman de
+    la solicitud; el staff define el patrón y las modalidades de cobro,
+    pero NO elige la modalidad ni el método de pago del cliente — eso lo
+    hace el cliente desde su portal (confirmar_inscripcion_serie()), igual
+    que en el camino de inscribir_cliente_en_serie().
+
+    Devuelve {"serie", "cliente", "acceso_token_plano"} — reexporta el
+    token de activación de inscribir_cliente_en_serie() para que el caller
+    mande el correo post-commit si aplica.
+    """
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+
+    if solicitud is None:
+        raise ReservaError("Solicitud no encontrada", codigo="solicitud_no_encontrada")
+    if solicitud.estado != EstadoSolicitud.PENDIENTE:
+        raise ReservaError("La solicitud ya fue resuelta", codigo="solicitud_no_pendiente")
+    if solicitud.fecha_hora_propuesta <= utcnow():
+        raise ReservaError(
+            "La fecha propuesta ya pasó; ya no se puede confirmar",
+            codigo="fecha_ambigua",
+        )
+
+    servicio = db.execute(
+        select(Servicio)
+        .options(joinedload(Servicio.sede))
+        .where(
+            Servicio.tenant_id == tenant.id,
+            Servicio.id == solicitud.servicio_id,
+            Servicio.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise ReservaError("Servicio no encontrado o no disponible", codigo="servicio_no_encontrado")
+
+    cliente = db.get(Usuario, solicitud.cliente_usuario_id)
+    if cliente is None:
+        raise ReservaError("Cliente no encontrado", codigo="cliente_no_encontrado")
+
+    tzname = _tz_del_contexto(tenant, servicio, servicio.sede)
+    fecha_inicio_local = solicitud.fecha_hora_propuesta.astimezone(ZoneInfo(tzname)).date()
+
+    serie_payload = SerieReservaCreate(
+        servicio_id=solicitud.servicio_id,
+        asesor_id=payload.asesor_id,
+        frecuencia=payload.frecuencia,
+        dia_semana=payload.dia_semana,
+        hora_inicio=payload.hora_inicio,
+        duracion_minutos=payload.duracion_minutos,
+        num_repeticiones=payload.num_repeticiones,
+        fecha_inicio=datetime.combine(fecha_inicio_local, time.min, tzinfo=ZoneInfo(tzname)),
+    )
+
+    serie = crear_serie(
+        db, tenant, serie_payload,
+        registrado_por=staff.usuario,
+        ip=ip, user_agent=user_agent,
+    )
+
+    inscripcion_payload = InscripcionSerieCreate(cliente_usuario_id=solicitud.cliente_usuario_id)
+
+    resultado_inscripcion = inscribir_cliente_en_serie(
+        db, tenant, serie.id, inscripcion_payload,
+        registrado_por=staff.usuario,
+        ip=ip, user_agent=user_agent,
+    )
+
+    solicitud.estado = EstadoSolicitud.ACEPTADA
+    solicitud.serie_id = serie.id
+    solicitud.resuelto_por_id = staff.id
+    solicitud.resuelto_en = utcnow()
+
+    registrar_bitacora(
+        db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_confirmada_serie",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "serie_id": serie.id,
+            "servicio_id": servicio.id,
+            "num_repeticiones": payload.num_repeticiones,
+            "cliente_usuario_id": solicitud.cliente_usuario_id,
+        },
+        ip=ip, user_agent=user_agent,
+    )
+
+    return {
+        "serie": serie,
+        "cliente": resultado_inscripcion["cliente"],
+        "acceso_token_plano": resultado_inscripcion["acceso_token_plano"],
+    }
+
+
 # ============================================================
 # CONFIRMAR PAGO — NUEVO
 # ============================================================
@@ -1013,28 +1773,11 @@ def confirmar_pago_por_folio(
     monto: Decimal,
     metodo: str = "stripe",
 ) -> Reserva:
-    reserva = db.execute(
+    """Confirma pago de una reserva por folio. Mantiene compatibilidad con Stripe."""
+    confirmar_pago_por_referencia(db, f"reserva:{folio}", monto, metodo=metodo)
+    return db.execute(
         select(Reserva).where(Reserva.folio == folio)
-    ).scalar_one_or_none()
-    if not reserva:
-        raise ReservaError("Reserva no encontrada", codigo="not_found")
-    if reserva.estado != EstadoReserva.EN_ESPERA:
-        raise ReservaError("La reserva no está en espera de pago", codigo="estado_invalido")
-
-    reserva.estado = EstadoReserva.CONFIRMADA
-    reserva.estado_pago = EstadoPagoReserva.COMPLETADO
-    reserva.pagado_en = utcnow()
-    reserva.metodo_pago_usado = MetodoPagoUsado(metodo)
-    reserva.hold_expira_en = None
-    reserva.precio_final = Decimal(str(monto))
-
-    actualizar_estado_sesion(db, reserva.sesion_id, reserva.tenant_id)
-
-    registrar_bitacora(
-        db, reserva.tenant_id, "reserva", reserva.id, "pago_confirmado",
-        detalles={"folio": folio, "monto": str(monto), "metodo": metodo},
-    )
-    return reserva
+    ).scalar_one()
 
 
 # ============================================================
@@ -1186,14 +1929,485 @@ def limpiar_holds_expirados(db: Session, lote: int = 200) -> int:
 
 
 # ============================================================
-# INTEGRACIONES EXTERNAS — post-commit (stubs)
+# INTEGRACIONES EXTERNAS — post-commit
 # ============================================================
-def iniciar_checkout(tenant: Tenant, reserva: Reserva, usuario: Usuario) -> Optional[CheckoutUrlOut]:
-    raise NotImplementedError("Integrar Stripe/MercadoPago con clave de idempotencia = folio")
+
+def _crear_espacio_meet(creds) -> dict:
+    """Crea un espacio de Google Meet y devuelve su resource name + URI.
+
+    Crítico: artifactConfig es lo que le pide a Google grabar y transcribir
+    automáticamente — sin esto el espacio se crea pero nadie graba nada,
+    y todo el resto del feature (job de contenido, correos, Drive) nunca
+    tendría nada que procesar. Confirmado en vivo con un script aislado
+    antes de escribir este prompt (ver HANDOFF) que el plan del tenant sí
+    acepta este body.
+
+    smartNotesConfig se apaga a propósito (autoSmartNotesGeneration=OFF):
+    sin esto, la política del workspace lo deja en automático (confirmado
+    en la misma prueba en vivo, veía "ON" sin haberlo pedido) y Google
+    manda un correo de error al organizador cuando falla la generación de
+    notas — no usamos esa función en el feature, no tiene caso arrastrar
+    ese ruido.
+    """
+    from googleapiclient.discovery import build
+
+    meet = build("meet", "v2", credentials=creds)
+    space = meet.spaces().create(
+        body={
+            "config": {
+                "accessType": "TRUSTED",
+                "entryPointAccess": "ALL",
+                "artifactConfig": {
+                    "recordingConfig": {"autoRecordingGeneration": "ON"},
+                    "transcriptionConfig": {"autoTranscriptionGeneration": "ON"},
+                    "smartNotesConfig": {"autoSmartNotesGeneration": "OFF"},
+                },
+            },
+        }
+    ).execute()
+    return space
+
+
+def _crear_evento_calendario(creds, sesion: Sesion, servicio: Servicio, space: dict) -> None:
+    """Crea un evento en Calendar del buzón impersonado para que el Meet tenga
+    un título visible con asignatura, docente y fecha/hora.
+    """
+    from googleapiclient.discovery import build
+
+    asesor_nombre = sesion.asesor.usuario.nombre if sesion.asesor and sesion.asesor.usuario else "Sin asesor asignado"
+    fecha_legible = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+    titulo = f"{servicio.nombre} — {asesor_nombre} — {fecha_legible}"
+
+    try:
+        calendar = build("calendar", "v3", credentials=creds)
+        calendar.events().insert(
+            calendarId="primary",
+            conferenceDataVersion=1,
+            body={
+                "summary": titulo,
+                "start": {"dateTime": sesion.fecha_hora_inicio.isoformat(), "timeZone": sesion.timezone},
+                "end": {"dateTime": sesion.fecha_hora_fin.isoformat(), "timeZone": sesion.timezone},
+                "conferenceData": {
+                    "conferenceId": space.get("meetingCode"),
+                    "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+                    "entryPoints": [{
+                        "entryPointType": "video",
+                        "uri": space.get("meetingUri"),
+                        "label": (space.get("meetingUri") or "").replace("https://", ""),
+                    }],
+                },
+            },
+        ).execute()
+    except Exception:
+        log.exception("Fallo al crear evento de Calendar para sesión %s", sesion.id)
 
 
 def sincronizar_calendario(tenant: Tenant, sesion: Sesion) -> Optional[str]:
-    raise NotImplementedError("Integrar Google Calendar")
+    """Crea el espacio de Meet para una sesión virtual/híbrida, si el
+    tenant tiene Google Meet conectado y todavía no existe uno para esta
+    sesión. Es un no-op silencioso (regresa None) si el servicio no es
+    virtual/híbrido, si el tenant no tiene Google Meet conectado, o si
+    la sesión ya tiene un meet_space_name (grupal: el 2o, 3er... cliente
+    que llega no debe crear un Meet nuevo, reusa el existente).
+
+    El caller es responsable de solo invocar esta función cuando la
+    reserva que la disparó YA está CONFIRMADA y con estado_pago en
+    (COMPLETADO, EXENTO) — esta función no vuelve a validar eso, confía
+    en el caller.
+    """
+    servicio = sesion.servicio
+    if servicio is None or servicio.modalidad.value not in ("virtual", "hibrida"):
+        return None
+    if sesion.meet_space_name:
+        return sesion.meet_url
+
+    cfg = tenant.google_meet_config if isinstance(tenant.google_meet_config, dict) else {}
+    if not cfg.get("impersonar_email"):
+        return None
+
+    creds = _google_meet_credentials(tenant)
+    space = _crear_espacio_meet(creds)
+    _crear_evento_calendario(creds, sesion, servicio, space)
+
+    from app.database import get_db
+
+    db = next(get_db())
+    try:
+        s = db.get(Sesion, sesion.id)
+        if s.meet_space_name:
+            return s.meet_url
+        s.meet_url = space.get("meetingUri")
+        s.meet_space_name = space.get("name")
+        s.meet_generado_auto = True
+        db.commit()
+    except StaleDataError:
+        db.rollback()
+        log.warning("Sesión %s cambió al guardar el Meet generado — reintenta o repórtalo", sesion.id)
+        return None
+    return space.get("meetingUri")
+
+
+# ── MercadoPago ─────────────────────────────────────────────────────────────
+_MP_PAYMENTS_URL = "https://api.mercadopago.com/v1/payments"
+_MP_USERS_ME_URL = "https://api.mercadopago.com/users/me"
+
+
+def _mp_cfg(tenant: Tenant) -> dict:
+    cfg = tenant.pago_config
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def conectar_mercadopago_token(
+    tenant: Tenant,
+    db: Session,
+    access_token: str,
+    public_key: Optional[str] = None,
+) -> dict:
+    """Valida un Access Token pegado por el admin y lo guarda cifrado.
+
+    No hace commit — el router se encarga de eso.
+    """
+    try:
+        r = httpx.get(
+            _MP_USERS_ME_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=30,
+        )
+    except Exception as exc:
+        log.exception("Error al validar token de MercadoPago")
+        raise ReservaError("No se pudo contactar a MercadoPago", codigo="mp_error_red") from exc
+    if r.status_code != 200:
+        log.warning("MercadoPago /users/me respondió %s: %s", r.status_code, r.text)
+        raise ReservaError(
+            "El token no es válido o no tiene permisos suficientes",
+            codigo="mp_token_invalido",
+        )
+    data = r.json()
+    mp_user_id = data.get("id")
+    tenant.pago_config = {
+        "access_token": access_token,
+        "public_key": public_key,
+        "mp_user_id": str(mp_user_id) if mp_user_id is not None else None,
+        "conectado_en": datetime.now(timezone.utc).isoformat(),
+    }
+    return tenant.pago_config
+
+
+def _google_meet_credentials(tenant: Tenant):
+    """Crea credenciales de service account con Domain-Wide Delegation para
+    impersonar el buzón de Workspace configurado en el tenant.
+    """
+    from google.oauth2.service_account import Credentials
+    import json
+
+    json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if not json_str:
+        raise ReservaError("Google Meet no está configurado en el servidor", codigo="meet_no_configurado")
+
+    try:
+        info = json.loads(json_str)
+    except json.JSONDecodeError as exc:
+        raise ReservaError("Configuración de Google Meet inválida", codigo="meet_config_invalida") from exc
+
+    cfg = tenant.google_meet_config if isinstance(tenant.google_meet_config, dict) else {}
+    impersonar_email = cfg.get("impersonar_email")
+    if not impersonar_email:
+        raise ReservaError("Tenant no tiene buzón de Google Meet configurado", codigo="meet_no_configurado")
+
+    return Credentials.from_service_account_info(
+        info,
+        scopes=[
+            "https://www.googleapis.com/auth/meetings.space.created",
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/documents",
+            "https://www.googleapis.com/auth/calendar.events",
+        ],
+        subject=impersonar_email,
+    )
+
+
+def conectar_google_meet(
+    tenant: Tenant,
+    db: Session,
+    impersonar_email: str,
+) -> dict:
+    """Valida el email y prueba la impersonación con la API de Meet antes de
+    guardar la configuración del tenant.
+    """
+    from googleapiclient.discovery import build
+
+    email = impersonar_email.strip().lower()
+    if "@" not in email:
+        raise ReservaError("El correo de impersonación no es válido", codigo="meet_email_invalido")
+
+    tenant.google_meet_config = {"impersonar_email": email}
+    creds = _google_meet_credentials(tenant)
+    try:
+        meet = build("meet", "v2", credentials=creds)
+        meet.spaces().create(body={"config": {"accessType": "TRUSTED"}}).execute()
+    except Exception as exc:
+        tenant.google_meet_config = None
+        log.exception("Fallo la prueba de conexión a Google Meet para %s", email)
+        raise ReservaError(
+            "No se pudo conectar con Google Meet. Verifica el correo, la delegación de dominio y los scopes.",
+            codigo="meet_error_conexion",
+        ) from exc
+
+    return tenant.google_meet_config
+
+
+def desconectar_google_meet(tenant: Tenant, db: Session) -> None:
+    """Borra la configuración de Google Meet del tenant. No revoca la
+    delegación de dominio ni el acceso del lado de Google; el admin debe
+    hacerlo desde el panel de Google Cloud / Workspace.
+    """
+    tenant.google_meet_config = None
+
+
+def desconectar_mercadopago(tenant: Tenant, db: Session) -> None:
+    """Borra la configuración de MercadoPago del tenant. No revoca el token
+    en el lado de MercadoPago; el admin debe regenerarlo desde su panel.
+    """
+    tenant.pago_config = None
+
+
+def _mp_access_token(tenant: Tenant, db: Session) -> str:
+    """Devuelve el access_token guardado del tenant."""
+    cfg = _mp_cfg(tenant)
+    access_token = cfg.get("access_token")
+    if not access_token:
+        raise ReservaError("Este tenant no tiene MercadoPago conectado", codigo="mp_no_conectado")
+    return access_token
+
+
+def _mp_client(tenant: Tenant, db: Session) -> mercadopago.SDK:
+    access_token = _mp_access_token(tenant, db)
+    return mercadopago.SDK(access_token)
+
+
+def _mp_base_url(request: Optional[Any] = None) -> str:
+    """URL base pública del backend para webhooks y back_urls."""
+    base = os.environ.get("API_BASE_URL", "")
+    if base:
+        return base.rstrip("/")
+    if request is not None:
+        return str(request.base_url).rstrip("/")
+    return "http://localhost:8000"
+
+
+def _mp_preferencia_body(
+    title: str,
+    unit_price: Decimal,
+    quantity: int,
+    external_reference: str,
+    base_url: str,
+    notification_url: str,
+    payer_email: Optional[str] = None,
+    payer_name: Optional[str] = None,
+) -> dict:
+    return {
+        "items": [
+            {
+                "title": title,
+                "quantity": quantity,
+                "unit_price": float(unit_price),
+                "currency_id": "MXN",  # MercadoPago usa el tenant.moneda en producción si es soportado
+            }
+        ],
+        "payer": {
+            "email": payer_email or "",
+            "name": payer_name or "",
+        },
+        "external_reference": external_reference,
+        "back_urls": {
+            "success": f"{base_url}/api/v2/mercadopago/redirect?reference={quote(external_reference)}&status=success",
+            "pending": f"{base_url}/api/v2/mercadopago/redirect?reference={quote(external_reference)}&status=pending",
+            "failure": f"{base_url}/api/v2/mercadopago/redirect?reference={quote(external_reference)}&status=failure",
+        },
+        "auto_return": "approved",
+        "notification_url": notification_url,
+    }
+
+
+def iniciar_checkout(
+    tenant: Tenant,
+    reserva: Reserva,
+    usuario: Usuario,
+    request: Optional[Any] = None,
+) -> Optional[CheckoutUrlOut]:
+    """Crea una preferencia de MercadoPago para una reserva suelta."""
+    db = None
+    if request is None:
+        # Para compatibilidad con el caller actual en crear_reserva, que no pasa request.
+        # En ese caso no podemos refrescar tokens ni guardar nada; si expiró fallará.
+        cfg = _mp_cfg(tenant)
+        access_token = cfg.get("access_token")
+        if not access_token:
+            return None
+        sdk = mercadopago.SDK(access_token)
+    else:
+        # Obtenemos session desde request para refrescar token si hace falta.
+        from app.database import get_db
+        db = next(get_db())
+        sdk = _mp_client(tenant, db)
+
+    base_url = _mp_base_url(request)
+    notification_url = f"{base_url}/api/v2/webhooks/mercadopago"
+    external_reference = f"reserva:{reserva.folio}"
+    title = f"Reserva {reserva.folio}"
+    body = _mp_preferencia_body(
+        title=title,
+        unit_price=reserva.precio_final or Decimal("0"),
+        quantity=1,
+        external_reference=external_reference,
+        base_url=base_url,
+        notification_url=notification_url,
+        payer_email=usuario.email,
+        payer_name=f"{usuario.nombre} {usuario.apellido or ''}".strip(),
+    )
+    try:
+        resp = sdk.preference().create(body)
+    except Exception:
+        log.exception("Fallo al crear preferencia de MercadoPago")
+        return None
+    if resp.get("status", 0) // 100 != 2:
+        log.warning("MercadoPago preference error: %s", resp)
+        return None
+    init_point = resp.get("response", {}).get("init_point")
+    if not init_point:
+        return None
+    return CheckoutUrlOut(url=init_point, proveedor="mercadopago", expira_en=reserva.hold_expira_en)
+
+
+def crear_preferencia_paquete(
+    tenant: Tenant,
+    inscripcion: InscripcionSerie,
+    db: Session,
+    request: Optional[Any] = None,
+) -> Optional[CheckoutUrlOut]:
+    """Crea una preferencia de MercadoPago para pagar un paquete de serie."""
+    sdk = _mp_client(tenant, db)
+    serie = inscripcion.serie
+    servicio = serie.servicio if serie else None
+    if servicio is None or servicio.precio_paquete is None:
+        raise ReservaError("El servicio no tiene precio de paquete", codigo="servicio_sin_precio_paquete")
+    usuario = inscripcion.cliente
+    if usuario is None:
+        raise ReservaError("Cliente no encontrado", codigo="not_found")
+
+    base_url = _mp_base_url(request)
+    notification_url = f"{base_url}/api/v2/webhooks/mercadopago"
+    external_reference = f"inscripcion:{inscripcion.id}"
+    title = f"Paquete {servicio.nombre}"
+    body = _mp_preferencia_body(
+        title=title,
+        unit_price=servicio.precio_paquete,
+        quantity=1,
+        external_reference=external_reference,
+        base_url=base_url,
+        notification_url=notification_url,
+        payer_email=usuario.email,
+        payer_name=f"{usuario.nombre} {usuario.apellido or ''}".strip(),
+    )
+    try:
+        resp = sdk.preference().create(body)
+    except Exception:
+        log.exception("Fallo al crear preferencia de paquete MercadoPago")
+        return None
+    if resp.get("status", 0) // 100 != 2:
+        log.warning("MercadoPago preference paquete error: %s", resp)
+        return None
+    init_point = resp.get("response", {}).get("init_point")
+    if not init_point:
+        return None
+    return CheckoutUrlOut(url=init_point, proveedor="mercadopago")
+
+
+def _marcar_reserva_pagada(
+    db: Session,
+    reserva: Reserva,
+    monto: Decimal,
+    metodo: str,
+) -> None:
+    """Marca una reserva como pagada, actualizando sesion si aplica."""
+    reserva.estado_pago = EstadoPagoReserva.COMPLETADO
+    reserva.pagado_en = utcnow()
+    reserva.metodo_pago_usado = MetodoPagoUsado(metodo)
+    reserva.precio_final = Decimal(str(monto))
+    reserva.hold_expira_en = None
+    actualizar_estado_sesion(db, reserva.sesion_id, reserva.tenant_id)
+
+
+def confirmar_pago_por_referencia(
+    db: Session,
+    referencia: str,
+    monto: Decimal,
+    metodo: str = "mercadopago",
+) -> Dict[str, Any]:
+    """Confirma un pago a partir de una referencia MercadoPago.
+
+    Formatos:
+      - reserva:{folio}
+      - inscripcion:{id}
+    """
+    if referencia.startswith("reserva:"):
+        folio = referencia[len("reserva:"):]
+        reserva = db.execute(
+            select(Reserva).where(Reserva.folio == folio)
+        ).scalar_one_or_none()
+        if not reserva:
+            raise ReservaError("Reserva no encontrada", codigo="not_found")
+        if reserva.estado not in (EstadoReserva.EN_ESPERA, EstadoReserva.CONFIRMADA):
+            raise ReservaError("La reserva no admite pago", codigo="estado_invalido")
+        if reserva.estado_pago != EstadoPagoReserva.PENDIENTE:
+            raise ReservaError("La reserva ya no tiene pago pendiente", codigo="estado_invalido")
+        if reserva.estado == EstadoReserva.EN_ESPERA:
+            reserva.estado = EstadoReserva.CONFIRMADA
+        _marcar_reserva_pagada(db, reserva, monto, metodo)
+        registrar_bitacora(
+            db, reserva.tenant_id, "reserva", reserva.id, "pago_confirmado",
+            detalles={"referencia": referencia, "monto": str(monto), "metodo": metodo},
+        )
+        return {"tipo": "reserva", "folio": folio, "reserva_id": reserva.id}
+
+    if referencia.startswith("inscripcion:"):
+        inscripcion_id = int(referencia[len("inscripcion:"):])
+        inscripcion = db.execute(
+            select(InscripcionSerie)
+            .where(InscripcionSerie.id == inscripcion_id)
+            .options(joinedload(InscripcionSerie.serie))
+        ).scalar_one_or_none()
+        if not inscripcion:
+            raise ReservaError("Inscripción no encontrada", codigo="not_found")
+        if inscripcion.estado != EstadoInscripcion.CONFIRMADA:
+            raise ReservaError("La inscripción no está confirmada", codigo="estado_invalido")
+        if inscripcion.modalidad_cobro != ModalidadCobro.PAQUETE:
+            raise ReservaError("La inscripción no es de paquete", codigo="modalidad_no_permitida")
+        reservas = db.execute(
+            select(Reserva).where(
+                Reserva.tenant_id == inscripcion.tenant_id,
+                Reserva.inscripcion_id == inscripcion.id,
+            )
+        ).scalars().all()
+        if not reservas:
+            raise ReservaError("La inscripción no tiene reservas", codigo="not_found")
+        pendientes = [r for r in reservas if r.estado_pago == EstadoPagoReserva.PENDIENTE]
+        if not pendientes:
+            raise ReservaError("El paquete ya está pagado", codigo="estado_invalido")
+        for r in pendientes:
+            _marcar_reserva_pagada(db, r, monto / len(pendientes), metodo)
+        registrar_bitacora(
+            db, inscripcion.tenant_id, "inscripcion_serie", inscripcion.id, "pago_confirmado",
+            detalles={"referencia": referencia, "monto": str(monto), "metodo": metodo, "reservas_pagadas": len(pendientes)},
+        )
+        return {
+            "tipo": "inscripcion",
+            "inscripcion_id": inscripcion.id,
+            "reservas_pagadas": len(pendientes),
+            "reservas_pagadas_ids": [r.id for r in pendientes],
+        }
+
+    raise ReservaError("Referencia de pago inválida", codigo="referencia_invalida")
 
 
 def _smtp_cfg(tenant: Tenant) -> dict:
@@ -1214,25 +2428,201 @@ def _asesor_email(asesor: Optional[UsuarioTenant]) -> Optional[str]:
     return (asesor.usuario.nombre if asesor.usuario else None) or f"Asesor #{asesor.id}"
 
 
-def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optional[Usuario], sesion: Sesion) -> None:
-    """Envía la confirmación de reserva por SMTP.
+def _link_activacion(tenant: Tenant, acceso_token_plano: str) -> str:
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return f"{base}/t/{tenant.slug}/activar?token={acceso_token_plano}"
+
+
+def _email_shell(tenant: Tenant, cuerpo_interior_html: str) -> str:
+    """Envuelve el cuerpo de un correo transaccional con la identidad del
+    tenant (logo si tiene, si no su nombre) y su `color_primario` en la
+    barra superior, en vez de un azul fijo genérico. Todos los correos
+    salientes del tenant pasan por aquí.
+    """
+    color = tenant.color_primario or "#1e3a5f"
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+    if tenant.logo_url:
+        header_html = (
+            f'<img src="{html.escape(tenant.logo_url)}" alt="{tenant_nombre_html}" '
+            f'style="max-height:36px;max-width:220px;display:block;border:0;">'
+        )
+    else:
+        header_html = (
+            f'<h1 style="margin:0;color:#ffffff;font-size:18px;font-family:Arial,sans-serif;">'
+            f'{tenant_nombre_html}</h1>'
+        )
+    return f"""\
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;">
+  <tr>
+    <td style="padding:24px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr>
+          <td style="background-color:{color};padding:20px 24px;">
+            {header_html}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px;font-family:Arial,sans-serif;">
+            {cuerpo_interior_html}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>"""
+
+
+@contextmanager
+def _forzar_resolucion_ipv4():
+    """Fuerza que las conexiones de socket dentro del bloque usen IPv4.
+
+    `getaddrinfo` en Linux devuelve direcciones IPv6 primero cuando el host
+    tiene registro AAAA (muchos proveedores SMTP lo tienen, incluido
+    Gmail). En Render el contenedor no tiene salida IPv6 funcional, así
+    que `smtplib.SMTP(host, port)` truena con `OSError: Network is
+    unreachable` de inmediato en vez de intentar IPv4 como fallback. Se
+    monkeypatchea `socket.getaddrinfo` solo durante el envío del correo —
+    se sigue pasando el hostname original (no una IP) a smtplib, así que
+    la validación de certificado TLS no se ve afectada.
+    """
+    original = socket.getaddrinfo
+
+    def _solo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+        return original(host, port, socket.AF_INET, type, proto, flags)
+
+    socket.getaddrinfo = _solo_ipv4
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original
+
+
+def _enviar_resend(tenant: Tenant, destinatario_email: str, asunto: str, texto_plano: str, cuerpo_html: str) -> None:
+    """Manda un correo transaccional por la API de Resend.
+
+    Usa credenciales globales por variable de entorno:
+      RESEND_API_KEY, RESEND_FROM_EMAIL (default onboarding@resend.dev)
+    El `Reply-To` se toma del `from_email` configurado por el tenant, así el
+    cliente final puede responderle directo aunque el remitente técnico sea
+    el dominio de Daniel.
+    """
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        log.error("RESEND_API_KEY no configurado, correo omitido (%s)", asunto)
+        return
+
+    cfg = _smtp_cfg(tenant)
+    from_email = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+    from_name = cfg.get("from_name") or tenant.nombre
+    reply_to = cfg.get("from_email")
+
+    payload = {
+        "from": f"{from_name} <{from_email}>",
+        "to": [destinatario_email],
+        "subject": asunto,
+        "html": cuerpo_html,
+        "text": texto_plano,
+    }
+    if reply_to:
+        payload["reply_to"] = reply_to
+
+    try:
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json=payload,
+            timeout=15,
+        )
+        if resp.status_code >= 400:
+            log.error(
+                "Resend error %s: %s — correo a %s omitido (%s)",
+                resp.status_code,
+                resp.text,
+                destinatario_email,
+                asunto,
+            )
+            return
+        log.info("Correo enviado via Resend a %s (%s)", destinatario_email, asunto)
+    except Exception as exc:  # noqa: BLE001
+        log.error("Error enviando correo por Resend a %s (%s): %s", destinatario_email, asunto, exc)
+
+
+def _enviar_smtp(tenant: Tenant, destinatario_email: str, asunto: str, texto_plano: str, cuerpo_html: str) -> None:
+    """Manda un correo transaccional según el método configurado por el tenant.
 
     La config vive en `tenant.smtp_config` (EncryptedJSON):
       { "host", "port", "user", "password", "from_email", "from_name",
         "tls" (bool, default True), "ssl" (bool, default False),
-        "console" (bool, imprime en vez de enviar) }
-    Si no hay host, la confirmación se omite (log) y nunca se lanza excepción:
-    el email es un efecto externo que no debe romper el flujo de reserva.
+        "console" (bool, imprime en vez de enviar),
+        "metodo": "smtp" | "api" (default "smtp") }
+    Si `metodo == "api"`, se envía por Resend. Si no hay host para SMTP, se
+    omite (log). Nunca se lanza excepción: el email es un efecto externo que
+    no debe romper la operación que lo disparó.
     """
     cfg = _smtp_cfg(tenant)
-    host = cfg.get("host")
-    if not host:
-        log.info(
-            "SMTP no configurado para tenant '%s' — confirmación omitida (folio %s)",
-            tenant.slug, reserva.folio,
-        )
+
+    if cfg.get("console") or os.environ.get("SMTP_CONSOLE", "").lower() == "1":
+        log.info("EMAIL (console) → %s | asunto: %s", destinatario_email, asunto)
+        log.info("Contenido: %s", texto_plano.replace("\n", " | "))
         return
 
+    if cfg.get("metodo") == "api":
+        _enviar_resend(tenant, destinatario_email, asunto, texto_plano, cuerpo_html)
+        return
+
+    host = cfg.get("host")
+    if not host:
+        log.info("SMTP no configurado para tenant '%s' — correo omitido (%s)", tenant.slug, asunto)
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = asunto
+    msg["From"] = f'{cfg.get("from_name") or tenant.nombre} <{cfg.get("from_email")}>'
+    msg["To"] = destinatario_email
+    msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
+    msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
+
+    port = int(cfg.get("port") or (465 if cfg.get("ssl") else 587))
+    user = cfg.get("user")
+    password = cfg.get("password")
+    from_email = cfg.get("from_email")
+
+    with _forzar_resolucion_ipv4():
+        if cfg.get("ssl"):
+            server = smtplib.SMTP_SSL(host, port, timeout=15)
+        else:
+            server = smtplib.SMTP(host, port, timeout=15)
+            if cfg.get("tls", True):
+                server.starttls()
+        try:
+            if user:
+                server.login(user, password or "")
+            server.sendmail(from_email, [destinatario_email], msg.as_string())
+        finally:
+            server.quit()
+    log.info("Correo enviado a %s (%s)", destinatario_email, asunto)
+
+
+def enviar_email_confirmacion(
+    tenant: Tenant,
+    reserva: Reserva,
+    usuario: Optional[Usuario],
+    sesion: Sesion,
+    acceso_token_plano: Optional[str] = None,
+    checkout_url: Optional[str] = None,
+) -> None:
+    """Envía la confirmación de reserva por SMTP, con el branding del tenant.
+
+    Si `acceso_token_plano` viene (el usuario que reservó es invitado nuevo,
+    sin contraseña), agrega un bloque de activación de cuenta dentro de este
+    mismo correo — nunca se manda un segundo correo aparte para eso.
+
+    Si `checkout_url` viene (la reserva quedó con pago online pendiente,
+    por ejemplo tras asignar_asesor_reserva() a una reserva que venía de
+    confirmación manual), agrega un bloque de "Pagar ahora" — sin esto el
+    cliente no tenía forma de enterarse de que falta pagar salvo entrando
+    por su cuenta a Mis Reservas.
+    """
     if usuario is None or not usuario.email:
         log.info("Sin destinatario para la confirmación (folio %s)", reserva.folio)
         return
@@ -1244,10 +2634,9 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
     fin = _fecha_email(sesion.fecha_hora_fin, sesion.timezone)
 
     # Escapar todo lo que puede venir de un campo editable por el usuario
-    # (nombre de cliente, servicio, tenant, sede, asesor) antes de meterlo
-    # en el HTML del correo — si no, un nombre tipo "<img src=x onerror=...>"
-    # se interpreta como markup dentro del email.
-    tenant_nombre_html = html.escape(tenant.nombre or "")
+    # (nombre de cliente, servicio, sede, asesor) antes de meterlo en el
+    # HTML del correo — si no, un nombre tipo "<img src=x onerror=...>" se
+    # interpreta como markup dentro del email.
     usuario_nombre_html = html.escape(usuario.nombre or "")
     servicio_nombre_html = html.escape(servicio.nombre or "")
     asesor_html = html.escape(asesor) if asesor else None
@@ -1278,22 +2667,50 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
             f'<td style="padding:6px 0;text-align:right;color:#111827;">{sede_nombre_html}</td></tr>'
         )
 
-    cuerpo_html = f"""\
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;">
-  <tr>
-    <td style="padding:24px 16px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background-color:#ffffff;border-radius:12px;overflow:hidden;">
-        <tr>
-          <td style="background-color:#1e3a5f;padding:20px 24px;">
-            <h1 style="margin:0;color:#ffffff;font-size:18px;font-family:Arial,sans-serif;">
-              {tenant_nombre_html} — Reserva confirmada
-            </h1>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:24px;font-family:Arial,sans-serif;">
+    activacion_html = ""
+    activacion_texto = ""
+    if acceso_token_plano:
+        link_activacion = _link_activacion(tenant, acceso_token_plano)
+        link_html = html.escape(link_activacion)
+        activacion_html = f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;background-color:#eff6ff;border-radius:8px;">
+              <tr><td style="padding:16px;">
+                <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#111827;">Crea tu contraseña</p>
+                <p style="margin:0 0 12px;font-size:13px;color:#4b5563;">
+                  Así puedes ver y administrar tus reservas la próxima vez sin volver a dar tus datos.
+                </p>
+                <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+                  Crear contraseña
+                </a>
+              </td></tr>
+            </table>"""
+        activacion_texto = f"\n\nCrea tu contraseña para administrar tus reservas: {link_activacion}"
+
+    pago_html = ""
+    pago_texto = ""
+    if checkout_url:
+        checkout_url_html = html.escape(checkout_url)
+        pago_html = f"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;background-color:#fef3c7;border-radius:8px;">
+              <tr><td style="padding:16px;">
+                <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#111827;">Falta completar tu pago</p>
+                <p style="margin:0 0 12px;font-size:13px;color:#4b5563;">
+                  Tu lugar está apartado, pero necesitamos que completes el pago para confirmarlo del todo.
+                </p>
+                <a href="{checkout_url_html}" style="display:inline-block;background-color:#d97706;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+                  Pagar ahora
+                </a>
+              </td></tr>
+            </table>"""
+        pago_texto = f"\n\nFalta completar tu pago para confirmar tu lugar: {checkout_url}"
+
+    saludo = (
+        "tu lugar está apartado, falta completar el pago:" if checkout_url
+        else "tu reserva está confirmada:"
+    )
+    cuerpo_interior = f"""\
             <p style="margin:0 0 16px;font-size:15px;color:#111827;">
-              Hola {usuario_nombre_html}, tu reserva está confirmada:
+              Hola {usuario_nombre_html}, {saludo}
             </p>
             <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">{servicio_nombre_html}</p>
             <p style="margin:4px 0 16px;font-size:15px;color:#4b5563;">
@@ -1312,19 +2729,17 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
                   <td style="padding:6px 0;text-align:right;color:#111827;">{reserva.codigo_confirmacion}</td></tr>
             </table>
             {meet_html}
+            {pago_html}
+            {activacion_html}
             <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
               Si necesitas cambiar o cancelar esta reserva, contacta a tu proveedor.
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>"""
+            </p>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
 
     texto_plano = (
         f"{tenant.nombre} — Reserva confirmada\n\n"
-        f"Hola {usuario.nombre}, tu reserva está confirmada:\n\n"
+        f"Hola {usuario.nombre}, {saludo}\n\n"
         f"{servicio.nombre}\n{fecha}"
         + (f" — {fin}" if fin and fin != fecha else "")
         + f"\nAsesor: {asesor or 'Por asignar'}"
@@ -1332,38 +2747,627 @@ def enviar_email_confirmacion(tenant: Tenant, reserva: Reserva, usuario: Optiona
         + (f"\nTotal: {reserva.precio_final:.2f} {reserva.moneda}" if reserva.precio_final is not None else "")
         + f"\nFolio: {reserva.folio}\nCódigo: {reserva.codigo_confirmacion}"
         + (f"\n\nEnlace de la sesión: {sesion.meet_url}" if sesion.meet_url else "")
+        + pago_texto
+        + activacion_texto
     )
 
-    if cfg.get("console") or os.environ.get("SMTP_CONSOLE", "").lower() == "1":
-        log.info("EMAIL (console) → %s | asunto: Confirmación de reserva — %s", usuario.email, servicio.nombre)
-        log.info("Contenido: %s", texto_plano.replace("\n", " | "))
+    asunto = (
+        f"Falta tu pago — {servicio.nombre}" if checkout_url
+        else f"Confirmación de reserva — {servicio.nombre}"
+    )
+    _enviar_smtp(tenant, usuario.email, asunto, texto_plano, cuerpo_html)
+
+
+def enviar_email_acceso_meet(
+    tenant: Tenant,
+    reserva: Reserva,
+    usuario: Optional[Usuario],
+    sesion: Sesion,
+) -> None:
+    """Reenvía el enlace de Google Meet al cliente. Úsalo cuando el
+    meet_url se genera o actualiza después de que el pago se completó
+    (por ejemplo, tras confirmar un pago online).
+    """
+    if usuario is None or not usuario.email:
+        log.info("Sin destinatario para correo de acceso Meet (folio %s)", reserva.folio)
+        return
+    if not sesion.meet_url:
+        log.info("Sin meet_url para enviar en correo (folio %s)", reserva.folio)
+        return
+    if reserva.servicio.modalidad.value not in ("virtual", "hibrida"):
         return
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Confirmación de reserva — {servicio.nombre}"
-    msg["From"] = f'{cfg.get("from_name") or tenant.nombre} <{cfg.get("from_email")}>'
-    msg["To"] = usuario.email
-    msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
-    msg.attach(MIMEText(cuerpo_html, "html", "utf-8"))
+    usuario_nombre_html = html.escape(usuario.nombre or "")
+    servicio_nombre_html = html.escape(reserva.servicio.nombre or "")
+    meet_url_html = html.escape(sesion.meet_url)
+    fecha = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
 
-    port = int(cfg.get("port") or (465 if cfg.get("ssl") else 587))
-    user = cfg.get("user")
-    password = cfg.get("password")
-    from_email = cfg.get("from_email")
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {usuario_nombre_html}, aquí está el enlace para tu sesión de {servicio_nombre_html}:
+            </p>
+            <p style="margin:0 0 4px;font-size:14px;color:#4b5563;">
+              <strong>Fecha:</strong> {fecha}
+            </p>
+            <p style="margin:0 0 16px;font-size:14px;color:#4b5563;">
+              <strong>Enlace:</strong>
+            </p>
+            <a href="{meet_url_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              Unirme a la sesión
+            </a>
+            <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
+              Folio: {reserva.folio}
+            </p>"""
 
-    if cfg.get("ssl"):
-        server = smtplib.SMTP_SSL(host, port, timeout=15)
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} — Enlace para tu sesión\n\n"
+        f"Hola {usuario.nombre},\n\n"
+        f"Servicio: {reserva.servicio.nombre}\n"
+        f"Fecha: {fecha}\n"
+        f"Enlace: {sesion.meet_url}\n\n"
+        f"Folio: {reserva.folio}"
+    )
+    _enviar_smtp(
+        tenant,
+        usuario.email,
+        f"Enlace para tu sesión — {reserva.servicio.nombre}",
+        texto_plano,
+        cuerpo_html,
+    )
+
+
+def enviar_email_activacion(tenant: Tenant, usuario: Usuario, acceso_token_plano: str) -> None:
+    """Correo standalone de activación de cuenta — lo dispara
+    _vincular_usuario_a_tenant(). La reserva de un invitado nuevo y la
+    invitación a serie NO usan esta función directamente: esos casos
+    integran el CTA de activación dentro de su propio correo
+    (enviar_email_confirmacion(), enviar_email_invitacion_serie()) en vez
+    de mandar un segundo correo aparte.
+    """
+    if not usuario.email:
+        log.info("Sin destinatario para el correo de activación (usuario %s)", usuario.id)
+        return
+
+    usuario_nombre_html = html.escape(usuario.nombre or "")
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+    link = _link_activacion(tenant, acceso_token_plano)
+    link_html = html.escape(link)
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {usuario_nombre_html}, {tenant_nombre_html} te dio acceso a tu cuenta.
+            </p>
+            <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">
+              Crea tu contraseña para entrar y administrar tus reservas.
+            </p>
+            <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              Crear contraseña
+            </a>
+            <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
+              Este enlace expira en 48 horas. Si no esperabas este correo, ignóralo.
+            </p>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} te dio acceso a tu cuenta.\n\n"
+        f"Hola {usuario.nombre}, crea tu contraseña para entrar y administrar tus reservas:\n"
+        f"{link}\n\nEste enlace expira en 48 horas. Si no esperabas este correo, ignóralo."
+    )
+    _enviar_smtp(tenant, usuario.email, f"{tenant.nombre} — Activa tu cuenta", texto_plano, cuerpo_html)
+
+
+def _link_recuperacion(acceso_token_plano: str) -> str:
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return f"{base}/recuperar-password/confirmar?token={acceso_token_plano}"
+
+
+def enviar_email_recuperacion(tenant: Tenant, usuario: Usuario, acceso_token_plano: str) -> None:
+    """Correo de restablecer contraseña — token de 2h, NO el mismo copy
+    que enviar_email_activacion() (esa dice "crea tu contraseña", esta
+    dice "restablece tu contraseña", para no confundir a alguien que ya
+    tenía cuenta y solo la olvidó)."""
+    if not usuario.email:
+        log.info("Sin destinatario para el correo de recuperación (usuario %s)", usuario.id)
+        return
+
+    usuario_nombre_html = html.escape(usuario.nombre or "")
+    link = _link_recuperacion(acceso_token_plano)
+    link_html = html.escape(link)
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {usuario_nombre_html}, recibimos una solicitud para restablecer tu contraseña.
+            </p>
+            <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">
+              Si no fuiste tú, ignora este correo — tu contraseña actual sigue funcionando.
+              Este enlace vence en 2 horas.
+            </p>
+            <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              Restablecer contraseña
+            </a>"""
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+
+    texto_plano = (
+        f"Hola {usuario.nombre}, recibimos una solicitud para restablecer tu contraseña.\n\n"
+        f"Si no fuiste tú, ignora este correo.\n\n"
+        f"Restablece tu contraseña (vence en 2 horas): {link}"
+    )
+    _enviar_smtp(tenant, usuario.email, "Restablece tu contraseña", texto_plano, cuerpo_html)
+
+
+def _link_mis_series(tenant: Tenant) -> str:
+    base = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return f"{base}/mis-series"
+
+
+def enviar_email_invitacion_serie(
+    tenant: Tenant,
+    cliente: Usuario,
+    servicio_nombre: str,
+    acceso_token_plano: Optional[str] = None,
+) -> None:
+    """Avisa al cliente que tiene una invitación pendiente a una serie
+    recurrente (inscribir_cliente_en_serie() / confirmar_solicitud_como_serie()).
+
+    Si el cliente no tiene contraseña, el CTA es el link de activación en
+    vez del link a "Mis series" — mismo criterio que
+    enviar_email_confirmacion() para invitados nuevos: un solo correo, no
+    dos.
+    """
+    if not cliente.email:
+        log.info("Sin destinatario para el correo de invitación a serie (usuario %s)", cliente.id)
+        return
+
+    cliente_nombre_html = html.escape(cliente.nombre or "")
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+    servicio_nombre_html = html.escape(servicio_nombre or "")
+
+    if acceso_token_plano:
+        link = _link_activacion(tenant, acceso_token_plano)
+        cta_texto = "Crear contraseña y ver invitación"
+        nota = 'Primero crea tu contraseña; después la verás en "Mis series".'
     else:
-        server = smtplib.SMTP(host, port, timeout=15)
-        if cfg.get("tls", True):
-            server.starttls()
+        link = _link_mis_series(tenant)
+        cta_texto = "Ver mi invitación"
+        nota = 'Inicia sesión y ve a "Mis series" para elegir cómo pagar.'
+    link_html = html.escape(link)
+    nota_html = html.escape(nota)
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              Hola {cliente_nombre_html}, {tenant_nombre_html} te invitó a una serie de sesiones recurrentes de
+              <strong>{servicio_nombre_html}</strong>.
+            </p>
+            <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">
+              {nota_html}
+            </p>
+            <a href="{link_html}" style="display:inline-block;background-color:#2563eb;color:#ffffff;padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">
+              {html.escape(cta_texto)}
+            </a>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} te invitó a una serie de sesiones recurrentes de {servicio_nombre}.\n\n"
+        f"{nota}\n{link}"
+    )
+    _enviar_smtp(tenant, cliente.email, f"{tenant.nombre} — Invitación a serie de sesiones", texto_plano, cuerpo_html)
+
+
+def _obtener_o_crear_carpeta_servicio(drive, servicio: Servicio, db: Session) -> str:
+    if servicio.drive_folder_id:
+        return servicio.drive_folder_id
+    carpeta = drive.files().create(
+        body={"name": servicio.nombre, "mimeType": "application/vnd.google-apps.folder"},
+        fields="id",
+    ).execute()
+    servicio.drive_folder_id = carpeta["id"]
+    db.commit()
+    return carpeta["id"]
+
+
+def _obtener_o_crear_carpeta_serie(
+    drive, serie: SerieReserva, carpeta_servicio_id: str, db: Session
+) -> str:
+    if serie.drive_folder_id:
+        return serie.drive_folder_id
+    servicio = serie.servicio
+    asesor_nombre = (
+        serie.asesor.usuario.nombre
+        if serie.asesor and serie.asesor.usuario
+        else "Sin asesor"
+    )
+    fecha_inicio = datetime.combine(serie.fecha_inicio, serie.hora_inicio) if serie.fecha_inicio and serie.hora_inicio else None
+    fecha_legible = _fecha_email(fecha_inicio, "UTC") if fecha_inicio else "Sin fecha"
+    nombre = f"Serie — {servicio.nombre} — {asesor_nombre} — {fecha_legible}"
+    carpeta = drive.files().create(
+        body={
+            "name": nombre,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [carpeta_servicio_id],
+        },
+        fields="id",
+    ).execute()
+    serie.drive_folder_id = carpeta["id"]
+    db.commit()
+    return carpeta["id"]
+
+
+def _mover_archivo(drive, file_id: str, carpeta_destino_id: str) -> List[str]:
+    """Mueve un archivo a carpeta_destino_id (le quita todos sus padres
+    actuales y le pone el nuevo). Devuelve la lista de IDs de carpetas
+    padre que tenía antes de moverlo, para que el llamador pueda revisar
+    si quedaron vacías y limpiarlas."""
+    archivo = drive.files().get(fileId=file_id, fields="parents").execute()
+    padres_actuales_lista = archivo.get("parents", [])
+    padres_actuales = ",".join(padres_actuales_lista)
+    drive.files().update(
+        fileId=file_id,
+        addParents=carpeta_destino_id,
+        removeParents=padres_actuales,
+        fields="id, parents",
+    ).execute()
+    return padres_actuales_lista
+
+
+def _limpiar_carpetas_origen_vacias(drive, carpetas_ids: set, carpeta_a_conservar: str) -> None:
+    """Google crea automáticamente una carpeta contenedora por cada espacio
+    de Meet donde deposita la grabación/transcripción. Una vez que movemos
+    esos archivos a nuestra estructura organizada, esa carpeta original
+    queda vacía pero Drive no la borra sola. La eliminamos (a la papelera)
+    si de verdad quedó sin contenido, para no dejar basura en el Drive del
+    tenant. No es crítico: si falla, solo se registra el error."""
+    for carpeta_id in carpetas_ids:
+        if not carpeta_id or carpeta_id == carpeta_a_conservar:
+            continue
+        try:
+            hijos = drive.files().list(
+                q=f"'{carpeta_id}' in parents and trashed=false",
+                fields="files(id)",
+                pageSize=1,
+            ).execute()
+            if not hijos.get("files"):
+                drive.files().update(fileId=carpeta_id, body={"trashed": True}).execute()
+        except Exception:
+            log.exception("No se pudo limpiar la carpeta origen %s de Meet", carpeta_id)
+
+
+def _clientes_con_acceso_contenido(db: Session, sesion: Sesion) -> List[Usuario]:
+    """Devuelve los usuarios destinatarios de la grabación/transcripción de
+    una sesión, aplicando el gate de pago: confirmada + pagada.
+    """
+    return [
+        r.creado_por
+        for r in _reservas_con_acceso_contenido(db, sesion)
+        if r.creado_por is not None
+    ]
+
+
+def _reservas_con_acceso_contenido(db: Session, sesion: Sesion) -> List[Reserva]:
+    """Mismo filtro de pago que _clientes_con_acceso_contenido, pero
+    devuelve las Reserva completas (para poder anclar EncuestaEnvio.reserva_id)."""
+    reservas = db.execute(
+        select(Reserva).where(Reserva.sesion_id == sesion.id)
+    ).scalars().all()
+
+    return [
+        r for r in reservas
+        if r.estado == EstadoReserva.CONFIRMADA
+        and r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+        and r.creado_por is not None
+        and r.creado_por.email
+    ]
+
+
+def _serie_de_sesion(db: Session, sesion: Sesion) -> Optional[SerieReserva]:
+    """Si la sesión pertenece a una serie, devuelve esa serie."""
+    reserva_serie = db.execute(
+        select(Reserva).where(
+            Reserva.sesion_id == sesion.id,
+            Reserva.serie_id.is_not(None),
+        )
+    ).scalar_one_or_none()
+    if reserva_serie is None:
+        return None
+    return db.get(SerieReserva, reserva_serie.serie_id)
+
+
+def _procesar_contenido_sesion(db: Session, sesion: Sesion) -> None:
+    """Consulta grabación/transcripción de una sesión virtual ya terminada,
+    organiza los archivos en Drive, da permisos a los clientes pagados y,
+    para sesiones sueltas, manda el correo de contenido. Para sesiones de
+    serie solo guarda los links; el correo se dispara cuando TODAS las
+    sesiones de la serie ya tengan contenido procesado.
+    """
+    from googleapiclient.discovery import build
+
+    tenant = sesion.tenant
+    if not tenant:
+        log.warning("Sesión %s sin tenant, se omite contenido", sesion.id)
+        return
+
+    servicio = sesion.servicio
+    if servicio is None or servicio.modalidad.value not in ("virtual", "hibrida"):
+        return
+    if not sesion.meet_space_name:
+        return
+
+    creds = _google_meet_credentials(tenant)
+    meet = build("meet", "v2", credentials=creds)
+
+    records = meet.conferenceRecords().list(
+        filter=f'space.name="{sesion.meet_space_name}"'
+    ).execute()
+    items = records.get("conferenceRecords", [])
+    if not items:
+        return
+    record = items[0]
+
+    recordings = meet.conferenceRecords().recordings().list(parent=record["name"]).execute()
+    transcripts = meet.conferenceRecords().transcripts().list(parent=record["name"]).execute()
+
+    rec_item = next((r for r in recordings.get("recordings", []) if r.get("state") == "FILE_GENERATED"), None)
+    trx_item = next((t for t in transcripts.get("transcripts", []) if t.get("state") == "FILE_GENERATED"), None)
+
+    if rec_item is None or trx_item is None:
+        return
+
+    recording_file_id = rec_item.get("driveDestination", {}).get("file")
+    transcript_file_id = trx_item.get("docsDestination", {}).get("document")
+    transcript_export_uri = trx_item.get("docsDestination", {}).get("exportUri")
+
+    if not recording_file_id or not transcript_file_id:
+        return
+
+    drive = build("drive", "v3", credentials=creds)
+    docs = build("docs", "v1", credentials=creds)
+
+    asesor_nombre = sesion.asesor.usuario.nombre if sesion.asesor and sesion.asesor.usuario else "Sin asesor asignado"
+    fecha_legible = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+    titulo = f"{servicio.nombre} — {asesor_nombre} — {fecha_legible}"
+    descripcion = f"Sesión de {servicio.nombre} con {asesor_nombre}, {fecha_legible}. Generado automáticamente por MVP Schedule."
+
+    # Organizar carpetas
+    carpeta_servicio_id = _obtener_o_crear_carpeta_servicio(drive, servicio, db)
+    serie = _serie_de_sesion(db, sesion)
+    if serie is not None:
+        carpeta_destino_id = _obtener_o_crear_carpeta_serie(drive, serie, carpeta_servicio_id, db)
+    else:
+        carpeta_sesion = drive.files().create(
+            body={
+                "name": f"{fecha_legible} — {asesor_nombre}",
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [carpeta_servicio_id],
+            },
+            fields="id",
+        ).execute()
+        carpeta_destino_id = carpeta_sesion["id"]
+
+    padres_grabacion = _mover_archivo(drive, recording_file_id, carpeta_destino_id)
+    padres_transcripcion = _mover_archivo(drive, transcript_file_id, carpeta_destino_id)
+    _limpiar_carpetas_origen_vacias(
+        drive, set(padres_grabacion) | set(padres_transcripcion), carpeta_destino_id
+    )
+
+    # Renombrar archivos
+    drive.files().update(
+        fileId=recording_file_id,
+        body={"name": f"{titulo} — Grabación", "description": descripcion},
+    ).execute()
+    drive.files().update(
+        fileId=transcript_file_id,
+        body={"name": f"{titulo} — Transcripción", "description": descripcion},
+    ).execute()
+
+    # Encabezado en la transcripción
     try:
-        if user:
-            server.login(user, password or "")
-        server.sendmail(from_email, [usuario.email], msg.as_string())
-    finally:
-        server.quit()
-    log.info("Confirmación enviada a %s (folio %s)", usuario.email, reserva.folio)
+        encabezado = f"{servicio.nombre}\n{asesor_nombre}\n{fecha_legible}\n\n"
+        docs.documents().batchUpdate(
+            documentId=transcript_file_id,
+            body={"requests": [{"insertText": {"location": {"index": 1}, "text": encabezado}}]},
+        ).execute()
+    except Exception:
+        log.exception("Fallo al insertar encabezado en transcripción %s", transcript_file_id)
+
+    # Links
+    recording_link = drive.files().get(fileId=recording_file_id, fields="webViewLink").execute().get("webViewLink")
+    sesion.drive_recording_link = recording_link
+    sesion.drive_transcript_link = transcript_export_uri
+
+    # Permisos
+    clientes = _clientes_con_acceso_contenido(db, sesion)
+    for cliente in clientes:
+        if not cliente.email:
+            continue
+        try:
+            drive.permissions().create(
+                fileId=recording_file_id,
+                body={
+                    "type": "user",
+                    "role": "reader",
+                    "emailAddress": cliente.email,
+                },
+                sendNotificationEmail=False,
+                fields="id",
+            ).execute()
+            drive.permissions().create(
+                fileId=transcript_file_id,
+                body={
+                    "type": "user",
+                    "role": "reader",
+                    "emailAddress": cliente.email,
+                },
+                sendNotificationEmail=False,
+                fields="id",
+            ).execute()
+        except Exception:
+            log.exception("Fallo al compartir contenido con %s", cliente.email)
+
+    sesion.contenido_enviado_en = utcnow()
+    db.commit()
+
+    # Encuesta de satisfacción: un token por reserva/cliente elegible
+    tokens_encuesta: Optional[Dict[int, str]] = None
+    if servicio.encuesta_satisfaccion_formulario_id:
+        tokens_encuesta = {}
+        for reserva in _reservas_con_acceso_contenido(db, sesion):
+            token = _generar_token_encuesta(
+                db, tenant.id, servicio.encuesta_satisfaccion_formulario_id, reserva.id
+            )
+            if reserva.creado_por is not None:
+                tokens_encuesta[reserva.creado_por.id] = token
+        db.commit()
+
+    # Correo: standalone inmediato; serie diferido al final de la serie
+    if serie is None:
+        enviar_email_contenido_sesion(tenant, [sesion], clientes, tokens_encuesta=tokens_encuesta)
+    else:
+        # Buscar todas las sesiones de la serie y ver si todas tienen contenido
+        sesiones_serie = db.execute(
+            select(Sesion)
+            .join(Reserva, Reserva.sesion_id == Sesion.id)
+            .where(
+                Reserva.serie_id == serie.id,
+                Sesion.meet_generado_auto.is_(True),
+                Sesion.meet_space_name.is_not(None),
+            )
+            .distinct()
+        ).scalars().all()
+        if all(s.contenido_enviado_en is not None for s in sesiones_serie):
+            clientes_serie = []
+            for s in sesiones_serie:
+                for c in _clientes_con_acceso_contenido(db, s):
+                    if c not in clientes_serie:
+                        clientes_serie.append(c)
+            enviar_email_contenido_sesion(tenant, sesiones_serie, clientes_serie, tokens_encuesta=tokens_encuesta)
+
+
+def revisar_contenido_sesiones_virtuales(db: Session, margen_minutos: int = 15) -> int:
+    """Busca sesiones virtuales ya terminadas con Meet generado por la app,
+    revisa si Google ya dejó lista la grabación/transcripción, y si es así
+    otorga acceso de Drive + dispara el correo correspondiente.
+
+    Corre cada 10 min vía APScheduler (ver main.py). `margen_minutos` es
+    el colchón después de fecha_hora_fin antes de intentar consultar —
+    Google tarda un rato en procesar el archivo tras colgar la llamada.
+    """
+    limite = utcnow() - timedelta(minutes=margen_minutos)
+    sesiones = db.execute(
+        select(Sesion).where(
+            Sesion.meet_generado_auto.is_(True),
+            Sesion.meet_space_name.is_not(None),
+            Sesion.fecha_hora_fin < limite,
+            Sesion.contenido_enviado_en.is_(None),
+        )
+    ).scalars().all()
+
+    procesadas = 0
+    for sesion in sesiones:
+        try:
+            _procesar_contenido_sesion(db, sesion)
+            procesadas += 1
+        except Exception:
+            log.exception("Fallo revisando contenido de sesión %s", sesion.id)
+            db.rollback()
+    return procesadas
+
+
+def enviar_email_contenido_sesion(
+    tenant: Tenant,
+    sesiones: List[Sesion],
+    clientes: List[Usuario],
+    tokens_encuesta: Optional[Dict[int, str]] = None,
+) -> None:
+    """Envía correo con links de grabación y transcripción de una o más sesiones.
+    Una sola sesión para reserva suelta; lista completa de sesiones al final de
+    una serie recurrente. Si `tokens_encuesta` viene, agrega un link de encuesta
+    de satisfacción por cliente.
+    """
+    if not sesiones or not clientes:
+        return
+
+    servicio = sesiones[0].servicio
+    if servicio is None:
+        return
+
+    es_serie = len(sesiones) > 1
+    servicio_nombre_html = html.escape(servicio.nombre or "")
+    tenant_nombre_html = html.escape(tenant.nombre or "")
+
+    filas = []
+    filas_texto = []
+    for sesion in sesiones:
+        asesor_nombre = sesion.asesor.usuario.nombre if sesion.asesor and sesion.asesor.usuario else "Sin asesor asignado"
+        fecha = _fecha_email(sesion.fecha_hora_inicio, sesion.timezone)
+        rec_link = sesion.drive_recording_link
+        trx_link = sesion.drive_transcript_link
+        filas.append(
+            f'<tr><td style="padding:12px;border-bottom:1px solid #e5e7eb;">'
+            f'<div style="font-weight:600;color:#111827;">{html.escape(fecha)}</div>'
+            f'<div style="font-size:12px;color:#6b7280;">{html.escape(asesor_nombre)}</div>'
+            f'</td><td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">'
+            f'<a href="{html.escape(rec_link or "")}" style="color:#2563eb;font-weight:600;">Ver grabación</a>'
+            f'<br><a href="{html.escape(trx_link or "")}" style="color:#2563eb;font-size:12px;">Ver transcripción</a>'
+            f'</td></tr>'
+        )
+        filas_texto.append(
+            f"{fecha} ({asesor_nombre})\nGrabación: {rec_link or 'No disponible'}\nTranscripción: {trx_link or 'No disponible'}"
+        )
+
+    asunto = (
+        f"Grabación y transcripción de tu sesión — {servicio.nombre}"
+        if not es_serie
+        else f"Grabaciones y transcripciones de tu serie — {servicio.nombre}"
+    )
+    titulo_html = (
+        "Grabación y transcripción de tu sesión"
+        if not es_serie
+        else "Grabaciones y transcripciones de tu serie"
+    )
+
+    cuerpo_interior = f"""\
+            <p style="margin:0 0 16px;font-size:15px;color:#111827;">
+              {tenant_nombre_html} comparte el contenido de tu {servicio_nombre_html}:
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-collapse:collapse;">
+              {''.join(filas)}
+            </table>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              Los links están compartidos con tu correo. Si no puedes abrirlos, responde a este correo.
+            </p>"""
+
+    cuerpo_html = _email_shell(tenant, cuerpo_interior)
+    texto_plano = (
+        f"{tenant.nombre} — {titulo_html}\n\n"
+        f"{servicio.nombre}\n\n"
+        + "\n\n".join(filas_texto)
+        + "\n\nLos links están compartidos con tu correo."
+    )
+
+    for cliente in clientes:
+        if not cliente.email:
+            continue
+
+        token = tokens_encuesta.get(cliente.id) if tokens_encuesta else None
+        if token:
+            link = (
+                f"{os.environ.get('FRONTEND_URL', 'http://localhost:5173').rstrip('/')}/encuestas/responder?token={token}"
+            )
+            bloque_encuesta_html = f"""\
+            <div style="margin:24px 0;padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+              <p style="margin:0 0 12px;font-size:15px;color:#111827;">Tu opinión nos ayuda a mejorar. ¿Nos cuentas cómo te fue?</p>
+              <a href="{html.escape(link)}" style="display:inline-block;padding:10px 16px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Responder encuesta</a>
+            </div>"""
+            bloque_encuesta_texto = (
+                f"\n\nTu opinión nos ayuda a mejorar. Responde la encuesta aquí: {link}"
+            )
+            html_cliente = _email_shell(tenant, cuerpo_interior + bloque_encuesta_html)
+            texto_cliente = texto_plano + bloque_encuesta_texto
+        else:
+            html_cliente = cuerpo_html
+            texto_cliente = texto_plano
+
+        _enviar_smtp(tenant, cliente.email, asunto, texto_cliente, html_cliente)
 
 
 def generar_mapa_url(sede: Optional[Sede]) -> Optional[str]:

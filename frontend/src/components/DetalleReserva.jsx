@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
+import { errorMensaje } from '../utils/errores'
 import Modal from './common/Modal'
 const BADGE = {
   confirmada: 'bg-green-100 text-green-700 border-green-200',
@@ -110,6 +111,8 @@ export default function DetalleReserva() {
   const [motivo, setMotivo] = useState('')
   const [cancelando, setCancelando] = useState(false)
   const [cancelError, setCancelError] = useState(null)
+  const [pagarLoading, setPagarLoading] = useState(false)
+  const [pagarError, setPagarError] = useState(null)
 
   const fetchReserva = useCallback(async () => {
     setLoading(true)
@@ -161,6 +164,24 @@ export default function DetalleReserva() {
     } finally {
       setCancelando(false)
     }
+  }
+
+  const pagar = async () => {
+    setPagarLoading(true)
+    setPagarError(null)
+    const { data, error: fetchErr } = await client.POST(
+      '/api/v2/{tenant_slug}/reservas/{folio}/checkout',
+      {
+        params: { path: { tenant_slug: tenantSlug, folio } },
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    )
+    setPagarLoading(false)
+    if (fetchErr || !data?.url) {
+      setPagarError(errorMensaje(fetchErr) || 'No se pudo iniciar el pago')
+      return
+    }
+    window.location.href = data.url
   }
 
   const cerrarModal = () => {
@@ -317,6 +338,20 @@ export default function DetalleReserva() {
             </div>
           )}
         </div>
+
+        {(r.estado === 'confirmada' || r.estado === 'en_espera') && r.estado_pago === 'pendiente' && !r.inscripcion_id && (
+          <button
+            type="button"
+            onClick={pagar}
+            disabled={pagarLoading}
+            className="mt-4 w-full rounded-lg bg-green-600 px-4 py-2.5 text-center text-sm font-medium text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pagarLoading ? 'Cargando...' : 'Pagar ahora'}
+          </button>
+        )}
+        {pagarError && (
+          <p className="mt-2 text-sm text-red-600">{pagarError}</p>
+        )}
 
         {r.estado === 'en_espera' && r.hold_expira_en && (
           <div className="mt-4">

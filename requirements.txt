@@ -31,9 +31,20 @@ apscheduler==3.10.4
 # Variables de entorno
 python-dotenv==1.0.1
 
+# MercadoPago (Checkout Pro + OAuth)
+mercadopago>=2.2.3
+
+# Google Workspace APIs (Meet, Calendar, Drive, Docs)
+google-api-python-client==2.149.0
+google-auth==2.35.0
+google-auth-httplib2==0.2.0
+
 # Generación de PDFs (recibos)
 weasyprint==62.3
 
 # Utilidades
 python-multipart==0.0.12     # para form data en FastAPI
 httpx==0.28.1                # cliente HTTP async (tests y webhooks)
+
+# Almacenamiento de logos por tenant
+cloudinary>=1.41.0,<2.0.0

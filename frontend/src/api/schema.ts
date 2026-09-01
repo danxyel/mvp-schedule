@@ -38,6 +38,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/activar-cuenta/validar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Validar Token Activacion
+         * @description Chequeo de solo lectura — no consume el token ni dice de quién es.
+         *
+         *     Permite que la pantalla de activación avise "enlace inválido o
+         *     vencido" antes de que el usuario llene el formulario de contraseña.
+         */
+        get: operations["validar_token_activacion_auth_activar_cuenta_validar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/activar-cuenta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activar Cuenta
+         * @description Activa una cuenta sin contraseña (invitado de reserva, vinculado por
+         *     admin/superadmin, inscrito en serie) usando el token de un solo uso
+         *     mandado por email. Global — no depende de tenant_slug: el token ya
+         *     identifica al usuario sin ambigüedad, y la respuesta reusa la misma
+         *     resolución de membresía que /auth/login (auto-login inmediato).
+         */
+        post: operations["activar_cuenta_auth_activar_cuenta_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/recuperar-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recuperar Password
+         * @description Autoservicio: manda un enlace para restablecer contraseña si el
+         *     correo pertenece a una cuenta activa que YA tiene contraseña.
+         *
+         *     Responde SIEMPRE el mismo mensaje genérico, exista o no la cuenta,
+         *     tenga o no ya password, esté o no activa — anti-enumeración.
+         */
+        post: operations["recuperar_password_auth_recuperar_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/publicos": {
         parameters: {
             query?: never;
@@ -55,6 +126,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/encuestas/validar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Validar Encuesta
+         * @description Devuelve el formulario asociado a un token de encuesta válido.
+         */
+        get: operations["validar_encuesta_encuestas_validar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/encuestas/responder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Responder Encuesta
+         * @description Guarda las respuestas de una encuesta de satisfacción y consume el token.
+         */
+        post: operations["responder_encuesta_encuestas_responder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/mercadopago/redirect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mercadopago Redirect
+         * @description Redirige al frontend después de que el cliente vuelve de MercadoPago.
+         *
+         *     El flujo de reserva permite pagar como invitado (sin cuenta, sin token
+         *     en sessionStorage) — por eso NO podemos mandar a rutas protegidas como
+         *     /mis-reservas/{folio}: un invitado nunca tuvo sesión, así que
+         *     ProtectedRoute lo rebota a /login. Para "reserva:" resolvemos el
+         *     tenant_slug y el codigo_confirmacion desde la BD y mandamos a la ruta
+         *     pública /t/{tenant_slug}/r/{folio}, que ya está pensada para
+         *     mostrarse sin login (folio + código).
+         */
+        get: operations["mercadopago_redirect_api_v2_mercadopago_redirect_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/webhooks/mercadopago": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Webhook Mercadopago
+         * @description Recibe notificaciones de MercadoPago. No confía en el payload:
+         *     re-consulta el pago directo a la API de MP antes de marcar nada pagado.
+         */
+        post: operations["webhook_mercadopago_api_v2_webhooks_mercadopago_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/servicios": {
         parameters: {
             query?: never;
@@ -64,6 +224,23 @@ export interface paths {
         };
         /** Listar Servicios Publicos */
         get: operations["listar_servicios_publicos_api_v2__tenant_slug__servicios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/servicios/{servicio_id}/sesiones-abiertas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sesiones Abiertas Servicio */
+        get: operations["sesiones_abiertas_servicio_api_v2__tenant_slug__servicios__servicio_id__sesiones_abiertas_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -214,6 +391,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/reclamar-cuenta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reclamar Cuenta
+         * @description Autoservicio: manda el correo de activación si el email pertenece a
+         *     un usuario vinculado activo a ESTE tenant y sin contraseña todavía.
+         *
+         *     Responde SIEMPRE el mismo mensaje genérico exista o no el email, esté o
+         *     no vinculado a este tenant, tenga o no ya contraseña — anti-enumeración.
+         *     Rate limited a 5/minuto por IP (mismo límite que /auth/login).
+         */
+        post: operations["reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/mis-reservas": {
         parameters: {
             query?: never;
@@ -259,6 +461,61 @@ export interface paths {
         get: operations["listar_mis_solicitudes_api_v2__tenant_slug__mis_solicitudes_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/mis-solicitudes/{solicitud_id}/alternativas/{alternativa_id}/aceptar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aceptar Alternativa Solicitud Endpoint */
+        post: operations["aceptar_alternativa_solicitud_endpoint_api_v2__tenant_slug__mis_solicitudes__solicitud_id__alternativas__alternativa_id__aceptar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/mis-series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Mis Series */
+        get: operations["listar_mis_series_api_v2__tenant_slug__mis_series_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/mis-series/{inscripcion_id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Mi Inscripcion Serie
+         * @description El cliente elige modalidad_cobro/metodo_pago para una invitación
+         *     suya pendiente. Genera las N reservas y la pasa a CONFIRMADA.
+         */
+        post: operations["confirmar_mi_inscripcion_serie_api_v2__tenant_slug__mis_series__inscripcion_id__confirmar_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -350,6 +607,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Solicitud Como Serie Admin
+         * @description Convierte una solicitud pendiente en una serie de reservas recurrentes.
+         */
+        post: operations["confirmar_solicitud_como_serie_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_serie_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/rechazar": {
         parameters: {
             query?: never;
@@ -361,6 +638,110 @@ export interface paths {
         put?: never;
         /** Rechazar Solicitud Admin */
         post: operations["rechazar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__rechazar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Series Admin
+         * @description Lista todas las series de reservas del tenant.
+         */
+        get: operations["listar_series_admin_api_v2__tenant_slug__admin_series_get"];
+        put?: never;
+        /**
+         * Crear Serie Admin
+         * @description Crea el patrón de horario de una serie recurrente.
+         */
+        post: operations["crear_serie_admin_api_v2__tenant_slug__admin_series_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inscribir Cliente En Serie Admin
+         * @description Inscribe un cliente a una serie recurrente existente.
+         */
+        post: operations["inscribir_cliente_en_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle Serie Admin
+         * @description Detalle de una serie de reservas, incluyendo sus inscripciones.
+         */
+        get: operations["detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/pago-local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar Pago Inscripcion Local
+         * @description Registra el pago de un paquete para un cliente específico de una serie.
+         */
+        post: operations["registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/series/{serie_id}/inscripciones/{inscripcion_id}/cancelar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancelar Invitacion Serie Admin
+         * @description Retira una invitación a serie que sigue pendiente (INVITADA).
+         */
+        post: operations["cancelar_invitacion_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__cancelar_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -418,6 +799,127 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/sesiones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Sesiones Por Servicio Admin */
+        get: operations["listar_sesiones_por_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__sesiones_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Formularios Admin */
+        get: operations["listar_formularios_admin_api_v2__tenant_slug__admin_formularios_get"];
+        put?: never;
+        /** Crear Formulario Admin */
+        post: operations["crear_formulario_admin_api_v2__tenant_slug__admin_formularios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtener Formulario Admin */
+        get: operations["obtener_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Actualizar Formulario Admin */
+        patch: operations["actualizar_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/respuestas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Respuestas Formulario Admin */
+        get: operations["listar_respuestas_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__respuestas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Crear Campos Formulario Admin */
+        post: operations["crear_campos_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Actualizar Campo Formulario Admin */
+        patch: operations["actualizar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/formularios/{formulario_id}/campos/{campo_id}/desactivar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Desactivar Campo Formulario Admin */
+        patch: operations["desactivar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__desactivar_patch"];
         trace?: never;
     };
     "/api/v2/{tenant_slug}/admin/usuarios": {
@@ -706,6 +1208,266 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/{tenant_slug}/admin/mercadopago/conectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Conectar Mercadopago
+         * @description Conecta la cuenta de MercadoPago del tenant usando un Access Token
+         *     pegado directamente por el admin.
+         */
+        post: operations["conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/mercadopago/desconectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Desconectar Mercadopago
+         * @description Desconecta la cuenta de MercadoPago del tenant. No revoca el token en
+         *     el lado de MercadoPago; el admin debe regenerarlo desde su panel.
+         */
+        delete: operations["desconectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_desconectar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/mercadopago/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado Mercadopago
+         * @description Devuelve si el tenant tiene conectada una cuenta de MercadoPago.
+         */
+        get: operations["estado_mercadopago_api_v2__tenant_slug__admin_mercadopago_estado_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/google-meet/conectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Conectar Google Meet
+         * @description Conecta el buzón de Google Meet del tenant vía service account + Domain-Wide Delegation.
+         */
+        post: operations["conectar_google_meet_api_v2__tenant_slug__admin_google_meet_conectar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/google-meet/desconectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Desconectar Google Meet
+         * @description Desconecta la configuración de Google Meet del tenant. No revoca la
+         *     delegación de dominio del lado de Google.
+         */
+        delete: operations["desconectar_google_meet_api_v2__tenant_slug__admin_google_meet_desconectar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/google-meet/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado Google Meet
+         * @description Devuelve si el tenant tiene conectado un buzón de Google Meet.
+         */
+        get: operations["estado_google_meet_api_v2__tenant_slug__admin_google_meet_estado_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/google-meet/revisar-contenido": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revisar Contenido Google Meet
+         * @description Dispara manualmente el mismo job que corre APScheduler cada 10 min
+         *     (organiza carpetas de Drive, renombra archivos, otorga permisos y manda
+         *     el correo de contenido para sesiones virtuales ya terminadas). Pensado
+         *     como botón de emergencia mientras el backend esté en un plan de Render
+         *     que se duerme por inactividad — mientras está dormido, el scheduler en
+         *     proceso tampoco corre, así que el contenido se queda sin procesar hasta
+         *     que algo despierta al servicio.
+         */
+        post: operations["revisar_contenido_google_meet_api_v2__tenant_slug__admin_google_meet_revisar_contenido_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/tenant/metodo-pago-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Actualizar Metodo Pago Default
+         * @description Permite al admin del tenant cambiar el método de pago por default.
+         */
+        patch: operations["actualizar_metodo_pago_default_api_v2__tenant_slug__admin_tenant_metodo_pago_default_patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/reservas/{folio}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Checkout Reserva
+         * @description Cliente logueado: genera una preferencia de MercadoPago para una
+         *     reserva confirmada o en espera de pago con pago pendiente (auto-compra
+         *     post-asignación, o reintento del link de pago original).
+         */
+        post: operations["checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/inscripciones/{inscripcion_id}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Checkout Inscripcion
+         * @description Cliente logueado: genera una preferencia de MercadoPago para pagar
+         *     un paquete de serie completo.
+         */
+        post: operations["checkout_inscripcion_api_v2__tenant_slug__inscripciones__inscripcion_id__checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/personalizacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Obtener Personalizacion
+         * @description Devuelve el color primario y logo actuales del tenant.
+         */
+        get: operations["obtener_personalizacion_api_v2__tenant_slug__admin_personalizacion_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Actualizar Color Personalizacion
+         * @description Actualiza únicamente el color primario del tenant (formato #RRGGBB).
+         */
+        patch: operations["actualizar_color_personalizacion_api_v2__tenant_slug__admin_personalizacion_patch"];
+        trace?: never;
+    };
+    "/api/v2/{tenant_slug}/admin/personalizacion/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Subir Logo Personalizacion
+         * @description Sube un logo de tenant a Cloudinary y reemplaza el anterior si existía.
+         */
+        post: operations["subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post"];
+        /**
+         * Quitar Logo Personalizacion
+         * @description Elimina el logo del tenant en Cloudinary y vuelve al avatar de inicial.
+         */
+        delete: operations["quitar_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/superadmin/tenants": {
         parameters: {
             query?: never;
@@ -739,6 +1501,121 @@ export interface paths {
         head?: never;
         /** Actualizar Tenant */
         patch: operations["actualizar_tenant_api_v2_superadmin_tenants__tenant_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Usuarios Global */
+        get: operations["listar_usuarios_global_api_v2_superadmin_usuarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle Usuario Global */
+        get: operations["detalle_usuario_global_api_v2_superadmin_usuarios__usuario_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/vincular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vincular Usuario Global */
+        post: operations["vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}/desvincular/{tenant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desvincular Usuario Global */
+        post: operations["desvincular_usuario_global_api_v2_superadmin_usuarios__usuario_id__desvincular__tenant_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}/desactivar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desactivar Usuario Global
+         * @description Desactiva la cuenta completa: bloquea login, desvincula de todos los
+         *     tenants (soft) y cancela sus reservas activas / solicitudes pendientes.
+         *
+         *     Reversible — no borra nada. `purgar` es el paso irreversible aparte.
+         */
+        post: operations["desactivar_usuario_global_api_v2_superadmin_usuarios__usuario_id__desactivar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/superadmin/usuarios/{usuario_id}/purgar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Purgar Usuario Global
+         * @description Anonimiza la cuenta (UPDATE, no DELETE) — ver decisión en HANDOFF.md:
+         *     las FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son
+         *     RESTRICT y no se tocan, así que purgar no puede ser un DELETE FROM
+         *     usuarios real sin romper esas tablas. Solo se permite si la cuenta lleva
+         *     30+ días desactivada. Irreversible.
+         */
+        post: operations["purgar_usuario_global_api_v2_superadmin_usuarios__usuario_id__purgar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/health": {
@@ -873,6 +1750,13 @@ export interface components {
              */
             creado_en: string;
         };
+        /** Body_activar_cuenta_auth_activar_cuenta_post */
+        Body_activar_cuenta_auth_activar_cuenta_post: {
+            /** Token */
+            token: string;
+            /** Password */
+            password: string;
+        };
         /** Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post */
         Body_asignar_servicio_asesor_api_v2__tenant_slug__admin_asesores__ut_id__servicios_post: {
             /** Servicio Id */
@@ -935,6 +1819,19 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post */
+        Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post: {
+            /** Email */
+            email: string;
+        };
+        /** Body_recuperar_password_auth_recuperar_password_post */
+        Body_recuperar_password_auth_recuperar_password_post: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
         /** Body_register_auth_register_post */
         Body_register_auth_register_post: {
             /**
@@ -948,6 +1845,110 @@ export interface components {
             nombre: string;
             /** Telefono */
             telefono?: string | null;
+        };
+        /** Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post */
+        Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post: {
+            /**
+             * Logo
+             * Format: binary
+             */
+            logo: string;
+        };
+        /** Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post */
+        Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post: {
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Rol */
+            rol: string;
+            /** Tenant Id */
+            tenant_id: number;
+        };
+        /** CampoFormularioAdminIn */
+        CampoFormularioAdminIn: {
+            tipo: components["schemas"]["TipoCampoFormularioEnum"];
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /**
+             * Requerido
+             * @default false
+             */
+            requerido: boolean;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Validacion Regex */
+            validacion_regex?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /**
+             * Orden
+             * @default 0
+             */
+            orden: number;
+        };
+        /** CampoFormularioAdminOut */
+        CampoFormularioAdminOut: {
+            /** Id */
+            id: number;
+            /** Formulario Id */
+            formulario_id: number;
+            /** Tipo */
+            tipo: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Requerido */
+            requerido: boolean;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Validacion Regex */
+            validacion_regex?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /** Orden */
+            orden: number;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /** CampoFormularioAdminUpdate */
+        CampoFormularioAdminUpdate: {
+            tipo?: components["schemas"]["TipoCampoFormularioEnum"] | null;
+            /** Label */
+            label?: string | null;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Requerido */
+            requerido?: boolean | null;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Validacion Regex */
+            validacion_regex?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /** Orden */
+            orden?: number | null;
+            /** Activo */
+            activo?: boolean | null;
+        };
+        /** CampoFormularioBulkAdminIn */
+        CampoFormularioBulkAdminIn: {
+            /** Items */
+            items: components["schemas"]["CampoFormularioAdminIn"][];
         };
         /**
          * CanalEnum
@@ -968,6 +1969,15 @@ export interface components {
             /** Expira En */
             expira_en?: string | null;
         };
+        /**
+         * ConfirmarInscripcionIn
+         * @description El cliente confirma su invitación: elige modalidad y método de pago.
+         */
+        ConfirmarInscripcionIn: {
+            modalidad_cobro: components["schemas"]["ModalidadCobroEnum"];
+            /** @default local */
+            metodo_pago: components["schemas"]["MetodoPagoEnum"];
+        };
         /** DisponibilidadDiaOut */
         DisponibilidadDiaOut: {
             /**
@@ -979,9 +1989,92 @@ export interface components {
             servicio_id: number;
             /** Timezone */
             timezone: string;
+            /** Requiere Confirmacion */
+            requiere_confirmacion: boolean;
+            /** Permite Solicitudes */
+            permite_solicitudes: boolean;
             /** Slots */
             slots: components["schemas"]["SlotDisponible"][];
         };
+        /** EncuestaCampoOut */
+        EncuestaCampoOut: {
+            /** Id */
+            id: number;
+            /** Tipo */
+            tipo: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Requerido */
+            requerido: boolean;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Ayuda */
+            ayuda?: string | null;
+            /** Orden */
+            orden: number;
+        };
+        /** EncuestaResponderIn */
+        EncuestaResponderIn: {
+            /** Token */
+            token: string;
+            /** Respuestas */
+            respuestas: Record<string, never>;
+        };
+        /** EncuestaRespuestaCampoOut */
+        EncuestaRespuestaCampoOut: {
+            /** Campo Id */
+            campo_id: number;
+            /** Label */
+            label: string;
+            /** Valor */
+            valor?: string | null;
+            /** Grupo Matriz */
+            grupo_matriz?: string | null;
+            /** Tipo */
+            tipo: string;
+            /** Opciones */
+            opciones?: Record<string, never> | null;
+            /** Orden */
+            orden: number;
+        };
+        /** EncuestaRespuestaClienteOut */
+        EncuestaRespuestaClienteOut: {
+            /** Reserva Id */
+            reserva_id: number;
+            /** Cliente Nombre */
+            cliente_nombre: string;
+            /** Cliente Email */
+            cliente_email?: string | null;
+            /**
+             * Respondido En
+             * Format: date-time
+             */
+            respondido_en: string;
+            /** Respuestas */
+            respuestas: components["schemas"]["EncuestaRespuestaCampoOut"][];
+        };
+        /** EncuestaValidarOut */
+        EncuestaValidarOut: {
+            /** Token */
+            token: string;
+            /** Formulario Id */
+            formulario_id: number;
+            /** Formulario Nombre */
+            formulario_nombre: string;
+            /** Reserva Id */
+            reserva_id: number;
+            /** Campos */
+            campos: components["schemas"]["EncuestaCampoOut"][];
+        };
+        /**
+         * EstadoInscripcionEnum
+         * @enum {string}
+         */
+        EstadoInscripcionEnum: "invitada" | "confirmada" | "cancelada";
         /**
          * EstadoPagoEnum
          * @enum {string}
@@ -992,6 +2085,16 @@ export interface components {
          * @enum {string}
          */
         EstadoReservaEnum: "pendiente" | "en_espera" | "confirmada" | "cancelada" | "no_show" | "completada";
+        /**
+         * EstadoSerie
+         * @enum {string}
+         */
+        EstadoSerie: "activa" | "completada" | "cancelada";
+        /**
+         * EstadoSerieEnum
+         * @enum {string}
+         */
+        EstadoSerieEnum: "activa" | "completada" | "cancelada";
         /**
          * EstadoSesionEnum
          * @enum {string}
@@ -1007,6 +2110,80 @@ export interface components {
          * @enum {string}
          */
         EstadoSolicitudEnum: "pendiente" | "aceptada" | "rechazada" | "cancelada";
+        /** FormularioAdminIn */
+        FormularioAdminIn: {
+            /** Nombre */
+            nombre: string;
+            /** @default satisfaccion */
+            tipo: components["schemas"]["TipoFormularioEnum"];
+        };
+        /** FormularioAdminOut */
+        FormularioAdminOut: {
+            /** Id */
+            id: number;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Nombre */
+            nombre: string;
+            /** Tipo */
+            tipo: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Campos
+             * @default []
+             */
+            campos: components["schemas"]["CampoFormularioAdminOut"][];
+        };
+        /** FormularioAdminUpdate */
+        FormularioAdminUpdate: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Activo */
+            activo?: boolean | null;
+        };
+        /** FormularioListAdminOut */
+        FormularioListAdminOut: {
+            /** Id */
+            id: number;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Nombre */
+            nombre: string;
+            /** Tipo */
+            tipo: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Num Campos */
+            num_campos: number;
+        };
+        /** GoogleMeetConectarIn */
+        GoogleMeetConectarIn: {
+            /**
+             * Impersonar Email
+             * Format: email
+             */
+            impersonar_email: string;
+        };
+        /** GoogleMeetEstadoOut */
+        GoogleMeetEstadoOut: {
+            /** Conectado */
+            conectado: boolean;
+            /** Impersonar Email */
+            impersonar_email?: string | null;
+            /** Tenant Id */
+            tenant_id: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1037,10 +2214,169 @@ export interface components {
             creado_en: string;
         };
         /**
+         * InscripcionSerieClienteOut
+         * @description Vista de una inscripción a serie para el cliente dueño (GET /mis-series).
+         *
+         *     Trae lo que el cliente necesita para decidir cómo confirmar: el
+         *     servicio, el patrón de horario, las modalidades habilitadas y sus
+         *     precios (sesión = servicio.precio, paquete = servicio.precio_paquete).
+         */
+        InscripcionSerieClienteOut: {
+            /** Id */
+            id: number;
+            /** Serie Id */
+            serie_id: number;
+            estado: components["schemas"]["EstadoInscripcionEnum"];
+            modalidad_cobro?: components["schemas"]["ModalidadCobroEnum"] | null;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /** Num Repeticiones */
+            num_repeticiones: number;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+            /** Cobro Por Sesion Habilitado */
+            cobro_por_sesion_habilitado: boolean;
+            /** Cobro Por Paquete Habilitado */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Sesion */
+            precio_sesion?: string | null;
+            /** Precio Paquete */
+            precio_paquete?: string | null;
+            /**
+             * Num Reservas Creadas
+             * @default 0
+             */
+            num_reservas_creadas: number;
+            /**
+             * Estado Pago
+             * @default pendiente
+             */
+            estado_pago: string;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /**
+         * InscripcionSerieCreate
+         * @description Invita a un cliente a una serie recurrente existente.
+         *
+         *     Ya no se captura modalidad de cobro ni método de pago aquí — eso lo
+         *     elige el cliente desde su portal (POST /mis-series/{id}/confirmar).
+         *     Esto solo crea la invitación (estado=invitada); no genera reservas.
+         */
+        InscripcionSerieCreate: {
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+        };
+        /**
+         * InscripcionSerieOut
+         * @description Vista de una inscripción a serie (admin).
+         */
+        InscripcionSerieOut: {
+            /** Id */
+            id: number;
+            /** Serie Id */
+            serie_id: number;
+            /** Cliente Usuario Id */
+            cliente_usuario_id: number;
+            /** Nombre Cliente */
+            nombre_cliente?: string | null;
+            /** Email Cliente */
+            email_cliente?: string | null;
+            estado: components["schemas"]["EstadoInscripcionEnum"];
+            modalidad_cobro?: components["schemas"]["ModalidadCobroEnum"] | null;
+            /**
+             * Num Reservas Creadas
+             * @default 0
+             */
+            num_reservas_creadas: number;
+            /**
+             * Num Reservas Omitidas
+             * @default 0
+             */
+            num_reservas_omitidas: number;
+            /** Fechas Omitidas */
+            fechas_omitidas?: Record<string, never>[] | null;
+            /** Estado Pago */
+            estado_pago: string;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+        };
+        /** MembresiaGlobalOut */
+        MembresiaGlobalOut: {
+            /** Ut Id */
+            ut_id: number;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Tenant Nombre */
+            tenant_nombre: string;
+            /** Tenant Slug */
+            tenant_slug: string;
+            /** Rol */
+            rol: string;
+            /** Activo */
+            activo: boolean;
+            /**
+             * Fecha Vinculacion
+             * Format: date-time
+             */
+            fecha_vinculacion: string;
+        };
+        /** MercadoPagoConectarIn */
+        MercadoPagoConectarIn: {
+            /** Access Token */
+            access_token: string;
+            /** Public Key */
+            public_key?: string | null;
+        };
+        /** MercadoPagoEstadoOut */
+        MercadoPagoEstadoOut: {
+            /** Conectado */
+            conectado: boolean;
+            /** Mp User Id */
+            mp_user_id?: string | null;
+            /** Tenant Id */
+            tenant_id: number;
+            /**
+             * Metodo Pago Default
+             * @default local
+             */
+            metodo_pago_default: string;
+        };
+        /** MetodoPagoDefaultIn */
+        MetodoPagoDefaultIn: {
+            /** Metodo Pago Default */
+            metodo_pago_default: string;
+        };
+        /**
          * MetodoPagoEnum
          * @enum {string}
          */
         MetodoPagoEnum: "online" | "local" | "registro";
+        /**
+         * ModalidadCobroEnum
+         * @enum {string}
+         */
+        ModalidadCobroEnum: "sesion" | "paquete";
         /**
          * ModalidadEnum
          * @enum {string}
@@ -1079,6 +2415,22 @@ export interface components {
             monto?: number | string | null;
             /** Referencia */
             referencia?: string | null;
+        };
+        /** PersonalizacionColorIn */
+        PersonalizacionColorIn: {
+            /** Color Primario */
+            color_primario: string;
+        };
+        /** PersonalizacionOut */
+        PersonalizacionOut: {
+            /** Color Primario */
+            color_primario: string;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Slug */
+            slug: string;
         };
         /** ReagendarSesionIn */
         ReagendarSesionIn: {
@@ -1189,6 +2541,8 @@ export interface components {
              * @description True si se creó una sesión nueva; False si el cliente se unió a una existente.
              */
             sesion_creada: boolean;
+            /** Activacion Url */
+            activacion_url?: string | null;
         };
         /** ReservaOut */
         ReservaOut: {
@@ -1234,6 +2588,11 @@ export interface components {
             hold_expira_en?: string | null;
             /** Notas Cliente */
             notas_cliente?: string | null;
+            /** Serie Id */
+            serie_id?: number | null;
+            /** Inscripcion Id */
+            inscripcion_id?: number | null;
+            modalidad_cobro?: components["schemas"]["ModalidadCobroEnum"] | null;
             /**
              * Creado En
              * Format: date-time
@@ -1323,6 +2682,106 @@ export interface components {
             /** Timezone */
             timezone: string;
         };
+        /**
+         * SerieReservaCreate
+         * @description Crear el patrón de horario de una serie recurrente.
+         *
+         *     Las modalidades de cobro y el precio de paquete se heredan del servicio.
+         *     La inscripción de clientes es un paso posterior.
+         */
+        SerieReservaCreate: {
+            /** Servicio Id */
+            servicio_id: number;
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /**
+             * Duracion Minutos
+             * @default 60
+             */
+            duracion_minutos: number;
+            /**
+             * Num Repeticiones
+             * @default 1
+             */
+            num_repeticiones: number;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+        };
+        /**
+         * SerieReservaOut
+         * @description Vista de una serie de reservas.
+         */
+        SerieReservaOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Nombre Asesor */
+            nombre_asesor?: string | null;
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Num Repeticiones */
+            num_repeticiones: number;
+            /**
+             * Fecha Inicio
+             * Format: date-time
+             */
+            fecha_inicio: string;
+            /** Cobro Por Sesion Habilitado */
+            cobro_por_sesion_habilitado: boolean;
+            /** Cobro Por Paquete Habilitado */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: string | null;
+            estado: components["schemas"]["EstadoSerieEnum"];
+            /**
+             * Num Inscripciones
+             * @default 0
+             */
+            num_inscripciones: number;
+            /**
+             * Num Reservas Creadas Total
+             * @default 0
+             */
+            num_reservas_creadas_total: number;
+            /** Inscripciones */
+            inscripciones?: components["schemas"]["InscripcionSerieOut"][] | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Actualizado En
+             * Format: date-time
+             */
+            actualizado_en: string;
+        };
         /** ServicioAdminIn */
         ServicioAdminIn: {
             /** Nombre */
@@ -1380,6 +2839,18 @@ export interface components {
              */
             pago_requerido: boolean;
             /**
+             * Cobro Por Sesion Habilitado
+             * @default true
+             */
+            cobro_por_sesion_habilitado: boolean;
+            /**
+             * Cobro Por Paquete Habilitado
+             * @default false
+             */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
+            /**
              * Visible Web
              * @default true
              */
@@ -1389,6 +2860,13 @@ export interface components {
              * @default false
              */
             requiere_confirmacion: boolean;
+            /**
+             * Permite Solicitudes
+             * @default false
+             */
+            permite_solicitudes: boolean;
+            /** Encuesta Satisfaccion Formulario Id */
+            encuesta_satisfaccion_formulario_id?: number | null;
         };
         /** ServicioAdminOut */
         ServicioAdminOut: {
@@ -1425,10 +2903,29 @@ export interface components {
             /** Pago Requerido */
             pago_requerido: boolean;
             /**
+             * Cobro Por Sesion Habilitado
+             * @default true
+             */
+            cobro_por_sesion_habilitado: boolean;
+            /**
+             * Cobro Por Paquete Habilitado
+             * @default false
+             */
+            cobro_por_paquete_habilitado: boolean;
+            /** Precio Paquete */
+            precio_paquete?: string | null;
+            /**
              * Requiere Confirmacion
              * @default false
              */
             requiere_confirmacion: boolean;
+            /**
+             * Permite Solicitudes
+             * @default false
+             */
+            permite_solicitudes: boolean;
+            /** Encuesta Satisfaccion Formulario Id */
+            encuesta_satisfaccion_formulario_id?: number | null;
             /** Visible Web */
             visible_web: boolean;
             /** Activo */
@@ -1477,10 +2974,20 @@ export interface components {
             moneda?: string | null;
             /** Pago Requerido */
             pago_requerido?: boolean | null;
+            /** Cobro Por Sesion Habilitado */
+            cobro_por_sesion_habilitado?: boolean | null;
+            /** Cobro Por Paquete Habilitado */
+            cobro_por_paquete_habilitado?: boolean | null;
+            /** Precio Paquete */
+            precio_paquete?: number | string | null;
             /** Visible Web */
             visible_web?: boolean | null;
             /** Requiere Confirmacion */
             requiere_confirmacion?: boolean | null;
+            /** Permite Solicitudes */
+            permite_solicitudes?: boolean | null;
+            /** Encuesta Satisfaccion Formulario Id */
+            encuesta_satisfaccion_formulario_id?: number | null;
         };
         /** ServicioPublicOut */
         ServicioPublicOut: {
@@ -1502,6 +3009,11 @@ export interface components {
             moneda: string;
             /** Imagen Url */
             imagen_url?: string | null;
+            /**
+             * Tiene Sesiones Abiertas
+             * @default false
+             */
+            tiene_sesiones_abiertas: boolean;
         };
         /** SesionAdminOut */
         SesionAdminOut: {
@@ -1662,6 +3174,47 @@ export interface components {
             motivo_no_disponible?: string | null;
         };
         /**
+         * SolicitudAceptarAlternativaOut
+         * @description El cliente aceptó una fecha alternativa; la reserva ya fue creada.
+         */
+        SolicitudAceptarAlternativaOut: {
+            /** Id */
+            id: number;
+            /** Servicio Id */
+            servicio_id: number;
+            /** Servicio Nombre */
+            servicio_nombre?: string | null;
+            /**
+             * Fecha Hora Propuesta
+             * Format: date-time
+             */
+            fecha_hora_propuesta: string;
+            /** Duracion Minutos */
+            duracion_minutos: number;
+            /** Notas Cliente */
+            notas_cliente?: string | null;
+            estado: components["schemas"]["EstadoSolicitudEnum"];
+            /** Asesor Id */
+            asesor_id?: number | null;
+            /** Motivo Rechazo */
+            motivo_rechazo?: string | null;
+            /** Reserva Id */
+            reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /** Folio Reserva */
+            folio_reserva?: string | null;
+            /** Sesion Id */
+            sesion_id?: number | null;
+        };
+        /**
          * SolicitudAdminOut
          * @description Vista del staff: agrega datos del cliente y de resolución.
          */
@@ -1688,6 +3241,10 @@ export interface components {
             motivo_rechazo?: string | null;
             /** Reserva Id */
             reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
             /**
              * Creado En
              * Format: date-time
@@ -1703,6 +3260,18 @@ export interface components {
             resuelto_por_id?: number | null;
             /** Resuelto En */
             resuelto_en?: string | null;
+            /** Serie Id */
+            serie_id?: number | null;
+        };
+        /** SolicitudAlternativaOut */
+        SolicitudAlternativaOut: {
+            /** Id */
+            id: number;
+            /**
+             * Fecha Hora
+             * Format: date-time
+             */
+            fecha_hora: string;
         };
         /**
          * SolicitudConfirmarOut
@@ -1732,6 +3301,10 @@ export interface components {
             motivo_rechazo?: string | null;
             /** Reserva Id */
             reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
             /**
              * Creado En
              * Format: date-time
@@ -1747,10 +3320,47 @@ export interface components {
             resuelto_por_id?: number | null;
             /** Resuelto En */
             resuelto_en?: string | null;
+            /** Serie Id */
+            serie_id?: number | null;
             /** Folio Reserva */
             folio_reserva?: string | null;
             /** Sesion Id */
             sesion_id?: number | null;
+        };
+        /**
+         * SolicitudConfirmarSerieIn
+         * @description Parámetros para convertir una solicitud en una serie recurrente.
+         *
+         *     La fecha de inicio, servicio y cliente se toman de la solicitud. El
+         *     staff define el patrón de recurrencia — las modalidades de cobro y el
+         *     precio de paquete se heredan del servicio. NO elige la modalidad ni el
+         *     método de pago del cliente: eso lo hace el cliente desde su portal
+         *     (POST /mis-series/{id}/confirmar), igual que en el camino de inscribir
+         *     directamente. Confirmar una solicitud como serie solo crea la serie +
+         *     una invitación (estado=invitada) para el cliente.
+         */
+        SolicitudConfirmarSerieIn: {
+            /** Frecuencia */
+            frecuencia: string;
+            /** Dia Semana */
+            dia_semana?: number | null;
+            /**
+             * Hora Inicio
+             * Format: time
+             */
+            hora_inicio: string;
+            /**
+             * Duracion Minutos
+             * @default 60
+             */
+            duracion_minutos: number;
+            /**
+             * Num Repeticiones
+             * @default 1
+             */
+            num_repeticiones: number;
+            /** Asesor Id */
+            asesor_id?: number | null;
         };
         /**
          * SolicitudCreate
@@ -1795,6 +3405,10 @@ export interface components {
             motivo_rechazo?: string | null;
             /** Reserva Id */
             reserva_id?: number | null;
+            /** Alternativas */
+            alternativas?: components["schemas"]["SolicitudAlternativaOut"][];
+            /** Alternativa Aceptada Id */
+            alternativa_aceptada_id?: number | null;
             /**
              * Creado En
              * Format: date-time
@@ -1808,6 +3422,8 @@ export interface components {
         SolicitudRechazarIn: {
             /** Motivo */
             motivo?: string | null;
+            /** Alternativas */
+            alternativas?: string[] | null;
         };
         /** TenantAdminOut */
         TenantAdminOut: {
@@ -1834,6 +3450,11 @@ export interface components {
             /** Max Reservas Mes */
             max_reservas_mes: number;
             /**
+             * Max Reservas Serie
+             * @default 20
+             */
+            max_reservas_serie: number;
+            /**
              * Creado En
              * Format: date-time
              */
@@ -1850,6 +3471,16 @@ export interface components {
             smtp_configurado: boolean;
             /** Smtp Config */
             smtp_config?: Record<string, never> | null;
+            /**
+             * Pago Configurado
+             * @default false
+             */
+            pago_configurado: boolean;
+            /**
+             * Metodo Pago Default
+             * @default local
+             */
+            metodo_pago_default: string;
         };
         /** TenantCreate */
         TenantCreate: {
@@ -1892,6 +3523,11 @@ export interface components {
              * @default 1000
              */
             max_reservas_mes: number;
+            /**
+             * Max Reservas Serie
+             * @default 20
+             */
+            max_reservas_serie: number;
         };
         /** TenantPublicOut */
         TenantPublicOut: {
@@ -1928,8 +3564,12 @@ export interface components {
             max_clientes?: number | null;
             /** Max Reservas Mes */
             max_reservas_mes?: number | null;
+            /** Max Reservas Serie */
+            max_reservas_serie?: number | null;
             /** Smtp Config */
             smtp_config?: Record<string, never> | null;
+            /** Metodo Pago Default */
+            metodo_pago_default?: string | null;
         };
         /**
          * TipoAgendaEnum
@@ -1941,6 +3581,16 @@ export interface components {
          * @enum {string}
          */
         TipoBloqueoEnum: "vacaciones" | "feriado" | "mantenimiento" | "personal" | "otro";
+        /**
+         * TipoCampoFormularioEnum
+         * @enum {string}
+         */
+        TipoCampoFormularioEnum: "texto" | "textarea" | "numero" | "email" | "telefono" | "fecha" | "select" | "multiselect" | "checkbox" | "radio" | "archivo" | "rating";
+        /**
+         * TipoFormularioEnum
+         * @enum {string}
+         */
+        TipoFormularioEnum: "intake" | "satisfaccion";
         /** UsuarioAdminOut */
         UsuarioAdminOut: {
             /** Id */
@@ -1964,6 +3614,75 @@ export interface components {
              * Format: date-time
              */
             fecha_vinculacion: string;
+        };
+        /** UsuarioGlobalDetalleOut */
+        UsuarioGlobalDetalleOut: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Apellido */
+            apellido?: string | null;
+            /** Telefono */
+            telefono?: string | null;
+            /** Activo */
+            activo: boolean;
+            /** Desactivado En */
+            desactivado_en?: string | null;
+            /** Purgado En */
+            purgado_en?: string | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Total Tenants
+             * @default 0
+             */
+            total_tenants: number;
+            /**
+             * Tenants
+             * @default []
+             */
+            tenants: components["schemas"]["MembresiaGlobalOut"][];
+        };
+        /** UsuarioGlobalOut */
+        UsuarioGlobalOut: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Nombre */
+            nombre: string;
+            /** Apellido */
+            apellido?: string | null;
+            /** Telefono */
+            telefono?: string | null;
+            /** Activo */
+            activo: boolean;
+            /** Desactivado En */
+            desactivado_en?: string | null;
+            /** Purgado En */
+            purgado_en?: string | null;
+            /**
+             * Creado En
+             * Format: date-time
+             */
+            creado_en: string;
+            /**
+             * Total Tenants
+             * @default 0
+             */
+            total_tenants: number;
+        };
+        /** UsuariosGlobalPaginadosOut */
+        UsuariosGlobalPaginadosOut: {
+            /** Items */
+            items: components["schemas"]["UsuarioGlobalOut"][];
+            paginacion: components["schemas"]["PaginacionOut"];
         };
         /** ValidationError */
         ValidationError: {
@@ -2049,6 +3768,103 @@ export interface operations {
             };
         };
     };
+    validar_token_activacion_auth_activar_cuenta_validar_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activar_cuenta_auth_activar_cuenta_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_activar_cuenta_auth_activar_cuenta_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recuperar_password_auth_recuperar_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_recuperar_password_auth_recuperar_password_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_tenants_publicos_tenants_publicos_get: {
         parameters: {
             query?: never;
@@ -2065,6 +3881,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantPublicOut"][];
+                };
+            };
+        };
+    };
+    validar_encuesta_encuestas_validar_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EncuestaValidarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    responder_encuesta_encuestas_responder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EncuestaResponderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mercadopago_redirect_api_v2_mercadopago_redirect_get: {
+        parameters: {
+            query: {
+                reference: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    webhook_mercadopago_api_v2_webhooks_mercadopago_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -2087,6 +4019,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServicioPublicOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sesiones_abiertas_servicio_api_v2__tenant_slug__servicios__servicio_id__sesiones_abiertas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SesionListOut"][];
                 };
             };
             /** @description Validation Error */
@@ -2358,6 +4322,41 @@ export interface operations {
             };
         };
     };
+    reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_reclamar_cuenta_api_v2__tenant_slug__reclamar_cuenta_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_mis_reservas_api_v2__tenant_slug__mis_reservas_get: {
         parameters: {
             query?: {
@@ -2459,6 +4458,106 @@ export interface operations {
             };
         };
     };
+    aceptar_alternativa_solicitud_endpoint_api_v2__tenant_slug__mis_solicitudes__solicitud_id__alternativas__alternativa_id__aceptar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                alternativa_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudAceptarAlternativaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_mis_series_api_v2__tenant_slug__mis_series_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieClienteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_mi_inscripcion_serie_api_v2__tenant_slug__mis_series__inscripcion_id__confirmar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inscripcion_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmarInscripcionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieClienteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_reservas_admin_api_v2__tenant_slug__admin_reservas_get: {
         parameters: {
             query?: {
@@ -2466,6 +4565,8 @@ export interface operations {
                 fecha?: string | null;
                 /** @description Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas */
                 estado?: string | null;
+                /** @description Busca por folio, código de confirmación, nombre o email del cliente */
+                q?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -2575,6 +4676,8 @@ export interface operations {
                 /** @description Filtrar por estado. Default: todas */
                 estado?: components["schemas"]["EstadoSolicitud"] | null;
                 servicio_id?: number | null;
+                /** @description Busca por folio, código de confirmación, nombre o email del cliente */
+                q?: string | null;
             };
             header?: never;
             path: {
@@ -2636,6 +4739,42 @@ export interface operations {
             };
         };
     };
+    confirmar_solicitud_como_serie_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__confirmar_serie_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudConfirmarSerieIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     rechazar_solicitud_admin_api_v2__tenant_slug__admin_solicitudes__solicitud_id__rechazar_post: {
         parameters: {
             query?: never;
@@ -2659,6 +4798,213 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SolicitudAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_series_admin_api_v2__tenant_slug__admin_series_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por estado */
+                estado?: components["schemas"]["EstadoSerie"] | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_serie_admin_api_v2__tenant_slug__admin_series_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SerieReservaCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inscribir_cliente_en_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InscripcionSerieCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_serie_admin_api_v2__tenant_slug__admin_series__serie_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieReservaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    registrar_pago_inscripcion_local_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__pago_local_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                inscripcion_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagoLocalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancelar_invitacion_serie_admin_api_v2__tenant_slug__admin_series__serie_id__inscripciones__inscripcion_id__cancelar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serie_id: number;
+                inscripcion_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InscripcionSerieOut"];
                 };
             };
             /** @description Validation Error */
@@ -2815,6 +5161,321 @@ export interface operations {
             header?: never;
             path: {
                 servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_sesiones_por_servicio_admin_api_v2__tenant_slug__admin_servicios__servicio_id__sesiones_get: {
+        parameters: {
+            query?: {
+                estado?: string | null;
+                desde?: string | null;
+                hasta?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                servicio_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SesionesPaginadasOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_formularios_admin_api_v2__tenant_slug__admin_formularios_get: {
+        parameters: {
+            query?: {
+                /** @description Filtrar por tipo de formulario */
+                tipo?: components["schemas"]["TipoFormularioEnum"] | null;
+                /** @description Filtrar por estado activo */
+                activo?: boolean | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioListAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_formulario_admin_api_v2__tenant_slug__admin_formularios_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormularioAdminIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obtener_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormularioAdminUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_respuestas_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__respuestas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EncuestaRespuestaClienteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_campos_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampoFormularioBulkAdminIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampoFormularioAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                campo_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampoFormularioAdminUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampoFormularioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desactivar_campo_formulario_admin_api_v2__tenant_slug__admin_formularios__formulario_id__campos__campo_id__desactivar_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+                campo_id: number;
                 tenant_slug: string;
             };
             cookie?: never;
@@ -3514,6 +6175,465 @@ export interface operations {
             };
         };
     };
+    conectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_conectar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MercadoPagoConectarIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MercadoPagoEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desconectar_mercadopago_api_v2__tenant_slug__admin_mercadopago_desconectar_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MercadoPagoEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estado_mercadopago_api_v2__tenant_slug__admin_mercadopago_estado_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MercadoPagoEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    conectar_google_meet_api_v2__tenant_slug__admin_google_meet_conectar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleMeetConectarIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleMeetEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desconectar_google_meet_api_v2__tenant_slug__admin_google_meet_desconectar_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleMeetEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estado_google_meet_api_v2__tenant_slug__admin_google_meet_estado_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleMeetEstadoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revisar_contenido_google_meet_api_v2__tenant_slug__admin_google_meet_revisar_contenido_post: {
+        parameters: {
+            query?: {
+                /** @description Si viene, fuerza el reprocesamiento de la sesión de ESE folio específico, sin importar si ya tiene contenido_enviado_en marcado o si fecha_hora_fin todavía no cumple el margen. Úsalo cuando una sesión se quedó a medias (ej. carpetas creadas pero correo nunca salió porque el proceso se interrumpió después de marcarla como ya procesada). */
+                folio?: string | null;
+            };
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_metodo_pago_default_api_v2__tenant_slug__admin_tenant_metodo_pago_default_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetodoPagoDefaultIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    checkout_reserva_api_v2__tenant_slug__reservas__folio__checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folio: string;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutUrlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    checkout_inscripcion_api_v2__tenant_slug__inscripciones__inscripcion_id__checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inscripcion_id: number;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutUrlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obtener_personalizacion_api_v2__tenant_slug__admin_personalizacion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_color_personalizacion_api_v2__tenant_slug__admin_personalizacion_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalizacionColorIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_subir_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quitar_logo_personalizacion_api_v2__tenant_slug__admin_personalizacion_logo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalizacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listar_tenants_api_v2_superadmin_tenants_get: {
         parameters: {
             query?: {
@@ -3603,6 +6723,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_usuarios_global_api_v2_superadmin_usuarios_get: {
+        parameters: {
+            query?: {
+                /** @description Busca por email o nombre */
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuariosGlobalPaginadosOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_usuario_global_api_v2_superadmin_usuarios__usuario_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioGlobalDetalleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_vincular_usuario_global_api_v2_superadmin_usuarios_vincular_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desvincular_usuario_global_api_v2_superadmin_usuarios__usuario_id__desvincular__tenant_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desactivar_usuario_global_api_v2_superadmin_usuarios__usuario_id__desactivar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purgar_usuario_global_api_v2_superadmin_usuarios__usuario_id__purgar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperacionOut"];
                 };
             };
             /** @description Validation Error */

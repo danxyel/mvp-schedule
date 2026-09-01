@@ -80,6 +80,48 @@ class EstadoSolicitudEnum(str, Enum):
     CANCELADA = "cancelada"
 
 
+class ModalidadCobroEnum(str, Enum):
+    SESION = "sesion"
+    PAQUETE = "paquete"
+
+
+class EstadoInscripcionEnum(str, Enum):
+    INVITADA = "invitada"
+    CONFIRMADA = "confirmada"
+    CANCELADA = "cancelada"
+
+
+def validar_modalidad_cobro(
+    modalidad: ModalidadCobroEnum,
+    precio_paquete: Optional[Decimal],
+    cobro_por_sesion_habilitado: bool,
+    cobro_por_paquete_habilitado: bool,
+) -> None:
+    """Valida coherencia entre modalidad elegida y modalidades habilitadas.
+
+    Usado por los model_validators de entrada y por la lógica de negocio
+    cuando la serie ya existe y las modalidades habilitadas viven en ella.
+    """
+    if not cobro_por_sesion_habilitado and not cobro_por_paquete_habilitado:
+        raise ValueError("Debe habilitar al menos una modalidad de cobro")
+    if (
+        cobro_por_paquete_habilitado
+        and modalidad == ModalidadCobroEnum.PAQUETE
+        and precio_paquete is None
+    ):
+        raise ValueError("precio_paquete es obligatorio cuando la modalidad es 'paquete'")
+    if modalidad == ModalidadCobroEnum.PAQUETE and not cobro_por_paquete_habilitado:
+        raise ValueError("No puede seleccionar modalidad 'paquete' si no está habilitada")
+    if modalidad == ModalidadCobroEnum.SESION and not cobro_por_sesion_habilitado:
+        raise ValueError("No puede seleccionar modalidad 'sesion' si no está habilitada")
+
+
+class EstadoSerieEnum(str, Enum):
+    ACTIVA = "activa"
+    COMPLETADA = "completada"
+    CANCELADA = "cancelada"
+
+
 # ============================================================
 # HELPERS DE TIMEZONE
 # ============================================================
@@ -232,6 +274,8 @@ class DisponibilidadDiaOut(BaseModel):
     fecha: datetime
     servicio_id: int
     timezone: str
+    requiere_confirmacion: bool
+    permite_solicitudes: bool
     slots: List[SlotDisponible]
 
 
@@ -333,6 +377,9 @@ class ReservaOut(BaseModel):
     asesor: Optional[AsesorPublicOut] = None
     hold_expira_en: Optional[datetime] = None
     notas_cliente: Optional[str] = None
+    serie_id: Optional[int] = None
+    inscripcion_id: Optional[int] = None
+    modalidad_cobro: Optional[ModalidadCobroEnum] = None
     creado_en: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -364,6 +411,28 @@ class CheckoutUrlOut(BaseModel):
     expira_en: Optional[datetime] = None
 
 
+class MercadoPagoEstadoOut(BaseModel):
+    conectado: bool
+    mp_user_id: Optional[str] = None
+    tenant_id: int
+    metodo_pago_default: str = "local"
+
+
+class MercadoPagoConectarIn(BaseModel):
+    access_token: str = Field(..., min_length=10)
+    public_key: Optional[str] = None
+
+
+class GoogleMeetEstadoOut(BaseModel):
+    conectado: bool
+    impersonar_email: Optional[str] = None
+    tenant_id: int
+
+
+class GoogleMeetConectarIn(BaseModel):
+    impersonar_email: EmailStr
+
+
 class ReservaCreateResponse(BaseModel):
     """Respuesta del POST /reservas.
 
@@ -377,6 +446,7 @@ class ReservaCreateResponse(BaseModel):
     sesion_creada: bool = Field(
         description="True si se creó una sesión nueva; False si el cliente se unió a una existente."
     )
+    activacion_url: Optional[str] = None
 
 
 class OperacionOut(BaseModel):
@@ -421,6 +491,12 @@ class SolicitudCreate(BaseModel):
         return v
 
 
+class SolicitudAlternativaOut(BaseModel):
+    id: int
+    fecha_hora: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SolicitudOut(BaseModel):
     """Vista del cliente: sin datos de resolución internos."""
     id: int
@@ -433,6 +509,8 @@ class SolicitudOut(BaseModel):
     asesor_id: Optional[int] = None
     motivo_rechazo: Optional[str] = None
     reserva_id: Optional[int] = None
+    alternativas: List[SolicitudAlternativaOut] = Field(default_factory=list)
+    alternativa_aceptada_id: Optional[int] = None
     creado_en: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -444,6 +522,7 @@ class SolicitudAdminOut(SolicitudOut):
     email_cliente: Optional[str] = None
     resuelto_por_id: Optional[int] = None
     resuelto_en: Optional[datetime] = None
+    serie_id: Optional[int] = None
 
 
 class SolicitudConfirmarOut(SolicitudAdminOut):
@@ -453,10 +532,178 @@ class SolicitudConfirmarOut(SolicitudAdminOut):
     sesion_id: Optional[int] = None
 
 
+class SolicitudConfirmarSerieIn(BaseModel):
+    """Parámetros para convertir una solicitud en una serie recurrente.
+
+    La fecha de inicio, servicio y cliente se toman de la solicitud. El
+    staff define el patrón de recurrencia — las modalidades de cobro y el
+    precio de paquete se heredan del servicio. NO elige la modalidad ni el
+    método de pago del cliente: eso lo hace el cliente desde su portal
+    (POST /mis-series/{id}/confirmar), igual que en el camino de inscribir
+    directamente. Confirmar una solicitud como serie solo crea la serie +
+    una invitación (estado=invitada) para el cliente.
+    """
+    frecuencia: str = Field(..., pattern=r"^(semanal|quincenal|mensual)$")
+    dia_semana: Optional[int] = Field(default=None, ge=0, le=6)
+    hora_inicio: time
+    duracion_minutos: int = Field(default=60, gt=0)
+    num_repeticiones: int = Field(default=1, ge=1, le=50)
+    asesor_id: Optional[int] = Field(default=None, gt=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SolicitudRechazarIn(BaseModel):
     """El staff rechaza una solicitud pendiente."""
     motivo: Optional[str] = Field(default=None, max_length=500)
+    alternativas: Optional[List[datetime]] = Field(default=None, max_length=10)
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("alternativas")
+    @classmethod
+    def _validar_alternativas(cls, v: Optional[List[datetime]]) -> Optional[List[datetime]]:
+        if not v:
+            return v
+        for i, dt in enumerate(v):
+            dt = exigir_aware(dt, f"alternativas[{i}]")
+            if dt <= datetime.now(dt_timezone.utc):
+                raise ValueError(f"La alternativa {i + 1} debe ser una fecha futura")
+        return v
+
+
+class SolicitudAceptarAlternativaOut(SolicitudOut):
+    """El cliente aceptó una fecha alternativa; la reserva ya fue creada."""
+    folio_reserva: Optional[str] = None
+    sesion_id: Optional[int] = None
+
+
+# ============================================================
+# SERIES DE RESERVAS — reservas recurrentes
+# ============================================================
+class SerieReservaCreate(BaseModel):
+    """Crear el patrón de horario de una serie recurrente.
+
+    Las modalidades de cobro y el precio de paquete se heredan del servicio.
+    La inscripción de clientes es un paso posterior.
+    """
+    servicio_id: int = Field(..., gt=0)
+    asesor_id: Optional[int] = Field(default=None, gt=0)
+
+    # Patrón de recurrencia
+    frecuencia: str = Field(..., pattern=r"^(semanal|quincenal|mensual)$")
+    dia_semana: Optional[int] = Field(default=None, ge=0, le=6)
+    hora_inicio: time
+    duracion_minutos: int = Field(default=60, gt=0)
+    num_repeticiones: int = Field(default=1, ge=1, le=50)
+    fecha_inicio: datetime
+
+    @field_validator("fecha_inicio")
+    @classmethod
+    def validar_fecha_inicio(cls, v: datetime) -> datetime:
+        v = exigir_aware(v, "fecha_inicio")
+        return v
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class InscripcionSerieCreate(BaseModel):
+    """Invita a un cliente a una serie recurrente existente.
+
+    Ya no se captura modalidad de cobro ni método de pago aquí — eso lo
+    elige el cliente desde su portal (POST /mis-series/{id}/confirmar).
+    Esto solo crea la invitación (estado=invitada); no genera reservas.
+    """
+    cliente_usuario_id: int = Field(..., gt=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConfirmarInscripcionIn(BaseModel):
+    """El cliente confirma su invitación: elige modalidad y método de pago."""
+    modalidad_cobro: ModalidadCobroEnum
+    metodo_pago: MetodoPagoEnum = Field(default=MetodoPagoEnum.LOCAL)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class InscripcionSerieOut(BaseModel):
+    """Vista de una inscripción a serie (admin)."""
+    id: int
+    serie_id: int
+    cliente_usuario_id: int
+    nombre_cliente: Optional[str] = None
+    email_cliente: Optional[str] = None
+    estado: EstadoInscripcionEnum
+    modalidad_cobro: Optional[ModalidadCobroEnum] = None
+    num_reservas_creadas: int = 0
+    num_reservas_omitidas: int = 0
+    fechas_omitidas: Optional[List[Dict[str, Any]]] = None
+    estado_pago: str  # pendiente | completo | parcial | exento
+    creado_en: datetime
+
+
+class InscripcionSerieClienteOut(BaseModel):
+    """Vista de una inscripción a serie para el cliente dueño (GET /mis-series).
+
+    Trae lo que el cliente necesita para decidir cómo confirmar: el
+    servicio, el patrón de horario, las modalidades habilitadas y sus
+    precios (sesión = servicio.precio, paquete = servicio.precio_paquete).
+    """
+    id: int
+    serie_id: int
+    estado: EstadoInscripcionEnum
+    modalidad_cobro: Optional[ModalidadCobroEnum] = None
+    servicio_id: int
+    servicio_nombre: Optional[str] = None
+    frecuencia: str
+    dia_semana: Optional[int] = None
+    hora_inicio: time
+    num_repeticiones: int
+    fecha_inicio: datetime
+    cobro_por_sesion_habilitado: bool
+    cobro_por_paquete_habilitado: bool
+    precio_sesion: Optional[Decimal] = None
+    precio_paquete: Optional[Decimal] = None
+    num_reservas_creadas: int = 0
+    estado_pago: str = "pendiente"  # pendiente | completo | parcial | exento
+    creado_en: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SerieReservaOut(BaseModel):
+    """Vista de una serie de reservas."""
+    id: int
+    servicio_id: int
+    servicio_nombre: Optional[str] = None
+    asesor_id: Optional[int] = None
+    nombre_asesor: Optional[str] = None
+
+    # Patrón de recurrencia
+    frecuencia: str
+    dia_semana: Optional[int] = None
+    hora_inicio: time
+    duracion_minutos: int
+    num_repeticiones: int
+    fecha_inicio: datetime
+
+    # Modalidades de cobro habilitadas por admin
+    cobro_por_sesion_habilitado: bool
+    cobro_por_paquete_habilitado: bool
+    precio_paquete: Optional[Decimal] = None
+
+    # Estado
+    estado: EstadoSerieEnum
+    num_inscripciones: int = 0
+    num_reservas_creadas_total: int = 0
+
+    # Detalle completo; se incluye solo en GET /admin/series/{serie_id}
+    inscripciones: Optional[List[InscripcionSerieOut]] = None
+
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -472,6 +719,7 @@ class TenantCreate(BaseModel):
     max_servicios: int = Field(10, ge=1)
     max_clientes: int = Field(500, ge=1)
     max_reservas_mes: int = Field(1000, ge=1)
+    max_reservas_serie: int = Field(20, ge=1, le=50)
 
 
 class TenantAdminOut(BaseModel):
@@ -486,12 +734,15 @@ class TenantAdminOut(BaseModel):
     max_servicios: int
     max_clientes: int
     max_reservas_mes: int
+    max_reservas_serie: int = 20
     creado_en: datetime
     total_usuarios: int = 0
     smtp_configurado: bool = False
     # Campos NO sensibles de smtp_config, para que el frontend pueda precargar
     # el formulario al reabrir el modal. `password` NUNCA sale por aquí.
     smtp_config: Optional[dict] = None
+    pago_configurado: bool = False
+    metodo_pago_default: str = "local"
 
 
 class TenantUpdate(BaseModel):
@@ -505,7 +756,27 @@ class TenantUpdate(BaseModel):
     max_servicios: Optional[int] = Field(None, ge=1)
     max_clientes: Optional[int] = Field(None, ge=1)
     max_reservas_mes: Optional[int] = Field(None, ge=1)
+    max_reservas_serie: Optional[int] = Field(None, ge=1, le=50)
     smtp_config: Optional[dict] = None
+    metodo_pago_default: Optional[str] = Field(None, pattern=r"^(online|local|registro)$")
+
+
+class MetodoPagoDefaultIn(BaseModel):
+    metodo_pago_default: str = Field(..., pattern=r"^(online|local|registro)$")
+
+
+# ============================================================
+# ADMIN — PERSONALIZACIÓN DE MARCA
+# ============================================================
+class PersonalizacionOut(BaseModel):
+    color_primario: str
+    logo_url: Optional[str] = None
+    nombre: str
+    slug: str
+
+
+class PersonalizacionColorIn(BaseModel):
+    color_primario: str = Field(..., pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 # ============================================================
@@ -521,6 +792,41 @@ class UsuarioAdminOut(BaseModel):
     rol: str
     activo: bool
     fecha_vinculacion: datetime
+
+
+# ============================================================
+# SUPERADMIN — USUARIOS GLOBALES
+# ============================================================
+class UsuarioGlobalOut(BaseModel):
+    id: int
+    email: str
+    nombre: str
+    apellido: Optional[str] = None
+    telefono: Optional[str] = None
+    activo: bool
+    desactivado_en: Optional[datetime] = None
+    purgado_en: Optional[datetime] = None
+    creado_en: datetime
+    total_tenants: int = 0
+
+
+class UsuariosGlobalPaginadosOut(BaseModel):
+    items: List[UsuarioGlobalOut]
+    paginacion: PaginacionOut
+
+
+class MembresiaGlobalOut(BaseModel):
+    ut_id: int
+    tenant_id: int
+    tenant_nombre: str
+    tenant_slug: str
+    rol: str
+    activo: bool
+    fecha_vinculacion: datetime
+
+
+class UsuarioGlobalDetalleOut(UsuarioGlobalOut):
+    tenants: List[MembresiaGlobalOut] = []
 
 
 class ServicioAdminIn(BaseModel):
@@ -539,8 +845,13 @@ class ServicioAdminIn(BaseModel):
     precio: Optional[Decimal] = Field(None, ge=0)
     moneda: str = Field("MXN", min_length=3, max_length=3)
     pago_requerido: bool = True
+    cobro_por_sesion_habilitado: bool = True
+    cobro_por_paquete_habilitado: bool = False
+    precio_paquete: Optional[Decimal] = Field(None, ge=0)
     visible_web: bool = True
     requiere_confirmacion: bool = False
+    permite_solicitudes: bool = False
+    encuesta_satisfaccion_formulario_id: Optional[int] = None
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -549,6 +860,17 @@ class ServicioAdminIn(BaseModel):
             raise ValueError("cupo_maximo no puede ser menor que cupo_minimo")
         if self.tipo_agenda == TipoAgendaEnum.INDIVIDUAL and self.cupo_maximo != 1:
             raise ValueError("Un servicio individual solo admite cupo_maximo = 1")
+        return self
+
+    @model_validator(mode="after")
+    def _validar_modalidades_cobro(self):
+        if not self.cobro_por_sesion_habilitado and not self.cobro_por_paquete_habilitado:
+            raise ValueError("Debe habilitar al menos una modalidad de cobro")
+        if self.cobro_por_paquete_habilitado:
+            if self.tipo_agenda != TipoAgendaEnum.RECURRENTE:
+                raise ValueError("El cobro por paquete solo está disponible para servicios recurrentes")
+            if self.precio_paquete is None:
+                raise ValueError("precio_paquete es obligatorio cuando el cobro por paquete está habilitado")
         return self
 
 
@@ -569,8 +891,13 @@ class ServicioAdminUpdate(BaseModel):
     precio: Optional[Decimal] = Field(None, ge=0)
     moneda: Optional[str] = Field(None, min_length=3, max_length=3)
     pago_requerido: Optional[bool] = None
+    cobro_por_sesion_habilitado: Optional[bool] = None
+    cobro_por_paquete_habilitado: Optional[bool] = None
+    precio_paquete: Optional[Decimal] = Field(None, ge=0)
     visible_web: Optional[bool] = None
     requiere_confirmacion: Optional[bool] = None
+    permite_solicitudes: Optional[bool] = None
+    encuesta_satisfaccion_formulario_id: Optional[int] = None
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
@@ -581,6 +908,22 @@ class ServicioAdminUpdate(BaseModel):
         if self.tipo_agenda == TipoAgendaEnum.INDIVIDUAL and self.cupo_maximo is not None:
             if self.cupo_maximo != 1:
                 raise ValueError("Un servicio individual solo admite cupo_maximo = 1")
+        return self
+
+    @model_validator(mode="after")
+    def _validar_modalidades_cobro(self):
+        if self.cobro_por_paquete_habilitado:
+            if self.tipo_agenda is not None and self.tipo_agenda != TipoAgendaEnum.RECURRENTE:
+                raise ValueError("El cobro por paquete solo está disponible para servicios recurrentes")
+            if self.precio_paquete is None and self.cobro_por_sesion_habilitado is not False:
+                # precio_paquete es obligatorio si paquete queda habilitado;
+                # si sesión también está habilitada, el campo no es obligatorio
+                # en el payload, pero no podemos validar sin leer el modelo.
+                # Para PATCH parcial aceptamos NULL y el endpoint debe validar
+                # el estado final si paquete queda habilitado sin precio.
+                pass
+        if self.cobro_por_sesion_habilitado is False and self.cobro_por_paquete_habilitado is False:
+            raise ValueError("Debe habilitar al menos una modalidad de cobro")
         return self
 
 
@@ -595,6 +938,7 @@ class ServicioPublicOut(BaseModel):
     precio: Optional[Decimal] = None
     moneda: str
     imagen_url: Optional[str] = None
+    tiene_sesiones_abiertas: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -625,7 +969,12 @@ class ServicioAdminOut(BaseModel):
     precio: Optional[Decimal] = None
     moneda: str
     pago_requerido: bool
+    cobro_por_sesion_habilitado: bool = True
+    cobro_por_paquete_habilitado: bool = False
+    precio_paquete: Optional[Decimal] = None
     requiere_confirmacion: bool = False
+    permite_solicitudes: bool = False
+    encuesta_satisfaccion_formulario_id: Optional[int] = None
     visible_web: bool
     activo: bool
     creado_en: datetime
@@ -660,6 +1009,156 @@ class TipoBloqueoEnum(str, Enum):
     MANTENIMIENTO = "mantenimiento"
     PERSONAL = "personal"
     OTRO = "otro"
+
+
+# ============================================================
+# FORMULARIOS (intake + satisfacción)
+# ============================================================
+class TipoFormularioEnum(str, Enum):
+    INTAKE = "intake"
+    SATISFACCION = "satisfaccion"
+
+
+class TipoCampoFormularioEnum(str, Enum):
+    TEXTO = "texto"
+    TEXTAREA = "textarea"
+    NUMERO = "numero"
+    EMAIL = "email"
+    TELEFONO = "telefono"
+    FECHA = "fecha"
+    SELECT = "select"
+    MULTISELECT = "multiselect"
+    CHECKBOX = "checkbox"
+    RADIO = "radio"
+    ARCHIVO = "archivo"
+    RATING = "rating"
+
+
+class CampoFormularioAdminIn(BaseModel):
+    tipo: TipoCampoFormularioEnum
+    label: str = Field(..., min_length=1, max_length=255)
+    placeholder: Optional[str] = Field(None, max_length=255)
+    requerido: bool = False
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = Field(None, max_length=255)
+    validacion_regex: Optional[str] = Field(None, max_length=255)
+    ayuda: Optional[str] = Field(None, max_length=1000)
+    orden: int = Field(0, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
+
+class CampoFormularioBulkAdminIn(BaseModel):
+    items: List[CampoFormularioAdminIn] = Field(..., min_length=1)
+    model_config = ConfigDict(extra="forbid")
+
+
+class CampoFormularioAdminUpdate(BaseModel):
+    tipo: Optional[TipoCampoFormularioEnum] = None
+    label: Optional[str] = Field(None, min_length=1, max_length=255)
+    placeholder: Optional[str] = Field(None, max_length=255)
+    requerido: Optional[bool] = None
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = Field(None, max_length=255)
+    validacion_regex: Optional[str] = Field(None, max_length=255)
+    ayuda: Optional[str] = Field(None, max_length=1000)
+    orden: Optional[int] = Field(None, ge=0)
+    activo: Optional[bool] = None
+    model_config = ConfigDict(extra="forbid")
+
+
+class CampoFormularioAdminOut(BaseModel):
+    id: int
+    formulario_id: int
+    tipo: str
+    label: str
+    placeholder: Optional[str] = None
+    requerido: bool
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = None
+    validacion_regex: Optional[str] = None
+    ayuda: Optional[str] = None
+    orden: int
+    activo: bool
+    creado_en: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FormularioAdminIn(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=255)
+    tipo: TipoFormularioEnum = TipoFormularioEnum.SATISFACCION
+    model_config = ConfigDict(extra="forbid")
+
+
+class FormularioAdminUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=255)
+    activo: Optional[bool] = None
+    model_config = ConfigDict(extra="forbid")
+
+
+class FormularioListAdminOut(BaseModel):
+    id: int
+    tenant_id: int
+    nombre: str
+    tipo: str
+    activo: bool
+    creado_en: datetime
+    num_campos: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FormularioAdminOut(BaseModel):
+    id: int
+    tenant_id: int
+    nombre: str
+    tipo: str
+    activo: bool
+    creado_en: datetime
+    campos: List[CampoFormularioAdminOut] = []
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EncuestaCampoOut(BaseModel):
+    id: int
+    tipo: str
+    label: str
+    placeholder: Optional[str] = None
+    requerido: bool
+    opciones: Optional[Dict[str, Any]] = None
+    grupo_matriz: Optional[str] = None
+    ayuda: Optional[str] = None
+    orden: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EncuestaValidarOut(BaseModel):
+    token: str
+    formulario_id: int
+    formulario_nombre: str
+    reserva_id: int
+    campos: List[EncuestaCampoOut]
+
+
+class EncuestaResponderIn(BaseModel):
+    token: str
+    respuestas: Dict[str, Any]
+
+
+class EncuestaRespuestaCampoOut(BaseModel):
+    campo_id: int
+    label: str
+    valor: Optional[str] = None
+    grupo_matriz: Optional[str] = None
+    tipo: str
+    opciones: Optional[Dict[str, Any]] = None
+    orden: int
+
+
+class EncuestaRespuestaClienteOut(BaseModel):
+    reserva_id: int
+    cliente_nombre: str
+    cliente_email: Optional[str] = None
+    respondido_en: datetime
+    respuestas: List[EncuestaRespuestaCampoOut]
 
 
 class BloqueoCreate(BaseModel):

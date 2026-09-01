@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import client from '../../api/client'
 import Modal from '../common/Modal'
 import HorarioServicio from './HorarioServicio'
+import { errorMensaje } from '../../utils/errores'
 const TIPO_BADGE = {
   individual: 'border-blue-200 bg-blue-100 text-blue-700',
   grupal: 'border-purple-200 bg-purple-100 text-purple-700',
@@ -36,6 +37,34 @@ const ESTADO_LABEL = {
   false: 'Inactivo',
 }
 
+const SESION_BADGE = {
+  abierta: 'bg-green-100 text-green-700 border-green-200',
+  confirmada: 'bg-blue-100 text-blue-700 border-blue-200',
+  llena: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  cancelada: 'bg-red-100 text-red-700 border-red-200',
+  completada: 'bg-gray-100 text-gray-600 border-gray-200',
+}
+
+const SESION_LABEL = {
+  abierta: 'Abierta',
+  confirmada: 'Confirmada',
+  llena: 'Llena',
+  cancelada: 'Cancelada',
+  completada: 'Completada',
+}
+
+function formatFechaHora(utcString, timezone) {
+  return new Intl.DateTimeFormat('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: timezone,
+  }).format(new Date(utcString))
+}
+
 function normalizarServicio(s) {
   const base = s ?? {}
   const out = { ...base }
@@ -46,6 +75,9 @@ function normalizarServicio(s) {
   if (out.cupo_maximo == null) out.cupo_maximo = 1
   if (out.precio == null) out.precio = null
   if (out.moneda == null) out.moneda = 'MXN'
+  if (out.cobro_por_sesion_habilitado == null) out.cobro_por_sesion_habilitado = true
+  if (out.cobro_por_paquete_habilitado == null) out.cobro_por_paquete_habilitado = false
+  if (out.precio_paquete == null) out.precio_paquete = null
   if (out.activo === undefined) out.activo = true
   return out
 }
@@ -70,14 +102,16 @@ const FORM_VACIO = {
   precio: '',
   moneda: 'MXN',
   pago_requerido: true,
+  cobro_por_sesion_habilitado: true,
+  cobro_por_paquete_habilitado: false,
+  precio_paquete: '',
   visible_web: true,
   requiere_confirmacion: false,
+  permite_solicitudes: false,
   buffer_antes_min: 0,
   buffer_despues_min: 0,
-}
-
-function errorMensaje(err) {
-  return err?.mensaje ?? err?.detail ?? err?.message ?? JSON.stringify(err)
+  encuesta_habilitada: false,
+  encuesta_satisfaccion_formulario_id: '',
 }
 
 function formatPrecio(precio, moneda) {
@@ -100,7 +134,7 @@ function Badge({ value, map, labelMap, color }) {
   )
 }
 
-export default function GestionServicios({ tenantSlug, token }) {
+export default function GestionServicios({ tenantSlug, token, onIrACrearSerie, onIrAEncuestas }) {
   const [servicios, setServicios] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -114,8 +148,16 @@ export default function GestionServicios({ tenantSlug, token }) {
   const [editarLoading, setEditarLoading] = useState(false)
   const [editarError, setEditarError] = useState(null)
   const [horarioDe, setHorarioDe] = useState(null)
+  const [sesionesDe, setSesionesDe] = useState(null)
+  const [sesionesItems, setSesionesItems] = useState([])
+  const [sesionesTotal, setSesionesTotal] = useState(0)
+  const [sesionesOffset, setSesionesOffset] = useState(0)
+  const [sesionesLoading, setSesionesLoading] = useState(false)
+  const [sesionesError, setSesionesError] = useState(null)
   const [franjasNuevas, setFranjasNuevas] = useState([])
   const [form, setForm] = useState(FORM_VACIO)
+  const [exitoServicio, setExitoServicio] = useState(null)
+  const [encuestas, setEncuestas] = useState([])
 
   const fetchServicios = useCallback(async () => {
     setLoading(true)
@@ -140,6 +182,25 @@ export default function GestionServicios({ tenantSlug, token }) {
     fetchServicios()
   }, [fetchServicios])
 
+  const fetchEncuestas = useCallback(async () => {
+    const { data, error: fetchErr } = await client.GET(
+      '/api/v2/{tenant_slug}/admin/formularios',
+      {
+        params: {
+          path: { tenant_slug: tenantSlug },
+          query: { tipo: 'satisfaccion', activo: true },
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
+    if (fetchErr) return
+    setEncuestas(data ?? [])
+  }, [tenantSlug, token])
+
+  useEffect(() => {
+    fetchEncuestas()
+  }, [fetchEncuestas])
+
   const reintentar = () => {
     setLoading(true)
     setError(null)
@@ -150,6 +211,7 @@ export default function GestionServicios({ tenantSlug, token }) {
     setForm({ ...FORM_VACIO })
     setFranjasNuevas([])
     setCrearError(null)
+    fetchEncuestas()
     setModalAbierto(true)
   }
 
@@ -166,13 +228,20 @@ export default function GestionServicios({ tenantSlug, token }) {
       precio: s.precio === null || s.precio === undefined ? '' : String(s.precio),
       moneda: s.moneda,
       pago_requerido: s.pago_requerido,
+      cobro_por_sesion_habilitado: s.cobro_por_sesion_habilitado ?? true,
+      cobro_por_paquete_habilitado: s.cobro_por_paquete_habilitado ?? false,
+      precio_paquete: s.precio_paquete === null || s.precio_paquete === undefined ? '' : String(s.precio_paquete),
       visible_web: s.visible_web,
       requiere_confirmacion: s.requiere_confirmacion ?? false,
+      permite_solicitudes: s.permite_solicitudes ?? false,
       buffer_antes_min: s.buffer_antes_min,
       buffer_despues_min: s.buffer_despues_min,
+      encuesta_habilitada: !!s.encuesta_satisfaccion_formulario_id,
+      encuesta_satisfaccion_formulario_id: s.encuesta_satisfaccion_formulario_id ?? '',
     })
     setEditarError(null)
     setEditando(s)
+    fetchEncuestas()
   }
 
   const setCampo = (campo, valor) => {
@@ -200,6 +269,18 @@ export default function GestionServicios({ tenantSlug, token }) {
     if (form.precio !== '' && Number(form.precio) < 0) {
       return 'El precio no puede ser negativo'
     }
+    if (form.tipo_agenda !== 'recurrente' && form.cobro_por_paquete_habilitado) {
+      return 'El cobro por paquete solo está disponible para servicios recurrentes'
+    }
+    if (!form.cobro_por_sesion_habilitado && !form.cobro_por_paquete_habilitado) {
+      return 'Debe habilitar al menos una modalidad de cobro'
+    }
+    if (form.cobro_por_paquete_habilitado && form.precio_paquete === '') {
+      return 'El precio del paquete es obligatorio cuando el cobro por paquete está habilitado'
+    }
+    if (form.precio_paquete !== '' && Number(form.precio_paquete) < 0) {
+      return 'El precio del paquete no puede ser negativo'
+    }
     return null
   }
 
@@ -225,10 +306,22 @@ export default function GestionServicios({ tenantSlug, token }) {
       precio: form.precio === '' ? null : Number(form.precio),
       moneda: form.moneda,
       pago_requerido: form.pago_requerido,
+      cobro_por_sesion_habilitado: form.cobro_por_sesion_habilitado,
+      cobro_por_paquete_habilitado:
+        form.tipo_agenda === 'recurrente' ? form.cobro_por_paquete_habilitado : false,
+      precio_paquete:
+        form.tipo_agenda === 'recurrente' && form.cobro_por_paquete_habilitado && form.precio_paquete !== ''
+          ? Number(form.precio_paquete)
+          : null,
       visible_web: form.visible_web,
       requiere_confirmacion: form.requiere_confirmacion,
+      permite_solicitudes: form.permite_solicitudes,
       buffer_antes_min: Number(form.buffer_antes_min),
       buffer_despues_min: Number(form.buffer_despues_min),
+      encuesta_satisfaccion_formulario_id:
+        form.encuesta_habilitada && form.encuesta_satisfaccion_formulario_id
+          ? Number(form.encuesta_satisfaccion_formulario_id)
+          : null,
     }
 
     setCrearLoading(true)
@@ -257,6 +350,10 @@ export default function GestionServicios({ tenantSlug, token }) {
     setServicios((prev) => [data, ...prev])
     setModalAbierto(false)
     setFranjasNuevas([])
+    if (data?.tipo_agenda === 'recurrente') {
+      setExitoServicio(data)
+      window.setTimeout(() => setExitoServicio(null), 8000)
+    }
     if (franjasNuevas.length > 0) {
       let fallo = null
       for (const f of franjasNuevas) {
@@ -317,15 +414,39 @@ export default function GestionServicios({ tenantSlug, token }) {
     if (nuevoPrecio !== precioActual) cambios.precio = nuevoPrecio
     if (form.moneda !== editando.moneda) cambios.moneda = form.moneda
     if (form.pago_requerido !== editando.pago_requerido) cambios.pago_requerido = form.pago_requerido
+    if (form.cobro_por_sesion_habilitado !== (editando.cobro_por_sesion_habilitado ?? true)) {
+      cambios.cobro_por_sesion_habilitado = form.cobro_por_sesion_habilitado
+    }
+    const cobroPaqueteEnviar = form.tipo_agenda === 'recurrente' ? form.cobro_por_paquete_habilitado : false
+    if (cobroPaqueteEnviar !== (editando.cobro_por_paquete_habilitado ?? false)) {
+      cambios.cobro_por_paquete_habilitado = cobroPaqueteEnviar
+    }
+    const precioPaqueteEnviar =
+      form.tipo_agenda === 'recurrente' && cobroPaqueteEnviar && form.precio_paquete !== ''
+        ? Number(form.precio_paquete)
+        : null
+    const precioPaqueteActual = editando.precio_paquete === null ? null : Number(editando.precio_paquete)
+    if (precioPaqueteEnviar !== precioPaqueteActual) cambios.precio_paquete = precioPaqueteEnviar
     if (form.visible_web !== editando.visible_web) cambios.visible_web = form.visible_web
     if (form.requiere_confirmacion !== (editando.requiere_confirmacion ?? false)) {
       cambios.requiere_confirmacion = form.requiere_confirmacion
+    }
+    if (form.permite_solicitudes !== (editando.permite_solicitudes ?? false)) {
+      cambios.permite_solicitudes = form.permite_solicitudes
     }
     if (Number(form.buffer_antes_min) !== editando.buffer_antes_min) {
       cambios.buffer_antes_min = Number(form.buffer_antes_min)
     }
     if (Number(form.buffer_despues_min) !== editando.buffer_despues_min) {
       cambios.buffer_despues_min = Number(form.buffer_despues_min)
+    }
+    const encuestaIdActual = editando.encuesta_satisfaccion_formulario_id ?? null
+    const encuestaIdNuevo =
+      form.encuesta_habilitada && form.encuesta_satisfaccion_formulario_id
+        ? Number(form.encuesta_satisfaccion_formulario_id)
+        : null
+    if (encuestaIdNuevo !== encuestaIdActual) {
+      cambios.encuesta_satisfaccion_formulario_id = encuestaIdNuevo
     }
 
     if (Object.keys(cambios).length === 0) {
@@ -358,6 +479,10 @@ export default function GestionServicios({ tenantSlug, token }) {
     }
     setServicios((prev) => prev.map((x) => (x.id === data.id ? data : x)))
     setEditando(null)
+    if (data?.tipo_agenda === 'recurrente') {
+      setExitoServicio(data)
+      window.setTimeout(() => setExitoServicio(null), 8000)
+    }
   }
 
   const activar = async (s) => {
@@ -394,6 +519,50 @@ export default function GestionServicios({ tenantSlug, token }) {
       return
     }
     setServicios((prev) => prev.map((x) => (x.id === data.detalle.id ? { ...x, activo: false } : x)))
+  }
+
+  const cargarSesiones = useCallback(
+    async (servicio, offset = 0) => {
+      setSesionesLoading(true)
+      setSesionesError(null)
+      const { data, error: fetchErr } = await client.GET(
+        '/api/v2/{tenant_slug}/admin/servicios/{servicio_id}/sesiones',
+        {
+          params: {
+            path: { tenant_slug: tenantSlug, servicio_id: servicio.id },
+            query: { limit: 20, offset },
+          },
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      setSesionesLoading(false)
+      if (fetchErr) {
+        setSesionesError(errorMensaje(fetchErr))
+        return
+      }
+      setSesionesDe(servicio)
+      setSesionesItems(data?.items ?? [])
+      setSesionesTotal(data?.paginacion?.total ?? 0)
+      setSesionesOffset(offset)
+    },
+    [tenantSlug, token],
+  )
+
+  const abrirSesiones = (s) => {
+    setSesionesItems([])
+    setSesionesTotal(0)
+    setSesionesOffset(0)
+    setSesionesError(null)
+    setSesionesDe(s)
+    cargarSesiones(s, 0)
+  }
+
+  const cerrarSesiones = () => {
+    setSesionesDe(null)
+    setSesionesItems([])
+    setSesionesTotal(0)
+    setSesionesOffset(0)
+    setSesionesError(null)
   }
 
   function FilaServicio({ s }) {
@@ -443,6 +612,24 @@ export default function GestionServicios({ tenantSlug, token }) {
                   className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-50"
                 >
                   Horario
+                </button>
+              )}
+              {s.tipo_agenda !== 'individual' && (
+                <button
+                  type="button"
+                  onClick={() => abrirSesiones(s)}
+                  className="rounded-lg border border-purple-200 px-2.5 py-1 text-xs font-medium text-purple-700 transition hover:bg-purple-50"
+                >
+                  Ver sesiones
+                </button>
+              )}
+              {s.tipo_agenda === 'recurrente' && (
+                <button
+                  type="button"
+                  onClick={() => onIrACrearSerie?.(s)}
+                  className="rounded-lg border border-orange-200 px-2.5 py-1 text-xs font-medium text-orange-700 transition hover:bg-orange-50"
+                >
+                  Crear Serie
                 </button>
               )}
               <button
@@ -771,7 +958,98 @@ export default function GestionServicios({ tenantSlug, token }) {
                 />
                 Requiere confirmación manual
               </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.permite_solicitudes}
+                  onChange={(e) => setCampo('permite_solicitudes', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                />
+                Permite proponer fecha alternativa
+              </label>
             </div>
+
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-900">
+                <input
+                  type="checkbox"
+                  checked={form.encuesta_habilitada}
+                  onChange={(e) => setCampo('encuesta_habilitada', e.target.checked)}
+                  className="h-4 w-4 rounded border-blue-300 text-blue-600"
+                />
+                Enviar encuesta de satisfacción al terminar la sesión
+              </label>
+              {form.encuesta_habilitada && (
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <select
+                    value={form.encuesta_satisfaccion_formulario_id}
+                    onChange={(e) => setCampo('encuesta_satisfaccion_formulario_id', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-72"
+                  >
+                    <option value="">Selecciona una plantilla...</option>
+                    {encuestas.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={onIrAEncuestas}
+                    className="text-sm font-medium text-blue-700 transition hover:text-blue-900"
+                  >
+                    + Crear nueva plantilla
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {form.tipo_agenda === 'recurrente' && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-2 text-xs font-medium text-gray-500">Modalidades de cobro para series</p>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_sesion_habilitado}
+                      onChange={(e) => setCampo('cobro_por_sesion_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por sesión
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_paquete_habilitado}
+                      onChange={(e) => setCampo('cobro_por_paquete_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por paquete
+                  </label>
+                </div>
+                {form.cobro_por_paquete_habilitado && (
+                  <div className="mt-3">
+                    <label
+                      htmlFor="servicio-precio-paquete"
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Precio del paquete *
+                    </label>
+                    <input
+                      id="servicio-precio-paquete"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.precio_paquete}
+                      onChange={(e) => setCampo('precio_paquete', e.target.value)}
+                      placeholder="Ej. 15000"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Precio total por todas las sesiones de la serie</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {form.requiere_confirmacion && (
               <HorarioServicio
@@ -1022,7 +1300,98 @@ export default function GestionServicios({ tenantSlug, token }) {
                 />
                 Requiere confirmación manual
               </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.permite_solicitudes}
+                  onChange={(e) => setCampo('permite_solicitudes', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                />
+                Permite proponer fecha alternativa
+              </label>
             </div>
+
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-blue-900">
+                <input
+                  type="checkbox"
+                  checked={form.encuesta_habilitada}
+                  onChange={(e) => setCampo('encuesta_habilitada', e.target.checked)}
+                  className="h-4 w-4 rounded border-blue-300 text-blue-600"
+                />
+                Enviar encuesta de satisfacción al terminar la sesión
+              </label>
+              {form.encuesta_habilitada && (
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <select
+                    value={form.encuesta_satisfaccion_formulario_id}
+                    onChange={(e) => setCampo('encuesta_satisfaccion_formulario_id', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-72"
+                  >
+                    <option value="">Selecciona una plantilla...</option>
+                    {encuestas.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={onIrAEncuestas}
+                    className="text-sm font-medium text-blue-700 transition hover:text-blue-900"
+                  >
+                    + Crear nueva plantilla
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {form.tipo_agenda === 'recurrente' && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-2 text-xs font-medium text-gray-500">Modalidades de cobro para series</p>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_sesion_habilitado}
+                      onChange={(e) => setCampo('cobro_por_sesion_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por sesión
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.cobro_por_paquete_habilitado}
+                      onChange={(e) => setCampo('cobro_por_paquete_habilitado', e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                    />
+                    Ofrecer pago por paquete
+                  </label>
+                </div>
+                {form.cobro_por_paquete_habilitado && (
+                  <div className="mt-3">
+                    <label
+                      htmlFor="edit-servicio-precio-paquete"
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Precio del paquete *
+                    </label>
+                    <input
+                      id="edit-servicio-precio-paquete"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.precio_paquete}
+                      onChange={(e) => setCampo('precio_paquete', e.target.value)}
+                      placeholder="Ej. 15000"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Precio total por todas las sesiones de la serie</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {form.requiere_confirmacion && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
@@ -1109,6 +1478,24 @@ export default function GestionServicios({ tenantSlug, token }) {
         </Modal>
       )}
 
+      {exitoServicio && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3">
+          <p className="text-sm font-medium text-green-800">
+            Servicio guardado: {exitoServicio.nombre}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              onIrACrearSerie?.(exitoServicio)
+              setExitoServicio(null)
+            }}
+            className="mt-2 inline-flex items-center rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-orange-700"
+          >
+            Crear una serie para este servicio →
+          </button>
+        </div>
+      )}
+
       {horarioDe && (
         <HorarioServicio
           servicio={horarioDe}
@@ -1116,6 +1503,90 @@ export default function GestionServicios({ tenantSlug, token }) {
           token={token}
           onClose={() => setHorarioDe(null)}
         />
+      )}
+
+      {sesionesDe && (
+        <Modal
+          title={`Sesiones: ${sesionesDe.nombre}`}
+          onClose={cerrarSesiones}
+          maxWidth="max-w-3xl"
+        >
+          {sesionesLoading && (
+            <div className="animate-pulse space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-9 rounded bg-gray-100" />
+              ))}
+            </div>
+          )}
+
+          {sesionesError && (
+            <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {sesionesError}
+            </p>
+          )}
+
+          {!sesionesLoading && !sesionesError && (
+            <div className="max-h-[60vh] overflow-x-auto overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+                    <th className="px-3 py-2 font-medium">Fecha/Hora</th>
+                    <th className="px-3 py-2 font-medium">Asesor</th>
+                    <th className="px-3 py-2 font-medium">Estado</th>
+                    <th className="px-3 py-2 font-medium">Inscritos/Cupo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sesionesItems.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                        {formatFechaHora(s.fecha_hora_inicio, s.timezone)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">{s.asesor?.nombre ?? '—'}</td>
+                      <td className="px-3 py-2">
+                        <Badge value={s.estado} map={SESION_BADGE} labelMap={SESION_LABEL} />
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {sesionesDe.tipo_agenda === 'individual' ? '1:1' : `${s.inscritos ?? 0}/${s.cupo_maximo ?? 0}`}
+                      </td>
+                    </tr>
+                  ))}
+                  {sesionesItems.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500">
+                        No hay sesiones registradas para este servicio.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {sesionesTotal > 0 && (
+            <div className="mt-4 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                disabled={sesionesOffset === 0 || sesionesLoading}
+                onClick={() => cargarSesiones(sesionesDe, Math.max(0, sesionesOffset - 20))}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                &larr; Anterior
+              </button>
+              <span className="text-sm text-gray-500">
+                {sesionesOffset + 1}&ndash;{sesionesOffset + sesionesItems.length} de {sesionesTotal}
+              </span>
+              <button
+                type="button"
+                disabled={sesionesOffset + sesionesItems.length >= sesionesTotal || sesionesLoading}
+                onClick={() => cargarSesiones(sesionesDe, sesionesOffset + 20)}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Siguiente &rarr;
+              </button>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   )

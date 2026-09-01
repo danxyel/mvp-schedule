@@ -6,11 +6,11 @@ v2.2.1: webhook Stripe, check-in, completar sesión, excepciones específicas.
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import bcrypt
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Path, Request, status
-from sqlalchemy import select, func, or_
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Path, Request, UploadFile, status
+from sqlalchemy import select, func, or_, exists
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm.exc import StaleDataError
@@ -21,25 +21,36 @@ from app.dependencies import (
 )
 from app.models_v2_2 import (
     Tenant, Usuario, UsuarioTenant, Sesion, Reserva, Servicio, Sede, Beneficiario,
-    SolicitudReserva,
-    RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPagoUsado,
-    EstadoSolicitud, ESTADOS_SESION_ACTIVA, PlanTenant,
+    SolicitudReserva, SolicitudAlternativa, SerieReserva, InscripcionSerie, Bitacora,
+    RolUsuario, EstadoSesion, EstadoReserva, EstadoPagoReserva, MetodoPago, MetodoPagoUsado,
+    EstadoSolicitud, EstadoSerie, ModalidadCobro, EstadoInscripcion, ESTADOS_SESION_ACTIVA, PlanTenant,
     TipoAgenda, Modalidad, HorarioDisponibilidad, AsesorServicio, HorarioBloqueo,
-    TipoBloqueo, utcnow,
+    TipoBloqueo, utcnow, Formulario, CampoFormulario, TipoFormulario,
+    RespuestaFormulario, EncuestaEnvio,
 )
 from app.rate_limiter import limiter
+from app.cloudinary_client import uploader
 from app.schemas_v2_2 import (
     ReservaCreate, ReservaOut, ReservaPublicaOut, ReservaCreateResponse, ReagendarSesionIn,
     CancelarReservaIn, DisponibilidadDiaOut, SlotDisponible,
     SesionListOut, SesionDetailOut, SesionAdminOut, SesionesPaginadasOut,
-    PaginacionOut, CheckoutUrlOut, OperacionOut, AsesorPublicOut, SedeOut,
+    PaginacionOut, CheckoutUrlOut, MercadoPagoEstadoOut, MercadoPagoConectarIn,
+    GoogleMeetEstadoOut, GoogleMeetConectarIn, OperacionOut, AsesorPublicOut, SedeOut,
     ReservaAdminListOut, ReservasAdminPaginadasOut,
     PagoLocalIn, AsignarAsesorIn,
-    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudRechazarIn, CanalEnum,
-    TenantCreate, TenantAdminOut, TenantUpdate,
+    SolicitudCreate, SolicitudOut, SolicitudAdminOut, SolicitudConfirmarOut, SolicitudConfirmarSerieIn,
+    SolicitudRechazarIn, SolicitudAlternativaOut, SolicitudAceptarAlternativaOut, CanalEnum,
+    SerieReservaCreate, SerieReservaOut, InscripcionSerieCreate, InscripcionSerieOut,
+    ConfirmarInscripcionIn, InscripcionSerieClienteOut,
+    TenantCreate, TenantAdminOut, TenantUpdate, MetodoPagoDefaultIn,
+    PersonalizacionOut, PersonalizacionColorIn,
     ServicioAdminIn, ServicioAdminUpdate, ServicioAdminOut, ServicioPublicOut,
     UsuarioAdminOut, HorarioAsesorOut, AsesorServicioOut,
+    UsuarioGlobalOut, UsuariosGlobalPaginadosOut, UsuarioGlobalDetalleOut, MembresiaGlobalOut,
     BloqueoCreate, BloqueoOut,
+    TipoFormularioEnum, FormularioAdminIn, FormularioAdminUpdate, FormularioAdminOut,
+    FormularioListAdminOut, CampoFormularioBulkAdminIn, CampoFormularioAdminUpdate,
+    CampoFormularioAdminOut, EncuestaRespuestaClienteOut, EncuestaRespuestaCampoOut,
     exigir_aware,
 )
 import app.services_v2_2 as svc
@@ -151,6 +162,14 @@ _CODIGO_HTTP = {
     "identidad_requerida": status.HTTP_401_UNAUTHORIZED,
     "not_found": status.HTTP_404_NOT_FOUND,
     "estado_invalido": status.HTTP_409_CONFLICT,
+    "pago_pendiente": status.HTTP_409_CONFLICT,
+    "cliente_ya_inscrito": status.HTTP_409_CONFLICT,
+    "modalidad_no_permitida": status.HTTP_422_UNPROCESSABLE_ENTITY,
+    "servicio_sin_precio_paquete": status.HTTP_409_CONFLICT,
+    "inscripcion_no_encontrada": status.HTTP_404_NOT_FOUND,
+    "inscripcion_no_pendiente": status.HTTP_409_CONFLICT,
+    "pago_en_linea_no_disponible": status.HTTP_409_CONFLICT,
+    "mp_token_invalido": status.HTTP_400_BAD_REQUEST,
 }
 
 
@@ -193,6 +212,11 @@ def _sesion_list_out(s: Sesion) -> SesionListOut:
 
 def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
     servicio = db.get(Servicio, s.servicio_id)
+    alternativas = db.execute(
+        select(SolicitudAlternativa)
+        .where(SolicitudAlternativa.solicitud_id == s.id)
+        .order_by(SolicitudAlternativa.fecha_hora)
+    ).scalars().all()
     return SolicitudOut(
         id=s.id,
         servicio_id=s.servicio_id,
@@ -204,6 +228,8 @@ def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
         asesor_id=s.asesor_id,
         motivo_rechazo=s.motivo_rechazo,
         reserva_id=s.reserva_id,
+        alternativas=[SolicitudAlternativaOut.model_validate(a) for a in alternativas],
+        alternativa_aceptada_id=s.alternativa_aceptada_id,
         creado_en=s.creado_en,
     )
 
@@ -211,6 +237,11 @@ def _solicitud_out(db: Session, s: SolicitudReserva) -> SolicitudOut:
 def _solicitud_admin_out(db: Session, s: SolicitudReserva) -> SolicitudAdminOut:
     servicio = db.get(Servicio, s.servicio_id)
     cliente = db.get(Usuario, s.cliente_usuario_id)
+    alternativas = db.execute(
+        select(SolicitudAlternativa)
+        .where(SolicitudAlternativa.solicitud_id == s.id)
+        .order_by(SolicitudAlternativa.fecha_hora)
+    ).scalars().all()
     return SolicitudAdminOut(
         id=s.id,
         servicio_id=s.servicio_id,
@@ -222,6 +253,9 @@ def _solicitud_admin_out(db: Session, s: SolicitudReserva) -> SolicitudAdminOut:
         asesor_id=s.asesor_id,
         motivo_rechazo=s.motivo_rechazo,
         reserva_id=s.reserva_id,
+        serie_id=s.serie_id,
+        alternativas=[SolicitudAlternativaOut.model_validate(a) for a in alternativas],
+        alternativa_aceptada_id=s.alternativa_aceptada_id,
         creado_en=s.creado_en,
         cliente_usuario_id=s.cliente_usuario_id,
         nombre_cliente=cliente.nombre if cliente else None,
@@ -239,19 +273,107 @@ def listar_servicios_publicos(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ):
-    servicios = db.execute(
-        select(Servicio).where(
+    # Mismo criterio que sesiones_abiertas_servicio() (línea ~309): cupo
+    # real de la sesión, no tipo_agenda — grupal Y recurrente pueden tener
+    # cupo_maximo > 1 (ver PROMPT_P en HANDOFF, no son categorías
+    # excluyentes en cuanto a capacidad). Individual nunca pasa de 1 por
+    # el propio validador del schema, así que ese caso queda excluido
+    # solo, sin necesidad de mirar tipo_agenda.
+    # Igual que sesiones_abiertas_servicio() (línea ~316): una sesión que
+    # ya es parte de una serie no cuenta — tiene su propio mecanismo
+    # (Mis Series), no se ofrece como "únete" suelto.
+    existe_sesion_abierta = (
+        exists()
+        .where(
+            Sesion.servicio_id == Servicio.id,
+            Sesion.tenant_id == tenant.id,
+            Sesion.cupo_maximo > 1,
+            Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
+            Sesion.inscritos < Sesion.cupo_maximo,
+            Sesion.fecha_hora_inicio > utcnow(),
+            ~exists().where(
+                Reserva.sesion_id == Sesion.id,
+                Reserva.serie_id.is_not(None),
+            ),
+        )
+        .correlate(Servicio)
+    )
+
+    filas = db.execute(
+        select(Servicio, existe_sesion_abierta.label("tiene_sesiones_abiertas"))
+        .where(
             Servicio.tenant_id == tenant.id,
             Servicio.activo.is_(True),
             Servicio.visible_web.is_(True),
         ).order_by(Servicio.nombre.asc()).limit(20)
-    ).scalars().all()
-    return servicios
+    ).all()
+
+    return [
+        ServicioPublicOut.model_validate(s, from_attributes=True).model_copy(
+            update={"tiene_sesiones_abiertas": bool(tiene)}
+        )
+        for s, tiene in filas
+    ]
 
 
 # ============================================================
 # DISPONIBILIDAD (público)
 # ============================================================
+@router.get("/servicios/{servicio_id}/sesiones-abiertas", response_model=List[SesionListOut])
+def sesiones_abiertas_servicio(
+    servicio_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    servicio = db.execute(
+        select(Servicio).where(
+            Servicio.tenant_id == tenant.id,
+            Servicio.id == servicio_id,
+            Servicio.activo.is_(True),
+            Servicio.visible_web.is_(True),
+        )
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+
+    # Una sesión que ya es parte de una serie (Reserva.serie_id no nulo
+    # para alguna reserva de esa sesión) NO cuenta como "sesión abierta"
+    # aquí — las series son su propia "asignatura" con su propio mecanismo
+    # (Mis Series / inscripción), no se mezclan con sesiones grupales
+    # sueltas nacidas de una solicitud aceptada. Confirmado con Daniel:
+    # "una serie es una materia y cada sesión es una clase" — no tiene
+    # sentido ofrecer "únete" a una clase individual de una materia ajena.
+    sin_serie = ~exists().where(
+        Reserva.sesion_id == Sesion.id,
+        Reserva.serie_id.is_not(None),
+    )
+
+    sesiones = db.execute(
+        select(Sesion)
+        .options(
+            joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+            joinedload(Sesion.sede),
+        )
+        .where(
+            Sesion.tenant_id == tenant.id,
+            Sesion.servicio_id == servicio_id,
+            # No filtramos por tipo_agenda — grupal Y recurrente pueden
+            # tener cupo_maximo > 1 (ver PROMPT_P en HANDOFF). Lo que
+            # importa es si la sesión en sí tiene lugar para más de una
+            # persona, no la etiqueta del servicio.
+            Sesion.cupo_maximo > 1,
+            Sesion.estado.in_([EstadoSesion.ABIERTA, EstadoSesion.CONFIRMADA]),
+            Sesion.inscritos < Sesion.cupo_maximo,
+            Sesion.fecha_hora_inicio > utcnow(),
+            sin_serie,
+        )
+        .order_by(Sesion.fecha_hora_inicio.asc())
+        .limit(50)
+    ).scalars().unique().all()
+
+    return [_sesion_list_out(s) for s in sesiones]
+
+
 @router.get("/servicios/{servicio_id}/disponibilidad", response_model=DisponibilidadDiaOut)
 def disponibilidad_por_dia(
     servicio_id: int = Path(..., gt=0),
@@ -455,21 +577,31 @@ def crear_nueva_reserva(
     checkout = None
     if tareas["checkout"]:
         try:
-            checkout = svc.iniciar_checkout(tenant, reserva, resultado["usuario"])
+            checkout = svc.iniciar_checkout(tenant, reserva, resultado["usuario"], request=request)
         except Exception:
             log.exception("Fallo al iniciar checkout para folio %s", reserva.folio)
 
     if tareas["sincronizar_calendario"]:
         try:
-            svc.sincronizar_calendario(tenant, sesion)
+            meet_url = svc.sincronizar_calendario(tenant, sesion)
+            if meet_url:
+                sesion.meet_url = meet_url
         except Exception:
             log.exception("Fallo al sincronizar calendario para sesión %s", sesion.id)
 
     if tareas["enviar_confirmacion"]:
         try:
-            svc.enviar_email_confirmacion(tenant, reserva, resultado["usuario"], sesion)
+            svc.enviar_email_confirmacion(
+                tenant, reserva, resultado["usuario"], sesion,
+                acceso_token_plano=resultado.get("acceso_token_plano"),
+                checkout_url=checkout.url if checkout else None,
+            )
         except Exception:
             log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
+
+    activacion_url = None
+    if resultado.get("acceso_token_plano"):
+        activacion_url = svc._link_activacion(tenant, resultado["acceso_token_plano"])
 
     return ReservaCreateResponse(
         reserva=ReservaOut(
@@ -498,6 +630,7 @@ def crear_nueva_reserva(
         mensaje=resultado["mensaje"],
         sesion_asignada_id=sesion.id,
         sesion_creada=resultado["sesion_creada"],
+        activacion_url=activacion_url,
     )
 
 
@@ -528,7 +661,7 @@ async def webhook_stripe(
         monto = Decimal(str(session.get("amount_total", 0))) / 100
         if folio:
             try:
-                svc.confirmar_pago_por_folio(db, folio, monto=monto, metodo="stripe")
+                reserva = svc.confirmar_pago_por_folio(db, folio, monto=monto, metodo="stripe")
                 db.commit()
             except ReservaError as e:
                 db.rollback()
@@ -538,6 +671,21 @@ async def webhook_stripe(
                 db.rollback()
                 log.exception("Error DB en webhook Stripe folio=%s", folio)
                 raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error DB")
+
+            try:
+                sesion = reserva.sesion
+                if (
+                    sesion
+                    and reserva.estado == EstadoReserva.CONFIRMADA
+                    and reserva.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+                    and reserva.servicio.modalidad.value in ("virtual", "hibrida")
+                ):
+                    meet_url = svc.sincronizar_calendario(reserva.tenant, sesion)
+                    if meet_url:
+                        sesion.meet_url = meet_url
+                    svc.enviar_email_acceso_meet(reserva.tenant, reserva, reserva.creado_por, sesion)
+            except Exception:
+                log.exception("Fallo post-proceso Meet tras pago Stripe folio=%s", folio)
 
     return {"ok": True}
 
@@ -625,6 +773,44 @@ def consultar_reserva_publica(
         moneda=r.moneda,
         creado_en=r.creado_en,
     )
+
+
+@router.post("/reclamar-cuenta", response_model=OperacionOut)
+@limiter.limit("5/minute")
+def reclamar_cuenta(
+    request: Request,
+    email: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    """Autoservicio: manda el correo de activación si el email pertenece a
+    un usuario vinculado activo a ESTE tenant y sin contraseña todavía.
+
+    Responde SIEMPRE el mismo mensaje genérico exista o no el email, esté o
+    no vinculado a este tenant, tenga o no ya contraseña — anti-enumeración.
+    Rate limited a 5/minuto por IP (mismo límite que /auth/login).
+    """
+    mensaje = "Si el correo pertenece a una cuenta pendiente de activar en este tenant, te enviamos un enlace."
+
+    email_norm = email.strip().lower()
+    usuario = db.execute(select(Usuario).where(Usuario.email == email_norm)).scalar_one_or_none()
+    if usuario is not None and usuario.password_hash is None:
+        vinculado = db.execute(
+            select(UsuarioTenant).where(
+                UsuarioTenant.tenant_id == tenant.id,
+                UsuarioTenant.usuario_id == usuario.id,
+                UsuarioTenant.activo.is_(True),
+            )
+        ).scalar_one_or_none()
+        if vinculado is not None:
+            acceso_token_plano = svc.generar_token_acceso(usuario)
+            db.commit()
+            try:
+                svc.enviar_email_activacion(tenant, usuario, acceso_token_plano)
+            except Exception:
+                log.exception("Fallo al enviar correo de reclamo de cuenta (usuario %s)", usuario.id)
+
+    return OperacionOut(ok=True, mensaje=mensaje)
 
 
 @router.get("/mis-reservas", response_model=List[ReservaOut])
@@ -729,6 +915,136 @@ def listar_mis_solicitudes(
     return [_solicitud_out(db, s) for s in filas]
 
 
+@router.post(
+    "/mis-solicitudes/{solicitud_id}/alternativas/{alternativa_id}/aceptar",
+    response_model=SolicitudAceptarAlternativaOut,
+)
+def aceptar_alternativa_solicitud_endpoint(
+    solicitud_id: int = Path(..., gt=0),
+    alternativa_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    solicitud = db.execute(
+        select(SolicitudReserva)
+        .where(
+            SolicitudReserva.tenant_id == tenant.id,
+            SolicitudReserva.id == solicitud_id,
+            SolicitudReserva.cliente_usuario_id == usuario.id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if solicitud is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "solicitud_no_encontrada", "mensaje": "Solicitud no encontrada"},
+        )
+
+    alternativa = db.execute(
+        select(SolicitudAlternativa)
+        .where(
+            SolicitudAlternativa.solicitud_id == solicitud_id,
+            SolicitudAlternativa.id == alternativa_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if alternativa is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "alternativa_no_encontrada", "mensaje": "Alternativa no encontrada"},
+        )
+
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        resultado = svc.aceptar_alternativa_solicitud(
+            db, tenant, solicitud, alternativa, usuario, ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La alternativa cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error de base de datos al aceptar alternativa %s", alternativa_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    solicitud = resultado["solicitud"]
+    reserva = resultado["reserva"]
+    sesion = resultado["sesion"]
+    db.refresh(solicitud)
+    out = _solicitud_out(db, solicitud)
+    return SolicitudAceptarAlternativaOut(
+        **out.model_dump(),
+        folio_reserva=reserva.folio,
+        sesion_id=sesion.id,
+    )
+
+
+@router.get("/mis-series", response_model=List[InscripcionSerieClienteOut])
+def listar_mis_series(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    filas = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.cliente_usuario_id == usuario.id,
+        ).order_by(InscripcionSerie.creado_en.desc())
+    ).scalars().all()
+    return [_inscripcion_cliente_out(db, i) for i in filas]
+
+
+@router.post("/mis-series/{inscripcion_id}/confirmar", response_model=InscripcionSerieClienteOut)
+def confirmar_mi_inscripcion_serie(
+    payload: ConfirmarInscripcionIn,
+    inscripcion_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """El cliente elige modalidad_cobro/metodo_pago para una invitación
+    suya pendiente. Genera las N reservas y la pasa a CONFIRMADA."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        resultado = svc.confirmar_inscripcion_serie(
+            db, tenant, inscripcion_id, usuario, payload, ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La inscripción cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al confirmar inscripción %s", inscripcion_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    inscripcion = resultado["inscripcion"]
+    db.refresh(inscripcion)
+    return _inscripcion_cliente_out(db, inscripcion)
+
+
 # ============================================================
 # ADMIN — LISTADO DE RESERVAS
 # ============================================================
@@ -736,6 +1052,7 @@ def listar_mis_solicitudes(
 def listar_reservas_admin(
     fecha: Optional[date] = Query(None, description="Filtra por fecha de la sesión. Default: hoy (omitir junto con estado para listar todas las fechas)"),
     estado: Optional[str] = Query(None, description="Filtra por estado de reserva (ej. confirmada). Si se omite fecha, aplica a todas las fechas"),
+    q: Optional[str] = Query(None, min_length=1, max_length=50, description="Busca por folio, código de confirmación, nombre o email del cliente"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -752,34 +1069,49 @@ def listar_reservas_admin(
                 f"Estado de reserva inválido: {estado}",
             )
 
-    if fecha is None and estado_enum is None:
+    busqueda = q and q.strip()
+    if fecha is None and estado_enum is None and not busqueda:
         fecha = date.today()
 
     cond = [Reserva.tenant_id == tenant.id]
-    if fecha is not None:
-        inicio = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
-        fin = inicio + timedelta(days=1)
-        cond.extend([
-            Sesion.fecha_hora_inicio >= inicio,
-            Sesion.fecha_hora_inicio < fin,
-        ])
+    if busqueda:
+        patron_codigo = f"%{q.strip().upper()}%"
+        patron_texto = f"%{q.strip().lower()}%"
+        cond.append(
+            or_(
+                func.upper(Reserva.folio).like(patron_codigo),
+                func.upper(Reserva.codigo_confirmacion).like(patron_codigo),
+                func.lower(Usuario.nombre).like(patron_texto),
+                func.lower(Usuario.email).like(patron_texto),
+            )
+        )
+    else:
+        if fecha is not None:
+            inicio = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
+            fin = inicio + timedelta(days=1)
+            cond.extend([
+                Sesion.fecha_hora_inicio >= inicio,
+                Sesion.fecha_hora_inicio < fin,
+            ])
     if estado_enum is not None:
         cond.append(Reserva.estado == estado_enum)
 
     total = db.execute(
         select(func.count(Reserva.id))
         .join(Sesion, Sesion.id == Reserva.sesion_id)
+        .join(Usuario, Usuario.id == Reserva.creado_por_usuario_id)
         .where(*cond)
     ).scalar_one()
 
     reservas = db.execute(
         select(Reserva)
         .join(Sesion, Sesion.id == Reserva.sesion_id)
-          .options(
-              joinedload(Reserva.sesion).joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
-              joinedload(Reserva.servicio),
-              joinedload(Reserva.creado_por),
-          )
+        .join(Usuario, Usuario.id == Reserva.creado_por_usuario_id)
+        .options(
+            joinedload(Reserva.sesion).joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+            joinedload(Reserva.servicio),
+            joinedload(Reserva.creado_por),
+        )
         .where(*cond)
         .order_by(Sesion.fecha_hora_inicio.desc())
         .limit(limit).offset(offset)
@@ -875,6 +1207,25 @@ def registrar_pago_local(
     )
 
     db.commit()
+    db.refresh(r)
+    sesion = r.sesion
+    if (
+        sesion
+        and r.estado == EstadoReserva.CONFIRMADA
+        and r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+        and r.servicio.modalidad.value in ("virtual", "hibrida")
+    ):
+        try:
+            meet_url = svc.sincronizar_calendario(tenant, sesion)
+            if meet_url:
+                sesion.meet_url = meet_url
+        except Exception:
+            log.exception("Fallo al sincronizar calendario tras pago local %s", folio)
+        try:
+            svc.enviar_email_acceso_meet(tenant, r, r.creado_por, sesion)
+        except Exception:
+            log.exception("Fallo al enviar acceso Meet tras pago local %s", folio)
+
     return OperacionOut(
         ok=True,
         mensaje="Pago registrado",
@@ -889,6 +1240,7 @@ def registrar_pago_local(
 def asignar_asesor_reserva(
     payload: AsignarAsesorIn,
     reserva_id: int = Path(..., gt=0),
+    request: Request = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     staff: UsuarioTenant = Depends(requiere_staff),
@@ -947,7 +1299,21 @@ def asignar_asesor_reserva(
         raise _http_de(e)
 
     sesion.asesor_id = payload.asesor_id
-    reserva.estado = EstadoReserva.CONFIRMADA
+
+    # Antes esto era CONFIRMADA sin importar el pago — una reserva pendiente
+    # de un servicio con pago online quedaba "confirmada" debiendo dinero,
+    # sin ningún checkout generado ni aviso en el correo. Mismo criterio que
+    # ya usa crear_reserva() para decidir EN_ESPERA vs CONFIRMADA al crear.
+    metodo = servicio.metodo_pago.value if servicio.metodo_pago else tenant.metodo_pago_default.value
+    requiere_pago_online = (
+        reserva.estado_pago == EstadoPagoReserva.PENDIENTE
+        and metodo == MetodoPago.ONLINE.value
+    )
+    if requiere_pago_online:
+        reserva.estado = EstadoReserva.EN_ESPERA
+        reserva.hold_expira_en = utcnow() + timedelta(minutes=tenant.hold_minutos)
+    else:
+        reserva.estado = EstadoReserva.CONFIRMADA
 
     svc.registrar_bitacora(
         db, tenant.id, "reserva", reserva.id, "asignar_asesor",
@@ -956,8 +1322,18 @@ def asignar_asesor_reserva(
             "folio": reserva.folio,
             "sesion_id": sesion.id,
             "asesor_id": payload.asesor_id,
+            "requiere_pago_online": requiere_pago_online,
         },
     )
+
+    # El email de confirmación recién se manda aquí (no al crear la reserva
+    # pendiente), así que el token de activación se genera fresco en este
+    # momento en vez de reusar el que crear_reserva() pudo haber dejado sin
+    # usar — evita que expire por el tiempo que la reserva estuvo pendiente.
+    cliente = db.get(Usuario, reserva.creado_por_usuario_id)
+    acceso_token_plano = None
+    if cliente is not None and cliente.password_hash is None:
+        acceso_token_plano = svc.generar_token_acceso(cliente)
 
     try:
         db.commit()
@@ -972,15 +1348,28 @@ def asignar_asesor_reserva(
     db.refresh(reserva)
 
     # Efectos externos DESPUÉS del commit: no rompen la respuesta si fallan.
-    try:
-        svc.enviar_email_confirmacion(tenant, reserva, reserva.creado_por, sesion)
-    except Exception:
-        log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
+    checkout_url = None
+    if requiere_pago_online and cliente is not None:
+        try:
+            checkout = svc.iniciar_checkout(tenant, reserva, cliente, request=request)
+            checkout_url = checkout.url if checkout else None
+        except Exception:
+            log.exception("Fallo al iniciar checkout para folio %s", reserva.folio)
 
     try:
-        svc.sincronizar_calendario(tenant, sesion)
+        meet_url = svc.sincronizar_calendario(tenant, sesion)
+        if meet_url:
+            sesion.meet_url = meet_url
     except Exception:
         log.exception("Fallo al sincronizar calendario para sesión %s", sesion.id)
+
+    try:
+        svc.enviar_email_confirmacion(
+            tenant, reserva, reserva.creado_por, sesion,
+            acceso_token_plano=acceso_token_plano, checkout_url=checkout_url,
+        )
+    except Exception:
+        log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
 
     return OperacionOut(
         ok=True,
@@ -1007,6 +1396,7 @@ def listar_solicitudes_admin(
         None, description="Filtrar por estado. Default: todas",
     ),
     servicio_id: Optional[int] = Query(None, gt=0),
+    q: Optional[str] = Query(None, min_length=1, max_length=50, description="Busca por folio, código de confirmación, nombre o email del cliente"),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
     _: UsuarioTenant = Depends(requiere_staff),
@@ -1017,8 +1407,27 @@ def listar_solicitudes_admin(
     if servicio_id is not None:
         cond.append(SolicitudReserva.servicio_id == servicio_id)
 
+    if q and q.strip():
+        patron_codigo = f"%{q.strip().upper()}%"
+        patron_texto = f"%{q.strip().lower()}%"
+        cond.append(
+            or_(
+                SolicitudReserva.reserva_id.in_(
+                    select(Reserva.id).where(
+                        or_(
+                            func.upper(Reserva.folio).like(patron_codigo),
+                            func.upper(Reserva.codigo_confirmacion).like(patron_codigo),
+                        )
+                    )
+                ),
+                func.lower(Usuario.nombre).like(patron_texto),
+                func.lower(Usuario.email).like(patron_texto),
+            )
+        )
+
     filas = db.execute(
         select(SolicitudReserva)
+        .join(Usuario, Usuario.id == SolicitudReserva.cliente_usuario_id)
         .where(*cond)
         .order_by(SolicitudReserva.creado_en.asc())
     ).scalars().all()
@@ -1092,6 +1501,7 @@ def confirmar_solicitud_admin(
     try:
         resultado = svc.crear_reserva(
             db, tenant, payload, usuario_actual=cliente, ip=ip, user_agent=ua,
+            forzar_pendiente=True,
         )
     except ReservaError as e:
         db.rollback()
@@ -1144,6 +1554,57 @@ def confirmar_solicitud_admin(
     )
 
 
+@router.post("/admin/solicitudes/{solicitud_id}/confirmar-serie", response_model=SerieReservaOut, status_code=status.HTTP_201_CREATED)
+def confirmar_solicitud_como_serie_admin(
+    payload: SolicitudConfirmarSerieIn,
+    solicitud_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Convierte una solicitud pendiente en una serie de reservas recurrentes."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        resultado = svc.confirmar_solicitud_como_serie(
+            db, tenant, solicitud_id, payload, staff, ip=ip, user_agent=ua
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La solicitud cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al confirmar solicitud %s como serie", solicitud_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+    except Exception:
+        db.rollback()
+        raise
+
+    serie = resultado["serie"]
+    db.refresh(serie)
+
+    try:
+        servicio_nombre = serie.servicio.nombre if serie.servicio else "tu servicio"
+        svc.enviar_email_invitacion_serie(
+            tenant, resultado["cliente"], servicio_nombre,
+            acceso_token_plano=resultado["acceso_token_plano"],
+        )
+    except Exception:
+        log.exception("Fallo al enviar correo de invitación a serie para usuario %s", resultado["cliente"].id)
+
+    return _serie_admin_out(db, serie)
+
+
 @router.post("/admin/solicitudes/{solicitud_id}/rechazar", response_model=SolicitudAdminOut)
 def rechazar_solicitud_admin(
     payload: SolicitudRechazarIn,
@@ -1178,11 +1639,23 @@ def rechazar_solicitud_admin(
     solicitud.resuelto_por_id = staff.usuario_id
     solicitud.resuelto_en = utcnow()
 
+    alternativas_creadas = 0
+    if payload.alternativas:
+        for fecha_hora in payload.alternativas:
+            alt = SolicitudAlternativa(
+                tenant_id=tenant.id,
+                solicitud_id=solicitud.id,
+                fecha_hora=svc._a_utc(fecha_hora),
+            )
+            db.add(alt)
+            alternativas_creadas += 1
+
     svc.registrar_bitacora(
         db, tenant.id, "solicitud_reserva", solicitud.id, "solicitud_reserva_rechazada",
         usuario_id=staff.usuario_id,
         detalles={
             "motivo_rechazo": payload.motivo,
+            "num_alternativas": alternativas_creadas,
         },
     )
 
@@ -1195,6 +1668,455 @@ def rechazar_solicitud_admin(
 
     db.refresh(solicitud)
     return _solicitud_admin_out(db, solicitud)
+
+
+# ============================================================
+# ADMIN — SERIES DE RESERVAS (reservas recurrentes)
+# ============================================================
+@router.post("/admin/series", response_model=SerieReservaOut, status_code=status.HTTP_201_CREATED)
+def crear_serie_admin(
+    payload: SerieReservaCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Crea el patrón de horario de una serie recurrente."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        serie = svc.crear_serie(
+            db, tenant, payload,
+            registrado_por=staff.usuario,
+            ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al crear serie de reservas")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(serie)
+    return _serie_admin_out(db, serie)
+
+
+@router.post("/admin/series/{serie_id}/inscripciones", response_model=InscripcionSerieOut, status_code=status.HTTP_201_CREATED)
+def inscribir_cliente_en_serie_admin(
+    payload: InscripcionSerieCreate,
+    serie_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Inscribe un cliente a una serie recurrente existente."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        resultado = svc.inscribir_cliente_en_serie(
+            db, tenant, serie_id, payload,
+            registrado_por=staff.usuario,
+            ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except StaleDataError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "conflicto_concurrencia",
+             "mensaje": "La serie cambió mientras se procesaba. Intente de nuevo."},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al inscribir cliente en serie %s", serie_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    inscripcion = resultado["inscripcion"]
+    db.refresh(inscripcion)
+
+    try:
+        servicio_nombre = inscripcion.serie.servicio.nombre if inscripcion.serie and inscripcion.serie.servicio else "tu servicio"
+        svc.enviar_email_invitacion_serie(
+            tenant, resultado["cliente"], servicio_nombre,
+            acceso_token_plano=resultado["acceso_token_plano"],
+        )
+    except Exception:
+        log.exception("Fallo al enviar correo de invitación a serie para usuario %s", resultado["cliente"].id)
+
+    return _inscripcion_admin_out(db, inscripcion)
+
+
+@router.get("/admin/series", response_model=List[SerieReservaOut])
+def listar_series_admin(
+    estado: Optional[EstadoSerie] = Query(None, description="Filtrar por estado"),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    """Lista todas las series de reservas del tenant."""
+    cond = [SerieReserva.tenant_id == tenant.id]
+    if estado is not None:
+        cond.append(SerieReserva.estado == estado)
+
+    filas = db.execute(
+        select(SerieReserva)
+        .where(*cond)
+        .order_by(SerieReserva.creado_en.desc())
+    ).scalars().all()
+
+    return [_serie_admin_out(db, s, con_inscripciones=False) for s in filas]
+
+
+@router.get("/admin/series/{serie_id}", response_model=SerieReservaOut)
+def detalle_serie_admin(
+    serie_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    """Detalle de una serie de reservas, incluyendo sus inscripciones."""
+    serie = db.execute(
+        select(SerieReserva).where(
+            SerieReserva.tenant_id == tenant.id,
+            SerieReserva.id == serie_id,
+        )
+    ).scalar_one_or_none()
+
+    if serie is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "serie_no_encontrada", "mensaje": "Serie no encontrada"},
+        )
+
+    return _serie_admin_out(db, serie, con_inscripciones=True)
+
+
+@router.post("/admin/series/{serie_id}/inscripciones/{inscripcion_id}/pago-local", response_model=OperacionOut)
+def registrar_pago_inscripcion_local(
+    payload: PagoLocalIn,
+    serie_id: int = Path(..., gt=0),
+    inscripcion_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Registra el pago de un paquete para un cliente específico de una serie."""
+    inscripcion = db.execute(
+        select(InscripcionSerie)
+        .where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.serie_id == serie_id,
+            InscripcionSerie.id == inscripcion_id,
+        )
+    ).scalar_one_or_none()
+
+    if inscripcion is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "inscripcion_no_encontrada", "mensaje": "Inscripción no encontrada"},
+        )
+
+    serie = db.execute(
+        select(SerieReserva).where(
+            SerieReserva.tenant_id == tenant.id,
+            SerieReserva.id == serie_id,
+        )
+    ).scalar_one_or_none()
+    if serie is None or serie.estado == EstadoSerie.CANCELADA:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "serie_cancelada", "mensaje": "La serie está cancelada"},
+        )
+
+    servicio = db.get(Servicio, serie.servicio_id)
+
+    reservas = db.execute(
+        select(Reserva).where(
+            Reserva.tenant_id == tenant.id,
+            Reserva.inscripcion_id == inscripcion_id,
+            Reserva.estado != EstadoReserva.CANCELADA,
+        )
+    ).scalars().all()
+
+    if not reservas:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"codigo": "sin_reservas_activas", "mensaje": "No hay reservas activas para esta inscripción"},
+        )
+
+    pendientes = [r for r in reservas if r.estado_pago == EstadoPagoReserva.PENDIENTE]
+    if not pendientes:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"codigo": "ya_pagado", "mensaje": "Todas las reservas ya tienen el pago registrado"},
+        )
+
+    monto_a_distribuir = payload.monto if payload.monto is not None else (servicio.precio_paquete if servicio else None)
+
+    for reserva in pendientes:
+        reserva.estado_pago = EstadoPagoReserva.COMPLETADO
+        reserva.pagado_en = utcnow()
+        reserva.metodo_pago_usado = MetodoPagoUsado(payload.metodo)
+
+        if monto_a_distribuir is not None and len(pendientes) > 0:
+            reserva.precio_final = monto_a_distribuir / len(pendientes)
+
+        if reserva.estado == EstadoReserva.EN_ESPERA:
+            reserva.estado = EstadoReserva.CONFIRMADA
+
+        svc.actualizar_estado_sesion(db, reserva.sesion_id, tenant.id)
+
+    svc.registrar_bitacora(
+        db, tenant.id, "inscripcion_serie", inscripcion_id, "pago_inscripcion",
+        usuario_id=staff.usuario_id,
+        detalles={
+            "serie_id": serie_id,
+            "inscripcion_id": inscripcion_id,
+            "cliente_usuario_id": inscripcion.cliente_usuario_id,
+            "num_reservas": len(pendientes),
+            "metodo": payload.metodo,
+            "monto_total": str(payload.monto) if payload.monto else None,
+            "referencia": payload.referencia,
+        },
+    )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al registrar pago de inscripción %s", inscripcion_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    for reserva in pendientes:
+        db.refresh(reserva)
+        sesion = reserva.sesion
+        if (
+            sesion
+            and reserva.estado == EstadoReserva.CONFIRMADA
+            and reserva.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO)
+            and reserva.servicio.modalidad.value in ("virtual", "hibrida")
+        ):
+            try:
+                meet_url = svc.sincronizar_calendario(tenant, sesion)
+                if meet_url:
+                    sesion.meet_url = meet_url
+            except Exception:
+                log.exception("Fallo al sincronizar calendario tras pago inscripción %s", inscripcion_id)
+            try:
+                svc.enviar_email_acceso_meet(tenant, reserva, reserva.creado_por, sesion)
+            except Exception:
+                log.exception("Fallo al enviar acceso Meet tras pago inscripción %s", inscripcion_id)
+
+    return OperacionOut(
+        ok=True,
+        mensaje=f"Pago registrado para {len(pendientes)} reservas de la inscripción",
+        detalle={"serie_id": serie_id, "inscripcion_id": inscripcion_id, "num_reservas": len(pendientes)},
+    )
+
+
+@router.post("/admin/series/{serie_id}/inscripciones/{inscripcion_id}/cancelar", response_model=InscripcionSerieOut)
+def cancelar_invitacion_serie_admin(
+    serie_id: int = Path(..., gt=0),
+    inscripcion_id: int = Path(..., gt=0),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_staff),
+):
+    """Retira una invitación a serie que sigue pendiente (INVITADA)."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    try:
+        inscripcion = svc.cancelar_invitacion_serie(
+            db, tenant, serie_id, inscripcion_id, staff, ip=ip, user_agent=ua,
+        )
+        db.commit()
+    except ReservaError as e:
+        db.rollback()
+        raise _http_de(e)
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al cancelar invitación %s", inscripcion_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    db.refresh(inscripcion)
+    return _inscripcion_admin_out(db, inscripcion)
+
+
+def _estado_pago_inscripcion(reservas: List[Reserva]) -> str:
+    if not reservas:
+        return "pendiente"
+    if all(r.estado_pago == EstadoPagoReserva.EXENTO for r in reservas):
+        return "exento"
+    if all(r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO) for r in reservas):
+        return "completo"
+    if any(r.estado_pago in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO) for r in reservas):
+        return "parcial"
+    return "pendiente"
+
+
+def _inscripcion_cliente_out(db: Session, inscripcion: InscripcionSerie) -> InscripcionSerieClienteOut:
+    """Vista de una inscripción para el cliente dueño — trae lo que necesita
+    para decidir cómo confirmar (servicio, patrón, precios por modalidad)."""
+    serie = inscripcion.serie
+    servicio = serie.servicio if serie else None
+
+    reservas = db.execute(
+        select(Reserva).where(
+            Reserva.tenant_id == inscripcion.tenant_id,
+            Reserva.inscripcion_id == inscripcion.id,
+        )
+    ).scalars().all()
+
+    num_creadas = len(reservas)
+
+    return InscripcionSerieClienteOut(
+        id=inscripcion.id,
+        serie_id=inscripcion.serie_id,
+        estado=inscripcion.estado.value,
+        modalidad_cobro=inscripcion.modalidad_cobro.value if inscripcion.modalidad_cobro else None,
+        servicio_id=serie.servicio_id if serie else 0,
+        servicio_nombre=servicio.nombre if servicio else None,
+        frecuencia=serie.frecuencia if serie else "",
+        dia_semana=serie.dia_semana if serie else None,
+        hora_inicio=serie.hora_inicio if serie else time(0, 0),
+        num_repeticiones=serie.num_repeticiones if serie else 0,
+        fecha_inicio=serie.fecha_inicio if serie else inscripcion.creado_en,
+        cobro_por_sesion_habilitado=servicio.cobro_por_sesion_habilitado if servicio else False,
+        cobro_por_paquete_habilitado=servicio.cobro_por_paquete_habilitado if servicio else False,
+        precio_sesion=servicio.precio if servicio else None,
+        precio_paquete=servicio.precio_paquete if servicio else None,
+        num_reservas_creadas=num_creadas,
+        estado_pago=_estado_pago_inscripcion(reservas),
+        creado_en=inscripcion.creado_en,
+    )
+
+
+def _inscripcion_admin_out(db: Session, inscripcion: InscripcionSerie) -> InscripcionSerieOut:
+    cliente = db.get(Usuario, inscripcion.cliente_usuario_id)
+
+    reservas = db.execute(
+        select(Reserva).where(
+            Reserva.tenant_id == inscripcion.tenant_id,
+            Reserva.inscripcion_id == inscripcion.id,
+        )
+    ).scalars().all()
+
+    num_creadas = len(reservas)
+    num_omitidas = (
+        inscripcion.serie.num_repeticiones - num_creadas
+        if inscripcion.serie and inscripcion.estado == EstadoInscripcion.CONFIRMADA
+        else 0
+    )
+
+    fechas_omitidas = None
+    bitacora = db.execute(
+        select(Bitacora).where(
+            Bitacora.tenant_id == inscripcion.tenant_id,
+            Bitacora.entidad_tipo == "inscripcion_serie",
+            Bitacora.entidad_id == inscripcion.id,
+            Bitacora.accion == "inscripcion_serie_confirmada",
+        )
+    ).scalar_one_or_none()
+    if bitacora and bitacora.detalles_json:
+        fechas_omitidas = bitacora.detalles_json.get("fechas_omitidas")
+
+    return InscripcionSerieOut(
+        id=inscripcion.id,
+        serie_id=inscripcion.serie_id,
+        cliente_usuario_id=inscripcion.cliente_usuario_id,
+        nombre_cliente=cliente.nombre if cliente else None,
+        email_cliente=cliente.email if cliente else None,
+        estado=inscripcion.estado.value,
+        modalidad_cobro=inscripcion.modalidad_cobro.value if inscripcion.modalidad_cobro else None,
+        num_reservas_creadas=num_creadas,
+        num_reservas_omitidas=num_omitidas,
+        fechas_omitidas=fechas_omitidas,
+        estado_pago=_estado_pago_inscripcion(reservas),
+        creado_en=inscripcion.creado_en,
+    )
+
+
+def _serie_admin_out(
+    db: Session,
+    serie: SerieReserva,
+    con_inscripciones: bool = True,
+) -> SerieReservaOut:
+    """Construye la salida de una serie con datos enriquecidos."""
+    servicio = db.get(Servicio, serie.servicio_id)
+    asesor = db.get(UsuarioTenant, serie.asesor_id) if serie.asesor_id else None
+
+    num_inscripciones = db.execute(
+        select(func.count(InscripcionSerie.id)).where(
+            InscripcionSerie.serie_id == serie.id,
+        )
+    ).scalar_one()
+
+    num_reservas_creadas_total = db.execute(
+        select(func.count(Reserva.id)).where(
+            Reserva.tenant_id == serie.tenant_id,
+            Reserva.serie_id == serie.id,
+        )
+    ).scalar_one()
+
+    inscripciones_out = None
+    if con_inscripciones:
+        inscripciones = db.execute(
+            select(InscripcionSerie)
+            .where(InscripcionSerie.serie_id == serie.id)
+            .order_by(InscripcionSerie.creado_en.desc())
+        ).scalars().all()
+        inscripciones_out = [_inscripcion_admin_out(db, i) for i in inscripciones]
+
+    return SerieReservaOut(
+        id=serie.id,
+        servicio_id=serie.servicio_id,
+        servicio_nombre=servicio.nombre if servicio else None,
+        asesor_id=serie.asesor_id,
+        nombre_asesor=asesor.usuario.nombre if asesor and asesor.usuario else None,
+        frecuencia=serie.frecuencia,
+        dia_semana=serie.dia_semana,
+        hora_inicio=serie.hora_inicio,
+        duracion_minutos=serie.duracion_minutos,
+        num_repeticiones=serie.num_repeticiones,
+        fecha_inicio=serie.fecha_inicio,
+        cobro_por_sesion_habilitado=servicio.cobro_por_sesion_habilitado if servicio else False,
+        cobro_por_paquete_habilitado=servicio.cobro_por_paquete_habilitado if servicio else False,
+        precio_paquete=servicio.precio_paquete if servicio else None,
+        estado=serie.estado.value,
+        num_inscripciones=num_inscripciones,
+        num_reservas_creadas_total=num_reservas_creadas_total,
+        inscripciones=inscripciones_out,
+        creado_en=serie.creado_en,
+        actualizado_en=serie.actualizado_en,
+    )
+
+
+def _validar_formulario_encuesta(db: Session, tenant_id: int, formulario_id: Optional[int]) -> None:
+    if formulario_id is None:
+        return
+    f = db.execute(
+        select(Formulario).where(
+            Formulario.id == formulario_id,
+            Formulario.tenant_id == tenant_id,
+            Formulario.tipo == TipoFormulario.SATISFACCION,
+            Formulario.activo.is_(True),
+        )
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "La plantilla de encuesta no existe, no pertenece al tenant o no está activa",
+        )
 
 
 # ============================================================
@@ -1245,9 +2167,14 @@ def crear_servicio_admin(
         precio=body.precio,
         moneda=body.moneda,
         pago_requerido=body.pago_requerido,
+        cobro_por_sesion_habilitado=body.cobro_por_sesion_habilitado,
+        cobro_por_paquete_habilitado=body.cobro_por_paquete_habilitado,
+        precio_paquete=body.precio_paquete,
         visible_web=body.visible_web,
         requiere_confirmacion=body.requiere_confirmacion,
+        encuesta_satisfaccion_formulario_id=body.encuesta_satisfaccion_formulario_id,
     )
+    _validar_formulario_encuesta(db, tenant.id, body.encuesta_satisfaccion_formulario_id)
     db.add(s)
     try:
         db.commit()
@@ -1276,6 +2203,9 @@ def actualizar_servicio_admin(
     if not cambios:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se enviaron campos para actualizar")
 
+    if "encuesta_satisfaccion_formulario_id" in cambios:
+        _validar_formulario_encuesta(db, tenant.id, cambios["encuesta_satisfaccion_formulario_id"])
+
     if "tipo_agenda" in cambios:
         cambios["tipo_agenda"] = TipoAgenda(cambios["tipo_agenda"].value)
     if "modalidad" in cambios:
@@ -1283,6 +2213,26 @@ def actualizar_servicio_admin(
 
     for campo, valor in cambios.items():
         setattr(s, campo, valor)
+
+    # Validación final del estado de cobro tras un PATCH parcial
+    if s.cobro_por_paquete_habilitado and s.tipo_agenda != TipoAgenda.RECURRENTE:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "El cobro por paquete solo está disponible para servicios recurrentes",
+        )
+    if s.cobro_por_paquete_habilitado and s.precio_paquete is None:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "precio_paquete es obligatorio cuando el cobro por paquete está habilitado",
+        )
+    if not s.cobro_por_sesion_habilitado and not s.cobro_por_paquete_habilitado:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Debe habilitar al menos una modalidad de cobro",
+        )
 
     try:
         db.commit()
@@ -1327,6 +2277,351 @@ def desactivar_servicio_admin(
     s.activo = False
     db.commit()
     return OperacionOut(ok=True, mensaje="Servicio desactivado", detalle={"id": servicio_id})
+
+
+@router.get("/admin/servicios/{servicio_id}/sesiones", response_model=SesionesPaginadasOut)
+def listar_sesiones_por_servicio_admin(
+    servicio_id: int = Path(..., gt=0),
+    estado: Optional[str] = Query(None),
+    desde: Optional[datetime] = Query(None),
+    hasta: Optional[datetime] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_staff),
+):
+    servicio = db.execute(
+        select(Servicio).where(Servicio.id == servicio_id, Servicio.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if servicio is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Servicio no encontrado")
+
+    cond = [Sesion.tenant_id == tenant.id, Sesion.servicio_id == servicio_id]
+    if estado:
+        try:
+            cond.append(Sesion.estado == EstadoSesion(estado))
+        except ValueError:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Estado de sesión inválido: {estado}",
+            )
+    if desde:
+        cond.append(Sesion.fecha_hora_inicio >= exigir_aware(desde, "desde"))
+    if hasta:
+        cond.append(Sesion.fecha_hora_inicio <= exigir_aware(hasta, "hasta"))
+
+    total = db.execute(select(func.count(Sesion.id)).where(*cond)).scalar_one()
+
+    sesiones = db.execute(
+        select(Sesion)
+        .options(
+            joinedload(Sesion.asesor).joinedload(UsuarioTenant.usuario),
+            joinedload(Sesion.sede),
+        )
+        .where(*cond)
+        .order_by(Sesion.fecha_hora_inicio)
+        .limit(limit).offset(offset)
+    ).scalars().unique().all()
+
+    return SesionesPaginadasOut(
+        items=[_sesion_list_out(s) for s in sesiones],
+        paginacion=PaginacionOut(total=total, limit=limit, offset=offset),
+    )
+
+
+# ============================================================
+# ADMIN — GESTIÓN DE FORMULARIOS / ENCUESTAS
+# ============================================================
+@router.get("/admin/formularios", response_model=List[FormularioListAdminOut])
+def listar_formularios_admin(
+    tipo: Optional[TipoFormularioEnum] = Query(None, description="Filtrar por tipo de formulario"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    cond = [Formulario.tenant_id == tenant.id]
+    if tipo is not None:
+        cond.append(Formulario.tipo == tipo.value)
+    if activo is not None:
+        cond.append(Formulario.activo.is_(activo))
+
+    stmt = (
+        select(Formulario, func.count(CampoFormulario.id).label("num_campos"))
+        .outerjoin(CampoFormulario, CampoFormulario.formulario_id == Formulario.id)
+        .where(*cond)
+        .group_by(Formulario.id)
+        .order_by(Formulario.creado_en.desc())
+    )
+    result = db.execute(stmt).all()
+    out = []
+    for f, num_campos in result:
+        out.append(
+            FormularioListAdminOut(
+                id=f.id,
+                tenant_id=f.tenant_id,
+                nombre=f.nombre,
+                tipo=f.tipo.value,
+                activo=f.activo,
+                creado_en=f.creado_en,
+                num_campos=num_campos,
+            )
+        )
+    return out
+
+
+@router.post("/admin/formularios", response_model=FormularioAdminOut, status_code=status.HTTP_201_CREATED)
+def crear_formulario_admin(
+    body: FormularioAdminIn,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = Formulario(
+        tenant_id=tenant.id,
+        nombre=body.nombre,
+        tipo=body.tipo.value,
+    )
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return FormularioAdminOut(
+        id=f.id,
+        tenant_id=f.tenant_id,
+        nombre=f.nombre,
+        tipo=f.tipo.value,
+        activo=f.activo,
+        creado_en=f.creado_en,
+        campos=[],
+    )
+
+
+@router.get("/admin/formularios/{formulario_id}", response_model=FormularioAdminOut)
+def obtener_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario)
+        .where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+        .options(selectinload(Formulario.campos))
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+    return FormularioAdminOut.model_validate(f)
+
+
+@router.get(
+    "/admin/formularios/{formulario_id}/respuestas",
+    response_model=List[EncuestaRespuestaClienteOut],
+)
+def listar_respuestas_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    campos = db.execute(
+        select(CampoFormulario).where(CampoFormulario.formulario_id == formulario_id)
+    ).scalars().all()
+    campos_por_id = {c.id: c for c in campos}
+
+    envios = db.execute(
+        select(EncuestaEnvio)
+        .where(
+            EncuestaEnvio.formulario_id == formulario_id,
+            EncuestaEnvio.tenant_id == tenant.id,
+            EncuestaEnvio.respondido_en.is_not(None),
+        )
+        .order_by(EncuestaEnvio.respondido_en.desc())
+    ).scalars().all()
+
+    out = []
+    for envio in envios:
+        cliente = envio.reserva.creado_por if envio.reserva else None
+        respuestas_raw = (
+            db.execute(
+                select(RespuestaFormulario).where(
+                    RespuestaFormulario.reserva_id == envio.reserva_id,
+                    RespuestaFormulario.campo_id.in_(campos_por_id.keys()),
+                )
+            ).scalars().all()
+            if campos_por_id
+            else []
+        )
+        out.append(
+            EncuestaRespuestaClienteOut(
+                reserva_id=envio.reserva_id,
+                cliente_nombre=cliente.nombre if cliente else "Desconocido",
+                cliente_email=cliente.email if cliente else None,
+                respondido_en=envio.respondido_en,
+                respuestas=[
+                    EncuestaRespuestaCampoOut(
+                        campo_id=r.campo_id,
+                        label=campos_por_id[r.campo_id].label if r.campo_id in campos_por_id else "",
+                        valor=r.valor,
+                        grupo_matriz=campos_por_id[r.campo_id].grupo_matriz if r.campo_id in campos_por_id else None,
+                        tipo=campos_por_id[r.campo_id].tipo.value if r.campo_id in campos_por_id else "texto",
+                        opciones=campos_por_id[r.campo_id].opciones if r.campo_id in campos_por_id else None,
+                        orden=campos_por_id[r.campo_id].orden if r.campo_id in campos_por_id else 0,
+                    )
+                    for r in respuestas_raw
+                ],
+            )
+        )
+    return out
+
+
+@router.patch("/admin/formularios/{formulario_id}", response_model=FormularioAdminOut)
+def actualizar_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    body: FormularioAdminUpdate = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario)
+        .where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+        .options(selectinload(Formulario.campos))
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    cambios = body.model_dump(exclude_unset=True)
+    if not cambios:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No se enviaron campos para actualizar")
+
+    for campo, valor in cambios.items():
+        setattr(f, campo, valor)
+
+    db.commit()
+    db.refresh(f)
+    return FormularioAdminOut.model_validate(f)
+
+
+@router.post(
+    "/admin/formularios/{formulario_id}/campos",
+    response_model=List[CampoFormularioAdminOut],
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_campos_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    body: CampoFormularioBulkAdminIn = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    max_orden = db.execute(
+        select(func.coalesce(func.max(CampoFormulario.orden), 0)).where(
+            CampoFormulario.formulario_id == formulario_id
+        )
+    ).scalar_one()
+
+    creados = []
+    for i, item in enumerate(body.items):
+        c = CampoFormulario(
+            formulario_id=formulario_id,
+            orden=item.orden if item.orden is not None else max_orden + i + 1,
+            tipo=item.tipo.value,
+            label=item.label,
+            placeholder=item.placeholder,
+            requerido=item.requerido,
+            opciones=item.opciones,
+            grupo_matriz=item.grupo_matriz,
+            validacion_regex=item.validacion_regex,
+            ayuda=item.ayuda,
+        )
+        db.add(c)
+        creados.append(c)
+    db.commit()
+    for c in creados:
+        db.refresh(c)
+    return [CampoFormularioAdminOut.model_validate(c) for c in creados]
+
+
+@router.patch(
+    "/admin/formularios/{formulario_id}/campos/{campo_id}",
+    response_model=CampoFormularioAdminOut,
+)
+def actualizar_campo_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    campo_id: int = Path(..., gt=0),
+    body: CampoFormularioAdminUpdate = Body(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    c = db.execute(
+        select(CampoFormulario).where(
+            CampoFormulario.id == campo_id,
+            CampoFormulario.formulario_id == formulario_id,
+        )
+    ).scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Campo no encontrado")
+
+    cambios = body.model_dump(exclude_unset=True)
+    for campo, valor in cambios.items():
+        if isinstance(valor, Enum):
+            valor = valor.value
+        setattr(c, campo, valor)
+
+    db.commit()
+    db.refresh(c)
+    return CampoFormularioAdminOut.model_validate(c)
+
+
+@router.patch(
+    "/admin/formularios/{formulario_id}/campos/{campo_id}/desactivar",
+    response_model=OperacionOut,
+)
+def desactivar_campo_formulario_admin(
+    formulario_id: int = Path(..., gt=0),
+    campo_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    f = db.execute(
+        select(Formulario).where(Formulario.id == formulario_id, Formulario.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Formulario no encontrado")
+
+    c = db.execute(
+        select(CampoFormulario).where(
+            CampoFormulario.id == campo_id,
+            CampoFormulario.formulario_id == formulario_id,
+        )
+    ).scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Campo no encontrado")
+
+    c.activo = False
+    db.commit()
+    return OperacionOut(ok=True, mensaje="Campo desactivado", detalle={"id": campo_id})
 
 
 # ============================================================
@@ -1376,16 +2671,26 @@ def listar_usuarios_admin(
     return [_usuario_admin_out(ut) for ut in filas]
 
 
-@router.post("/admin/usuarios/invitar", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
-def invitar_usuario(
-    email: str = Body(...),
-    nombre: str = Body(...),
-    rol: str = Body(...),
-    password: Optional[str] = Body(None, min_length=8),
-    db: Session = Depends(get_db),
-    tenant: Tenant = Depends(get_current_tenant),
-    staff: UsuarioTenant = Depends(requiere_admin),
-):
+def _vincular_usuario_a_tenant(
+    db: Session,
+    tenant_id: int,
+    email: str,
+    nombre: str,
+    rol: str,
+    actor_usuario_id: int,
+    password: Optional[str] = None,
+) -> Tuple[UsuarioTenant, Optional[str]]:
+    """Busca por email; si existe lo vincula sin duplicar, si no existe lo crea.
+
+    Compartido por `POST /admin/usuarios/invitar` (tenant del contexto) y
+    `POST /superadmin/usuarios/vincular` (tenant explícito en el body) — no
+    hace commit, el caller decide la transacción.
+
+    Devuelve `(ut, acceso_token_plano)`: si el usuario queda sin contraseña
+    después de esta operación, genera su token de activación (el caller
+    manda el correo post-commit); si ya tenía contraseña, el segundo valor
+    es `None` y no se manda nada.
+    """
     if rol not in _ROLES_VINCULABLES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Rol inválido")
 
@@ -1398,6 +2703,7 @@ def invitar_usuario(
         password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     usuario = db.execute(select(Usuario).where(Usuario.email == email_norm)).scalar_one_or_none()
+    ut_existente = None
     if usuario is None:
         usuario = Usuario(
             email=email_norm,
@@ -1408,13 +2714,13 @@ def invitar_usuario(
         db.add(usuario)
         db.flush()
     else:
-        ya_vinculado = db.execute(
+        ut_existente = db.execute(
             select(UsuarioTenant).where(
-                UsuarioTenant.tenant_id == tenant.id,
+                UsuarioTenant.tenant_id == tenant_id,
                 UsuarioTenant.usuario_id == usuario.id,
             )
         ).scalar_one_or_none()
-        if ya_vinculado is not None:
+        if ut_existente is not None and ut_existente.activo:
             raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
         if password_hash:
             if usuario.password_hash is not None:
@@ -1425,14 +2731,47 @@ def invitar_usuario(
             usuario.password_hash = password_hash
             usuario.es_invitado = False
 
-    ut = UsuarioTenant(tenant_id=tenant.id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
-    db.add(ut)
+    if ut_existente is not None:
+        # Ya existía una fila (desvinculado, activo=False) — desvincular es
+        # reversible y nunca borra la fila (uq_usuario_tenant no distingue
+        # activo), así que hay que reactivarla en vez de intentar un INSERT
+        # que violaría esa unique constraint.
+        ut = ut_existente
+        ut.activo = True
+        ut.desvinculado_en = None
+        ut.rol = _ROLES_VINCULABLES[rol]
+        accion_bitacora = "revincular"
+    else:
+        ut = UsuarioTenant(tenant_id=tenant_id, usuario_id=usuario.id, rol=_ROLES_VINCULABLES[rol], activo=True)
+        db.add(ut)
+        accion_bitacora = "invitar"
     db.flush()
 
     svc.registrar_bitacora(
-        db, tenant.id, "usuario_tenant", ut.id, "invitar",
-        usuario_id=staff.usuario_id,
+        db, tenant_id, "usuario_tenant", ut.id, accion_bitacora,
+        usuario_id=actor_usuario_id,
         detalles={"email": email_norm, "rol": rol, "password_set": bool(password_hash)},
+    )
+
+    acceso_token_plano = None
+    if usuario.password_hash is None:
+        acceso_token_plano = svc.generar_token_acceso(usuario)
+
+    return ut, acceso_token_plano
+
+
+@router.post("/admin/usuarios/invitar", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
+def invitar_usuario(
+    email: str = Body(...),
+    nombre: str = Body(...),
+    rol: str = Body(...),
+    password: Optional[str] = Body(None, min_length=8),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    staff: UsuarioTenant = Depends(requiere_admin),
+):
+    ut, acceso_token_plano = _vincular_usuario_a_tenant(
+        db, tenant.id, email, nombre, rol, staff.usuario_id, password=password
     )
 
     try:
@@ -1442,6 +2781,13 @@ def invitar_usuario(
         raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
 
     ut = _usuario_tenant_admin(db, tenant.id, ut.id)
+
+    if acceso_token_plano:
+        try:
+            svc.enviar_email_activacion(tenant, ut.usuario, acceso_token_plano)
+        except Exception:
+            log.exception("Fallo al enviar correo de activación para usuario %s", ut.usuario_id)
+
     return _usuario_admin_out(ut)
 
 
@@ -1995,6 +3341,12 @@ def checkin_reserva(
     if r.estado != EstadoReserva.CONFIRMADA:
         raise HTTPException(status.HTTP_409_CONFLICT, "Solo reservas confirmadas pueden hacer check-in")
 
+    if r.estado_pago not in (EstadoPagoReserva.COMPLETADO, EstadoPagoReserva.EXENTO):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"codigo": "pago_pendiente", "mensaje": "El pago debe estar confirmado antes de hacer check-in"},
+        )
+
     r.estado = EstadoReserva.COMPLETADA
 
     svc.registrar_bitacora(
@@ -2144,6 +3496,374 @@ def completar_sesion_endpoint(
 
 
 # ============================================================
+# MERCADOPAGO — ADMIN
+# ============================================================
+def _mercadopago_estado_out(tenant: Tenant) -> dict:
+    cfg = tenant.pago_config if isinstance(tenant.pago_config, dict) else {}
+    return {
+        "conectado": bool(cfg.get("access_token")),
+        "mp_user_id": cfg.get("mp_user_id"),
+        "tenant_id": tenant.id,
+        "metodo_pago_default": (
+            tenant.metodo_pago_default.value
+            if hasattr(tenant.metodo_pago_default, "value")
+            else (tenant.metodo_pago_default or "local")
+        ),
+    }
+
+
+@router.post("/admin/mercadopago/conectar", response_model=MercadoPagoEstadoOut)
+def conectar_mercadopago(
+    body: MercadoPagoConectarIn,
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Conecta la cuenta de MercadoPago del tenant usando un Access Token
+    pegado directamente por el admin."""
+    try:
+        svc.conectar_mercadopago_token(
+            tenant,
+            db,
+            access_token=body.access_token,
+            public_key=body.public_key,
+        )
+    except svc.ReservaError as e:
+        raise _http_de(e)
+    db.commit()
+    db.refresh(tenant)
+    return _mercadopago_estado_out(tenant)
+
+
+@router.delete("/admin/mercadopago/desconectar", response_model=MercadoPagoEstadoOut)
+def desconectar_mercadopago(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Desconecta la cuenta de MercadoPago del tenant. No revoca el token en
+    el lado de MercadoPago; el admin debe regenerarlo desde su panel."""
+    svc.desconectar_mercadopago(tenant, db)
+    db.commit()
+    db.refresh(tenant)
+    return _mercadopago_estado_out(tenant)
+
+
+@router.get("/admin/mercadopago/estado", response_model=MercadoPagoEstadoOut)
+def estado_mercadopago(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Devuelve si el tenant tiene conectada una cuenta de MercadoPago."""
+    return _mercadopago_estado_out(tenant)
+
+
+# ============================================================
+# GOOGLE MEET — ADMIN
+# ============================================================
+def _google_meet_estado_out(tenant: Tenant) -> dict:
+    cfg = tenant.google_meet_config if isinstance(tenant.google_meet_config, dict) else {}
+    return {
+        "conectado": bool(cfg.get("impersonar_email")),
+        "impersonar_email": cfg.get("impersonar_email"),
+        "tenant_id": tenant.id,
+    }
+
+
+@router.post("/admin/google-meet/conectar", response_model=GoogleMeetEstadoOut)
+def conectar_google_meet(
+    body: GoogleMeetConectarIn,
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Conecta el buzón de Google Meet del tenant vía service account + Domain-Wide Delegation."""
+    try:
+        svc.conectar_google_meet(tenant, db, impersonar_email=body.impersonar_email)
+    except svc.ReservaError as e:
+        raise _http_de(e)
+    db.commit()
+    db.refresh(tenant)
+    return _google_meet_estado_out(tenant)
+
+
+@router.delete("/admin/google-meet/desconectar", response_model=GoogleMeetEstadoOut)
+def desconectar_google_meet(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Desconecta la configuración de Google Meet del tenant. No revoca la
+    delegación de dominio del lado de Google."""
+    svc.desconectar_google_meet(tenant, db)
+    db.commit()
+    db.refresh(tenant)
+    return _google_meet_estado_out(tenant)
+
+
+@router.get("/admin/google-meet/estado", response_model=GoogleMeetEstadoOut)
+def estado_google_meet(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Devuelve si el tenant tiene conectado un buzón de Google Meet."""
+    return _google_meet_estado_out(tenant)
+
+
+@router.post("/admin/google-meet/revisar-contenido", response_model=OperacionOut)
+def revisar_contenido_google_meet(
+    folio: Optional[str] = Query(
+        None,
+        description="Si viene, fuerza el reprocesamiento de la sesión de ESE folio "
+                    "específico, sin importar si ya tiene contenido_enviado_en marcado "
+                    "o si fecha_hora_fin todavía no cumple el margen. Úsalo cuando una "
+                    "sesión se quedó a medias (ej. carpetas creadas pero correo nunca "
+                    "salió porque el proceso se interrumpió después de marcarla como "
+                    "ya procesada).",
+    ),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Dispara manualmente el mismo job que corre APScheduler cada 10 min
+    (organiza carpetas de Drive, renombra archivos, otorga permisos y manda
+    el correo de contenido para sesiones virtuales ya terminadas). Pensado
+    como botón de emergencia mientras el backend esté en un plan de Render
+    que se duerme por inactividad — mientras está dormido, el scheduler en
+    proceso tampoco corre, así que el contenido se queda sin procesar hasta
+    que algo despierta al servicio."""
+    if folio:
+        reserva = db.execute(
+            select(Reserva).where(Reserva.tenant_id == tenant.id, Reserva.folio == folio)
+        ).scalar_one_or_none()
+        if reserva is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+        sesion = reserva.sesion
+        if sesion is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Esa reserva no tiene sesión asociada")
+        try:
+            svc._procesar_contenido_sesion(db, sesion)
+        except Exception as e:
+            db.rollback()
+            log.exception("Fallo al forzar reprocesamiento de contenido, folio=%s", folio)
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Falló el reprocesamiento: {e}",
+            )
+        return OperacionOut(
+            ok=True,
+            mensaje=f"Sesión de la reserva {folio} reprocesada",
+            detalle={"folio": folio, "sesion_id": sesion.id},
+        )
+
+    # Sin folio: corre el job global normal (nota: procesa TODOS los tenants
+    # con contenido pendiente, no solo este — es el mismo job de APScheduler,
+    # expuesto aquí nada más como forma de dispararlo a mano).
+    procesadas = svc.revisar_contenido_sesiones_virtuales(db)
+    return OperacionOut(
+        ok=True,
+        mensaje=f"{procesadas} sesión(es) procesada(s)",
+        detalle={"procesadas": procesadas},
+    )
+
+
+@router.patch("/admin/tenant/metodo-pago-default", response_model=TenantAdminOut)
+def actualizar_metodo_pago_default(
+    body: MetodoPagoDefaultIn,
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+    db: Session = Depends(get_db),
+):
+    """Permite al admin del tenant cambiar el método de pago por default."""
+    tenant.metodo_pago_default = MetodoPago(body.metodo_pago_default)
+    db.commit()
+    db.refresh(tenant)
+    return _tenant_admin_out(tenant)
+
+
+@router.post("/reservas/{folio}/checkout", response_model=CheckoutUrlOut)
+def checkout_reserva(
+    request: Request,
+    folio: str = Path(..., min_length=8, max_length=32),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """Cliente logueado: genera una preferencia de MercadoPago para una
+    reserva confirmada o en espera de pago con pago pendiente (auto-compra
+    post-asignación, o reintento del link de pago original)."""
+    reserva = db.execute(
+        select(Reserva).where(
+            Reserva.tenant_id == tenant.id,
+            Reserva.folio == folio,
+        )
+    ).scalar_one_or_none()
+    if not reserva:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
+    if reserva.creado_por_usuario_id != usuario.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta reserva no te pertenece")
+    if reserva.estado not in (EstadoReserva.CONFIRMADA, EstadoReserva.EN_ESPERA):
+        raise _http_de(ReservaError("La reserva no admite pago en este estado", codigo="estado_invalido"))
+    if reserva.estado_pago != EstadoPagoReserva.PENDIENTE:
+        raise _http_de(ReservaError("La reserva no tiene pago pendiente", codigo="estado_invalido"))
+    if reserva.inscripcion_id is not None:
+        raise _http_de(ReservaError("Usa el checkout de inscripción para paquetes", codigo="tipo_pago_invalido"))
+
+    checkout = svc.iniciar_checkout(tenant, reserva, usuario, request=request)
+    if checkout is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No se pudo iniciar el pago con MercadoPago")
+    return checkout
+
+
+@router.post("/inscripciones/{inscripcion_id}/checkout", response_model=CheckoutUrlOut)
+def checkout_inscripcion(
+    request: Request,
+    inscripcion_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    usuario: Usuario = Depends(get_current_user),
+):
+    """Cliente logueado: genera una preferencia de MercadoPago para pagar
+    un paquete de serie completo."""
+    inscripcion = db.execute(
+        select(InscripcionSerie).where(
+            InscripcionSerie.tenant_id == tenant.id,
+            InscripcionSerie.id == inscripcion_id,
+        )
+    ).scalar_one_or_none()
+    if not inscripcion:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Inscripción no encontrada")
+    if inscripcion.cliente_usuario_id != usuario.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta inscripción no te pertenece")
+    if inscripcion.estado != EstadoInscripcion.CONFIRMADA:
+        raise _http_de(ReservaError("La inscripción no está confirmada", codigo="estado_invalido"))
+    if inscripcion.modalidad_cobro != ModalidadCobro.PAQUETE:
+        raise _http_de(ReservaError("La inscripción no es de paquete", codigo="modalidad_no_permitida"))
+
+    checkout = svc.crear_preferencia_paquete(tenant, inscripcion, db, request=request)
+    if checkout is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No se pudo iniciar el pago con MercadoPago")
+    return checkout
+
+
+# ============================================================
+# ADMIN — PERSONALIZACIÓN DE MARCA
+# ============================================================
+_LOGO_TIPOS_PERMITIDOS = {"image/png", "image/jpeg", "image/webp"}
+_LOGO_TAMANO_MAXIMO = 2 * 1024 * 1024  # 2 MB
+
+
+def _personalizacion_out(tenant: Tenant) -> PersonalizacionOut:
+    return PersonalizacionOut(
+        color_primario=tenant.color_primario,
+        logo_url=tenant.logo_url,
+        nombre=tenant.nombre,
+        slug=tenant.slug,
+    )
+
+
+@router.get("/admin/personalizacion", response_model=PersonalizacionOut)
+def obtener_personalizacion(
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Devuelve el color primario y logo actuales del tenant."""
+    return _personalizacion_out(tenant)
+
+
+@router.patch("/admin/personalizacion", response_model=PersonalizacionOut)
+def actualizar_color_personalizacion(
+    body: PersonalizacionColorIn,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Actualiza únicamente el color primario del tenant (formato #RRGGBB)."""
+    tenant.color_primario = body.color_primario.lower()
+    db.commit()
+    db.refresh(tenant)
+    return _personalizacion_out(tenant)
+
+
+@router.post("/admin/personalizacion/logo", response_model=PersonalizacionOut)
+async def subir_logo_personalizacion(
+    logo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Sube un logo de tenant a Cloudinary y reemplaza el anterior si existía."""
+    if logo.content_type not in _LOGO_TIPOS_PERMITIDOS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "codigo": "logo_formato_invalido",
+                "mensaje": "Solo se permiten imágenes PNG, JPEG o WebP.",
+            },
+        )
+
+    contenido = await logo.read()
+    if len(contenido) > _LOGO_TAMANO_MAXIMO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "codigo": "logo_muy_grande",
+                "mensaje": "El logo no debe superar los 2 MB.",
+            },
+        )
+
+    try:
+        resultado = uploader.upload(
+            contenido,
+            folder="tenant_logos",
+            public_id=f"tenant_{tenant.id}",
+            overwrite=True,
+            resource_type="image",
+        )
+    except Exception as exc:
+        log.exception("Error al subir logo a Cloudinary")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "codigo": "logo_no_disponible",
+                "mensaje": "No se pudo conectar con el servicio de almacenamiento de logos. Verifica CLOUDINARY_URL.",
+            },
+        ) from exc
+
+    if tenant.logo_public_id and tenant.logo_public_id != resultado.get("public_id"):
+        try:
+            uploader.destroy(tenant.logo_public_id)
+        except Exception:
+            log.exception("No se pudo borrar el logo anterior: %s", tenant.logo_public_id)
+
+    tenant.logo_url = resultado.get("secure_url")
+    tenant.logo_public_id = resultado.get("public_id")
+    db.commit()
+    db.refresh(tenant)
+    return _personalizacion_out(tenant)
+
+
+@router.delete("/admin/personalizacion/logo", response_model=PersonalizacionOut)
+def quitar_logo_personalizacion(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+    _: UsuarioTenant = Depends(requiere_admin),
+):
+    """Elimina el logo del tenant en Cloudinary y vuelve al avatar de inicial."""
+    if tenant.logo_public_id:
+        try:
+            uploader.destroy(tenant.logo_public_id)
+        except Exception:
+            log.exception("No se pudo borrar el logo en Cloudinary: %s", tenant.logo_public_id)
+
+    tenant.logo_url = None
+    tenant.logo_public_id = None
+    db.commit()
+    db.refresh(tenant)
+    return _personalizacion_out(tenant)
+
+
+# ============================================================
 # SUPERADMIN — GESTIÓN DE TENANTS (sin {tenant_slug} en la ruta)
 # ============================================================
 superadmin_router = APIRouter(prefix="/api/v2/superadmin", tags=["Superadmin"])
@@ -2163,6 +3883,7 @@ def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
             "ssl": smtp.get("ssl", False),
             "console": smtp.get("console", False),
         }
+    pago = t.pago_config if isinstance(t.pago_config, dict) else {}
     return TenantAdminOut(
         id=t.id,
         slug=t.slug,
@@ -2179,6 +3900,12 @@ def _tenant_admin_out(t: Tenant, total_usuarios: int = 0) -> TenantAdminOut:
         total_usuarios=total_usuarios,
         smtp_configurado=bool(smtp.get("host")),
         smtp_config=smtp_salida,
+        pago_configurado=bool(pago.get("access_token")),
+        metodo_pago_default=(
+            t.metodo_pago_default.value
+            if hasattr(t.metodo_pago_default, "value")
+            else (t.metodo_pago_default or "local")
+        ),
     )
 
 
@@ -2272,6 +3999,9 @@ def actualizar_tenant(
     if "plan" in cambios:
         cambios["plan"] = PlanTenant(cambios["plan"])
 
+    if "metodo_pago_default" in cambios:
+        cambios["metodo_pago_default"] = MetodoPago(cambios["metodo_pago_default"])
+
     if "smtp_config" in cambios:
         # smtp_config es write-only desde el frontend (el password nunca se
         # devuelve en GET/PATCH). Omitir campos en el payload (ej. "password")
@@ -2289,3 +4019,305 @@ def actualizar_tenant(
     db.refresh(t)
 
     return _tenant_admin_out(t)
+
+
+# ============================================================
+# SUPERADMIN — USUARIOS GLOBALES (a través de todo el SaaS)
+# ============================================================
+_DIAS_MINIMOS_PURGA = 30
+_MOTIVO_DESACTIVACION_CUENTA = "Cuenta desactivada"
+
+
+def _membresias_usuario(db: Session, usuario_id: int) -> List[MembresiaGlobalOut]:
+    filas = db.execute(
+        select(UsuarioTenant, Tenant)
+        .join(Tenant, Tenant.id == UsuarioTenant.tenant_id)
+        .where(UsuarioTenant.usuario_id == usuario_id)
+        .order_by(Tenant.nombre)
+    ).all()
+    return [
+        MembresiaGlobalOut(
+            ut_id=ut.id,
+            tenant_id=t.id,
+            tenant_nombre=t.nombre,
+            tenant_slug=t.slug,
+            rol=ut.rol.value,
+            activo=ut.activo,
+            fecha_vinculacion=ut.fecha_vinculacion,
+        )
+        for ut, t in filas
+    ]
+
+
+@superadmin_router.get("/usuarios", response_model=UsuariosGlobalPaginadosOut)
+def listar_usuarios_global(
+    q: Optional[str] = Query(None, description="Busca por email o nombre"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: UsuarioTenant = Depends(requiere_superadmin),
+):
+    cond = []
+    if q and q.strip():
+        patron = f"%{q.strip().lower()}%"
+        cond.append(or_(func.lower(Usuario.email).like(patron), func.lower(Usuario.nombre).like(patron)))
+
+    total = db.execute(select(func.count(Usuario.id)).where(*cond)).scalar_one()
+
+    filas = db.execute(
+        select(Usuario, func.count(UsuarioTenant.id).label("total_tenants"))
+        .outerjoin(UsuarioTenant, UsuarioTenant.usuario_id == Usuario.id)
+        .where(*cond)
+        .group_by(Usuario.id)
+        .order_by(Usuario.creado_en.desc())
+        .limit(limit).offset(offset)
+    ).all()
+
+    items = [
+        UsuarioGlobalOut(
+            id=u.id, email=u.email, nombre=u.nombre, apellido=u.apellido,
+            telefono=u.telefono, activo=u.activo, desactivado_en=u.desactivado_en,
+            purgado_en=u.purgado_en, creado_en=u.creado_en, total_tenants=total_tenants,
+        )
+        for u, total_tenants in filas
+    ]
+    return UsuariosGlobalPaginadosOut(items=items, paginacion=PaginacionOut(total=total, limit=limit, offset=offset))
+
+
+@superadmin_router.get("/usuarios/{usuario_id}", response_model=UsuarioGlobalDetalleOut)
+def detalle_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    _: UsuarioTenant = Depends(requiere_superadmin),
+):
+    u = db.get(Usuario, usuario_id)
+    if u is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+
+    return UsuarioGlobalDetalleOut(
+        id=u.id, email=u.email, nombre=u.nombre, apellido=u.apellido,
+        telefono=u.telefono, activo=u.activo, desactivado_en=u.desactivado_en,
+        purgado_en=u.purgado_en, creado_en=u.creado_en,
+        total_tenants=len(u.tenants) if u.tenants else 0,
+        tenants=_membresias_usuario(db, u.id),
+    )
+
+
+@superadmin_router.post("/usuarios/vincular", response_model=UsuarioAdminOut, status_code=status.HTTP_201_CREATED)
+def vincular_usuario_global(
+    email: str = Body(...),
+    nombre: str = Body(...),
+    rol: str = Body(...),
+    tenant_id: int = Body(...),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant no encontrado")
+
+    ut, acceso_token_plano = _vincular_usuario_a_tenant(db, tenant_id, email, nombre, rol, actor.usuario_id)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está vinculado a este tenant")
+
+    ut = _usuario_tenant_admin(db, tenant_id, ut.id)
+
+    if acceso_token_plano:
+        try:
+            svc.enviar_email_activacion(tenant, ut.usuario, acceso_token_plano)
+        except Exception:
+            log.exception("Fallo al enviar correo de activación para usuario %s", ut.usuario_id)
+
+    return _usuario_admin_out(ut)
+
+
+@superadmin_router.post("/usuarios/{usuario_id}/desvincular/{tenant_id}", response_model=OperacionOut)
+def desvincular_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    tenant_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    ut = db.execute(
+        select(UsuarioTenant).where(
+            UsuarioTenant.usuario_id == usuario_id,
+            UsuarioTenant.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if ut is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "El usuario no está vinculado a ese tenant")
+
+    if ut.rol == RolUsuario.ADMIN and _admins_activos_restantes(db, tenant_id, ut.id) == 0:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No puedes desvincular al único admin activo del tenant",
+        )
+
+    ut.activo = False
+    ut.desvinculado_en = utcnow()
+
+    svc.registrar_bitacora(
+        db, tenant_id, "usuario_tenant", ut.id, "desvincular",
+        usuario_id=actor.usuario_id,
+        detalles={"origen": "superadmin_global", "usuario_id": usuario_id},
+    )
+
+    db.commit()
+    return OperacionOut(
+        ok=True, mensaje="Usuario desvinculado del tenant",
+        detalle={"usuario_id": usuario_id, "tenant_id": tenant_id},
+    )
+
+
+@superadmin_router.post("/usuarios/{usuario_id}/desactivar", response_model=OperacionOut)
+def desactivar_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    """Desactiva la cuenta completa: bloquea login, desvincula de todos los
+    tenants (soft) y cancela sus reservas activas / solicitudes pendientes.
+
+    Reversible — no borra nada. `purgar` es el paso irreversible aparte.
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+    if not usuario.activo:
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya está desactivado")
+
+    ahora = utcnow()
+    usuario.activo = False
+    usuario.desactivado_en = ahora
+
+    membresias = db.execute(
+        select(UsuarioTenant).where(UsuarioTenant.usuario_id == usuario_id)
+    ).scalars().all()
+
+    reservas_canceladas = 0
+    solicitudes_canceladas = 0
+
+    for ut in membresias:
+        tenant = db.get(Tenant, ut.tenant_id)
+        if tenant is None:
+            continue
+
+        if ut.activo:
+            ut.activo = False
+            ut.desvinculado_en = ahora
+
+        reservas = db.execute(
+            select(Reserva).where(
+                Reserva.tenant_id == tenant.id,
+                Reserva.creado_por_usuario_id == usuario_id,
+                Reserva.estado.notin_([EstadoReserva.CANCELADA, EstadoReserva.COMPLETADA, EstadoReserva.NO_SHOW]),
+            )
+        ).scalars().all()
+        for r in reservas:
+            try:
+                svc.cancelar_reserva(
+                    db, tenant, r,
+                    cancelado_por_usuario_id=actor.usuario_id,
+                    motivo=_MOTIVO_DESACTIVACION_CUENTA,
+                    forzar=True,
+                )
+                reservas_canceladas += 1
+            except ReservaError:
+                continue
+
+        solicitudes = db.execute(
+            select(SolicitudReserva).where(
+                SolicitudReserva.tenant_id == tenant.id,
+                SolicitudReserva.cliente_usuario_id == usuario_id,
+                SolicitudReserva.estado == EstadoSolicitud.PENDIENTE,
+            )
+        ).scalars().all()
+        for s in solicitudes:
+            s.estado = EstadoSolicitud.CANCELADA
+            s.resuelto_en = ahora
+            solicitudes_canceladas += 1
+
+        svc.registrar_bitacora(
+            db, tenant.id, "usuario_tenant", ut.id, "desactivar_cuenta_global",
+            usuario_id=actor.usuario_id,
+            detalles={"usuario_id": usuario_id, "email": usuario.email},
+        )
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al desactivar usuario %s", usuario_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    return OperacionOut(
+        ok=True,
+        mensaje="Cuenta desactivada",
+        detalle={
+            "usuario_id": usuario_id,
+            "reservas_canceladas": reservas_canceladas,
+            "solicitudes_canceladas": solicitudes_canceladas,
+        },
+    )
+
+
+@superadmin_router.post("/usuarios/{usuario_id}/purgar", response_model=OperacionOut)
+def purgar_usuario_global(
+    usuario_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    actor: UsuarioTenant = Depends(requiere_superadmin),
+):
+    """Anonimiza la cuenta (UPDATE, no DELETE) — ver decisión en HANDOFF.md:
+    las FKs de reservas/sesiones/solicitudes/inscripciones hacia usuarios son
+    RESTRICT y no se tocan, así que purgar no puede ser un DELETE FROM
+    usuarios real sin romper esas tablas. Solo se permite si la cuenta lleva
+    30+ días desactivada. Irreversible.
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
+    if usuario.purgado_en is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya fue purgado")
+    if usuario.desactivado_en is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario debe estar desactivado antes de purgar")
+
+    dias_desactivado = (utcnow() - usuario.desactivado_en).days
+    if dias_desactivado < _DIAS_MINIMOS_PURGA:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Solo se puede purgar tras {_DIAS_MINIMOS_PURGA} días de desactivación "
+            f"(lleva {dias_desactivado})",
+        )
+
+    usuario.nombre = "Usuario eliminado"
+    usuario.apellido = None
+    usuario.telefono = None
+    usuario.password_hash = None
+    usuario.email = f"purgado+{usuario.id}@eliminado.local"
+    usuario.purgado_en = utcnow()
+
+    tenant_ids = db.execute(
+        select(UsuarioTenant.tenant_id).where(UsuarioTenant.usuario_id == usuario_id).distinct()
+    ).scalars().all()
+    for tenant_id in tenant_ids:
+        svc.registrar_bitacora(
+            db, tenant_id, "usuario", usuario_id, "purgar_cuenta_global",
+            usuario_id=actor.usuario_id,
+            detalles={"usuario_id": usuario_id},
+        )
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "No se pudo purgar (conflicto de datos)")
+    except SQLAlchemyError:
+        db.rollback()
+        log.exception("Error DB al purgar usuario %s", usuario_id)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Error interno de base de datos")
+
+    return OperacionOut(ok=True, mensaje="Cuenta purgada", detalle={"usuario_id": usuario_id})

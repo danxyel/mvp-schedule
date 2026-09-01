@@ -1,0 +1,392 @@
+import { useState, useEffect } from 'react'
+import client from '../../api/client'
+import Modal from '../common/Modal'
+import InscribirClientesSerieModal from './InscribirClientesSerieModal'
+import { getLocalOffset } from '../../utils/fechas'
+import { errorMensaje } from '../../utils/errores'
+
+const FRECUENCIAS = [
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'quincenal', label: 'Quincenal' },
+  { value: 'mensual', label: 'Mensual' },
+]
+
+const DIAS_SEMANA = [
+  { value: 0, label: 'Lunes' },
+  { value: 1, label: 'Martes' },
+  { value: 2, label: 'Miércoles' },
+  { value: 3, label: 'Jueves' },
+  { value: 4, label: 'Viernes' },
+  { value: 5, label: 'Sábado' },
+  { value: 6, label: 'Domingo' },
+]
+
+function toDateInputValue(date) {
+  const offset = date.getTimezoneOffset() * 60000
+  const local = new Date(date.getTime() - offset)
+  return local.toISOString().slice(0, 10)
+}
+
+function horaDesdeStringUTC(utcString) {
+  const d = new Date(utcString)
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+export default function CrearSerieModal({ servicio, solicitud = null, onClose, onCreado }) {
+  const esDesdeSolicitud = solicitud != null
+
+  const [asesores, setAsesores] = useState([])
+  const [servicios, setServicios] = useState([])
+  const [servicioSeleccionado, setServicioSeleccionado] = useState(servicio)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [exito, setExito] = useState(null)
+  const [serieCreada, setSerieCreada] = useState(null)
+  const [invitarSerie, setInvitarSerie] = useState(null)
+
+  const fechaBase = esDesdeSolicitud ? new Date(solicitud.fecha_hora_propuesta) : null
+  const [form, setForm] = useState({
+    asesor_id: solicitud?.asesor_id ? String(solicitud.asesor_id) : '',
+    frecuencia: 'semanal',
+    dia_semana: fechaBase ? (fechaBase.getDay() + 6) % 7 : 0,
+    hora_inicio: fechaBase ? horaDesdeStringUTC(solicitud.fecha_hora_propuesta) : '10:00',
+    duracion_minutos: servicio?.duracion_minutos || 60,
+    num_repeticiones: 8,
+    fecha_inicio: fechaBase ? toDateInputValue(fechaBase) : '',
+  })
+
+  useEffect(() => {
+    setServicioSeleccionado(servicio)
+  }, [servicio])
+
+  useEffect(() => {
+    if (servicioSeleccionado) {
+      setForm((prev) => ({
+        ...prev,
+        duracion_minutos: servicioSeleccionado.duracion_minutos || 60,
+      }))
+    }
+  }, [servicioSeleccionado])
+
+  useEffect(() => {
+    const tenantSlug = sessionStorage.getItem('tenantSlug')
+    const token = sessionStorage.getItem('token')
+
+    const cargarAsesores = async () => {
+      const { data, error: fetchErr } = await client.GET(
+        '/api/v2/{tenant_slug}/admin/usuarios',
+        {
+          params: { path: { tenant_slug: tenantSlug } },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      if (!fetchErr && data) {
+        setAsesores(data.filter(u => u.rol === 'asesor' || u.rol === 'admin'))
+      }
+    }
+
+    const cargarServicios = async () => {
+      if (servicioSeleccionado) return
+      const { data, error: fetchErr } = await client.GET(
+        '/api/v2/{tenant_slug}/admin/servicios',
+        {
+          params: { path: { tenant_slug: tenantSlug } },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+      if (!fetchErr && data) {
+        setServicios(data.filter(s => s.tipo_agenda === 'recurrente'))
+      }
+    }
+
+    cargarAsesores()
+    cargarServicios()
+  }, [servicioSeleccionado])
+
+  const handleChange = (campo) => (e) => {
+    const valor = e.target.type === 'checkbox' ? e.target.checked : e.target.value
+    setForm(prev => ({ ...prev, [campo]: valor }))
+  }
+
+  const validar = () => {
+    if (!servicioSeleccionado) return 'Selecciona un servicio'
+    if (!form.fecha_inicio) return 'Selecciona una fecha de inicio'
+    return null
+  }
+
+  const handleSubmit = async () => {
+    const validacion = validar()
+    if (validacion) {
+      setError(validacion)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setExito(null)
+    setSerieCreada(null)
+
+    const tenantSlug = sessionStorage.getItem('tenantSlug')
+    const token = sessionStorage.getItem('token')
+
+    const basePayload = {
+      frecuencia: form.frecuencia,
+      dia_semana: parseInt(form.dia_semana),
+      hora_inicio: form.hora_inicio,
+      duracion_minutos: parseInt(form.duracion_minutos),
+      num_repeticiones: parseInt(form.num_repeticiones),
+      asesor_id: form.asesor_id ? parseInt(form.asesor_id) : null,
+    }
+
+    let endpoint, params, body
+    if (esDesdeSolicitud) {
+      endpoint = '/api/v2/{tenant_slug}/admin/solicitudes/{solicitud_id}/confirmar-serie'
+      params = { path: { tenant_slug: tenantSlug, solicitud_id: solicitud.id } }
+      body = basePayload
+    } else {
+      endpoint = '/api/v2/{tenant_slug}/admin/series'
+      params = { path: { tenant_slug: tenantSlug } }
+      body = {
+        ...basePayload,
+        servicio_id: servicioSeleccionado.id,
+        fecha_inicio: `${form.fecha_inicio}T00:00:00${getLocalOffset()}`,
+      }
+    }
+
+    const { data, error: fetchErr } = await client.POST(
+      endpoint,
+      {
+        params,
+        body,
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    )
+
+    setLoading(false)
+
+    if (fetchErr) {
+      setError(errorMensaje(fetchErr))
+      return
+    }
+
+    const mensajeExito = esDesdeSolicitud
+      ? 'Serie creada — se invitó al cliente a elegir su modalidad de pago'
+      : 'Patrón de serie creado exitosamente'
+    setExito(mensajeExito)
+    setSerieCreada(data)
+    onCreado?.(data)
+  }
+
+  return (
+    <>
+    <Modal title={esDesdeSolicitud ? 'Confirmar solicitud como serie' : 'Crear Serie de Reservas Recurrentes'} onClose={onClose} maxWidth="max-w-2xl">
+      <div className="space-y-4">
+        {servicioSeleccionado ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <p className="text-sm font-medium text-blue-900">Servicio: {servicioSeleccionado.nombre}</p>
+            <p className="text-xs text-blue-700">Duración: {servicioSeleccionado.duracion_minutos} min</p>
+          </div>
+        ) : (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Servicio <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={servicioSeleccionado?.id || ''}
+              onChange={(e) => {
+                const id = parseInt(e.target.value)
+                const sel = servicios.find(s => s.id === id)
+                setServicioSeleccionado(sel || null)
+              }}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Selecciona un servicio recurrente</option>
+              {servicios.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre} ({s.duracion_minutos} min)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {solicitud?.notas_cliente && (
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+            <p className="text-xs font-medium text-yellow-800">Notas del cliente</p>
+            <p className="text-sm text-yellow-900">{solicitud.notas_cliente}</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        {exito && (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+            <p className="text-sm text-green-700">{exito}</p>
+            {!esDesdeSolicitud && serieCreada && (
+              <button
+                type="button"
+                onClick={() => setInvitarSerie(serieCreada)}
+                className="mt-2 text-sm font-medium text-green-800 underline hover:text-green-900"
+              >
+                Invitar clientes ahora →
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Asesor */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Asesor (opcional)
+          </label>
+          <select
+            value={form.asesor_id}
+            onChange={handleChange('asesor_id')}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Sin asesor específico</option>
+            {asesores.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Frecuencia y día */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Frecuencia <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.frecuencia}
+              onChange={handleChange('frecuencia')}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              {FRECUENCIAS.map(f => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Día de la semana <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.dia_semana}
+              onChange={handleChange('dia_semana')}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              {DIAS_SEMANA.map(d => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Hora y duración */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Hora de inicio <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="time"
+              value={form.hora_inicio}
+              onChange={handleChange('hora_inicio')}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Duración (min) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={form.duracion_minutos}
+              onChange={handleChange('duracion_minutos')}
+              min="1"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Fecha inicio y repeticiones */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Fecha de inicio <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={form.fecha_inicio}
+              onChange={handleChange('fecha_inicio')}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Número de repeticiones <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={form.num_repeticiones}
+              onChange={handleChange('num_repeticiones')}
+              min="1"
+              max="50"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        {esDesdeSolicitud && (
+          <p className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+            Al confirmar, se invita al cliente de la solicitud a esta serie — elegirá su modalidad
+            de pago desde su propio portal.
+          </p>
+        )}
+
+        {/* Botones */}
+        <div className="flex gap-2 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? (esDesdeSolicitud ? 'Confirmando...' : 'Creando...') : (esDesdeSolicitud ? 'Confirmar serie' : 'Crear Serie')}
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    {invitarSerie && (
+      <InscribirClientesSerieModal
+        serie={invitarSerie}
+        onClose={() => {
+          setInvitarSerie(null)
+          onClose()
+        }}
+        onCreado={() => {
+          setInvitarSerie(null)
+          onCreado?.()
+          onClose()
+        }}
+      />
+    )}
+    </>
+  )
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
 import { getLocalOffset } from '../utils/fechas'
 import SelectorFecha from './common/SelectorFecha'
@@ -47,12 +47,15 @@ function SlotSkeleton() {
 export default function CalendarioDisponibilidad() {
   const { tenantSlug, servicioId } = useParams()
   const navigate = useNavigate()
+  const token = sessionStorage.getItem('token')
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
   const [currentDate, setCurrentDate] = useState(() => hoy)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sesionesAbiertas, setSesionesAbiertas] = useState([])
+  const [avisoCargado, setAvisoCargado] = useState(false)
 
   const fetchDisponibilidad = useCallback(async () => {
     setLoading(true)
@@ -83,6 +86,42 @@ export default function CalendarioDisponibilidad() {
   useEffect(() => {
     fetchDisponibilidad()
   }, [fetchDisponibilidad])
+
+  useEffect(() => {
+    let cancelado = false
+    const cargar = async () => {
+      try {
+        const { data: result, error: fetchErr } = await client.GET(
+          '/api/v2/{tenant_slug}/servicios/{servicio_id}/sesiones-abiertas',
+          {
+            params: {
+              path: { tenant_slug: tenantSlug, servicio_id: servicioId },
+            },
+          },
+        )
+        if (cancelado) return
+        if (fetchErr) {
+          // falla en silencio para no bloquear la pantalla principal
+          // eslint-disable-next-line no-console
+          console.warn('No se pudieron cargar sesiones abiertas', fetchErr)
+          setSesionesAbiertas([])
+        } else {
+          setSesionesAbiertas(result ?? [])
+        }
+      } catch (err) {
+        if (cancelado) return
+        // eslint-disable-next-line no-console
+        console.warn('No se pudieron cargar sesiones abiertas', err)
+        setSesionesAbiertas([])
+      } finally {
+        if (!cancelado) setAvisoCargado(true)
+      }
+    }
+    cargar()
+    return () => {
+      cancelado = true
+    }
+  }, [tenantSlug, servicioId])
 
   const motivoLabel = (motivo) => MOTIVO_LABELS[motivo] ?? motivo
 
@@ -127,6 +166,27 @@ export default function CalendarioDisponibilidad() {
 
   return (
     <div className="mx-auto max-w-3xl">
+      {token && (
+        <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
+          <Link to="/mis-reservas" className="text-blue-600 hover:underline">
+            Mis reservas
+          </Link>
+          <Link to="/mis-solicitudes" className="text-blue-600 hover:underline">
+            Mis solicitudes
+          </Link>
+          <Link to={`/t/${tenantSlug}`} className="text-blue-600 hover:underline">
+            Elegir otro servicio
+          </Link>
+        </div>
+      )}
+      {avisoCargado && sesionesAbiertas.length > 0 && (
+        <Link
+          to={`/t/${tenantSlug}/servicio/${servicioId}/sesiones-abiertas`}
+          className="mb-4 block rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-center text-sm font-medium text-green-700 hover:bg-green-100"
+        >
+          Ya hay sesiones abiertas para este servicio — únete
+        </Link>
+      )}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr]">
         <div className="md:sticky md:top-4 md:self-start">
           <SelectorFecha
@@ -142,9 +202,19 @@ export default function CalendarioDisponibilidad() {
           </h2>
 
           {data && data.slots.length === 0 && (
-            <p className="py-8 text-center text-gray-500">
-              No hay horarios disponibles para este d&iacute;a.
-            </p>
+            <div className="py-8 text-center">
+              <p className="mb-3 text-gray-500">
+                No hay horarios disponibles para este d&iacute;a.
+              </p>
+              {data.permite_solicitudes && (
+                <Link
+                  to={`/t/${tenantSlug}/solicitar/${servicioId}`}
+                  className="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  Proponer otra fecha
+                </Link>
+              )}
+            </div>
           )}
 
           <div className="grid gap-3">
@@ -206,6 +276,17 @@ export default function CalendarioDisponibilidad() {
               )
             })}
           </div>
+
+          {data?.permite_solicitudes && data.slots.length > 0 && (
+            <div className="mt-4 text-center">
+              <Link
+                to={`/t/${tenantSlug}/solicitar/${servicioId}`}
+                className="text-sm text-blue-600 underline transition hover:text-blue-800"
+              >
+                ¿Ninguno de estos horarios te funciona? Proponer otra fecha
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

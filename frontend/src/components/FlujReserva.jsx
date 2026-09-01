@@ -66,7 +66,8 @@ export default function FlujReserva() {
   const location = useLocation()
   const slot = location.state?.slot
   const token = sessionStorage.getItem('token')
-  
+  const usuarioSesion = token ? JSON.parse(sessionStorage.getItem('usuario') || 'null') : null
+
   const [servicio, setServicio] = useState(null)
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({ email: '', nombre: '', telefono: '', notas: '' })
@@ -96,6 +97,7 @@ export default function FlujReserva() {
   }, [tenantSlug, servicioId])
 
   const validar = () => {
+    if (usuarioSesion) return true
     const errs = {}
     if (!form.nombre.trim()) errs.nombre = 'El nombre es obligatorio'
     if (!form.email.trim()) {
@@ -112,8 +114,8 @@ export default function FlujReserva() {
       servicio_id: servicioId,
       fecha_hora_inicio: utcToOffset(slot.fecha_hora_inicio),
       sesion_id: slot.sesion_existente_id ?? null,
-      email_invitado: form.email,
-      nombre_invitado: form.nombre,
+      email_invitado: form.email || null,
+      nombre_invitado: form.nombre || null,
       telefono_invitado: form.telefono || null,
       notas_cliente: form.notas || null,
       canal: 'web',
@@ -228,41 +230,49 @@ export default function FlujReserva() {
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Tus datos</h2>
 
           <div className="mb-4 space-y-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Nombre <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.nombre}
-                onChange={handleChange('nombre')}
-                className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
-                  errors.nombre ? 'border-red-400' : 'border-gray-300'
-                }`}
-                placeholder="Tu nombre"
-              />
-              {errors.nombre && (
-                <p className="mt-1 text-xs text-red-500">{errors.nombre}</p>
-              )}
-            </div>
+            {usuarioSesion ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                Vas a reservar como <span className="font-medium">{usuarioSesion.nombre}</span>.
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Nombre <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.nombre}
+                    onChange={handleChange('nombre')}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
+                      errors.nombre ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                    placeholder="Tu nombre"
+                  />
+                  {errors.nombre && (
+                    <p className="mt-1 text-xs text-red-500">{errors.nombre}</p>
+                  )}
+                </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={handleChange('email')}
-                className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
-                  errors.email ? 'border-red-400' : 'border-gray-300'
-                }`}
-                placeholder="correo@ejemplo.com"
-              />
-              {errors.email && (
-                <p className="mt-1 text-xs text-red-500">{errors.email}</p>
-              )}
-            </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={handleChange('email')}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
+                      errors.email ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                    placeholder="correo@ejemplo.com"
+                  />
+                  {errors.email && (
+                    <p className="mt-1 text-xs text-red-500">{errors.email}</p>
+                  )}
+                </div>
+              </>
+            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -313,13 +323,22 @@ export default function FlujReserva() {
     )
   }
 
-  const errorCodigo = errorReserva?.codigo
-  const errorMensaje = ERROR_MESSAGES[errorCodigo] ?? errorReserva?.mensaje ?? 'Ocurrió un error inesperado.'
+  // El backend envuelve errores de negocio como HTTPException(status, {codigo, mensaje}),
+  // que FastAPI serializa como {"detail": {"codigo": ..., "mensaje": ...}}. openapi-fetch
+  // no desenvuelve `detail`, así que el código/mensaje real vive en errorReserva.detail,
+  // no en el nivel superior.
+  const errorCodigo = errorReserva?.detail?.codigo ?? errorReserva?.codigo
+  const errorMensaje =
+    ERROR_MESSAGES[errorCodigo] ??
+    errorReserva?.detail?.mensaje ??
+    errorReserva?.mensaje ??
+    'Ocurrió un error inesperado.'
   const esConfirmada = resultado?.reserva?.estado === 'confirmada'
   const esEnEspera = resultado?.reserva?.estado === 'en_espera'
   const esNuevoEstadoPendiente = resultado?.reserva?.estado === 'pendiente'
   const reserva = resultado?.reserva
   const checkout = resultado?.checkout
+  const activacionUrl = resultado?.activacion_url
 
   return (
     <div className="mx-auto max-w-md">
@@ -439,8 +458,6 @@ export default function FlujReserva() {
             {checkout?.url && (
               <a
                 href={checkout.url}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="mb-2 block w-full rounded-lg bg-yellow-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-yellow-700"
               >
                 Ir a pagar
@@ -454,6 +471,22 @@ export default function FlujReserva() {
               Volver al calendario
             </button>
           </>
+        )}
+
+        {!errorReserva && activacionUrl && (
+          <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            <p className="mb-2 font-medium">Crea tu contraseña para dar seguimiento a tus reservas</p>
+            <p className="mb-3 text-blue-700">
+              Con tu cuenta activada puedes ver, reagendar o cancelar tus reservas
+              desde "Mis reservas" cuando quieras.
+            </p>
+            <a
+              href={activacionUrl}
+              className="block w-full rounded-lg bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              Activar mi cuenta
+            </a>
+          </div>
         )}
       </div>
     </div>

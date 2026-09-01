@@ -21,6 +21,7 @@ import GestionTenants from './components/superadmin/GestionTenants'
 import GestionUsuariosGlobal from './components/superadmin/GestionUsuariosGlobal'
 import ProtectedRoute from './components/ProtectedRoute'
 import TenantThemeProvider from './components/TenantThemeProvider'
+import { BookingFlow, ConfirmationScreen, MyReservations } from './vertice'
 
 function App() {
   return (
@@ -116,15 +117,20 @@ function App() {
           }
         />
 
-        <Route 
-          path="/seleccion-tenant" 
+        <Route
+          path="/seleccion-tenant"
           element={
             <ProtectedRoute allowedRoles={['cliente']}>
               <SeleccionTenant />
             </ProtectedRoute>
-          } 
+          }
         />
-        
+
+        {/* Rutas de prueba del sistema Vértice */}
+        <Route path="/test/booking" element={<BookingFlow />} />
+        <Route path="/test/confirmation" element={<ConfirmationScreen />} />
+        <Route path="/test/reservations" element={<MyReservations />} />
+
         {/* Ruta por defecto */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         

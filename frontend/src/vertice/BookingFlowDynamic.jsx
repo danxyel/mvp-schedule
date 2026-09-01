@@ -27,12 +27,9 @@ export function BookingFlowDynamic() {
   const [horarioSeleccionado, setHorarioSeleccionado] = useState(null)
   const [planSeleccionado, setPlanSeleccionado] = useState(null)
 
-  // Mock planes (usar del API si existe)
-  const planes = [
-    { id: 1, nombre: 'Sesión suelta', precio: 0, descripcion: 'Pago único' },
-    { id: 2, nombre: 'Paquete de 5', precio: 0, descripcion: 'Ahorra' },
-    { id: 3, nombre: 'Paquete de 10', precio: 0, descripcion: 'Ahorra más' },
-  ]
+  // Planes del servicio si existen, si no usar confirmación directa
+  const tienePaquetes = servicio?.paquetes?.length > 0
+  const planes = tienePaquetes ? servicio.paquetes : []
 
   // Cargar datos del servicio
   useEffect(() => {
@@ -133,7 +130,7 @@ export function BookingFlowDynamic() {
 
   const handleProximo = async () => {
     if (paso === 1 && (!fechaSeleccionada || horarioSeleccionado === null)) return
-    if (paso === 2 && !planSeleccionado) return
+    if (paso === 2 && tienePaquetes && !planSeleccionado) return
 
     if (paso < 2) {
       setPaso(paso + 1)
@@ -179,12 +176,14 @@ export function BookingFlowDynamic() {
     1: fechaSeleccionada && horarioSeleccionado !== null
       ? `${fechaSeleccionada.getDate()}/${fechaSeleccionada.getMonth() + 1} - ${sesiones[horarioSeleccionado]?.rango}`
       : 'Selecciona fecha y hora',
-    2: planSeleccionado ? planes[planSeleccionado - 1]?.nombre : 'Elige un plan',
+    2: tienePaquetes
+      ? (planSeleccionado ? planes.find(p => p.id === planSeleccionado)?.nombre : 'Selecciona plan')
+      : 'Listo para confirmar',
   }
 
   const botonDeshabilitado = {
     1: !fechaSeleccionada || horarioSeleccionado === null,
-    2: !planSeleccionado,
+    2: tienePaquetes ? !planSeleccionado : false,
   }
 
   if (loading) {
@@ -333,21 +332,23 @@ export function BookingFlowDynamic() {
         {paso === 2 && (
           <div>
             <h2 style={{ fontSize: 'var(--text-h3)', margin: '0 0 var(--space-5) 0' }}>
-              Selecciona tu plan
+              Confirmar
             </h2>
 
-            <div style={{ marginBottom: 'var(--space-6)' }}>
-              {planes.map((plan, idx) => (
-                <PlanCard
-                  key={idx}
-                  nombre={plan.nombre}
-                  precio={`$${plan.precio}`}
-                  nota={plan.descripcion}
-                  selected={planSeleccionado === idx + 1}
-                  onClick={() => setPlanSeleccionado(idx + 1)}
-                />
-              ))}
-            </div>
+            {tienePaquetes && (
+              <div style={{ marginBottom: 'var(--space-6)' }}>
+                {planes.map((plan, idx) => (
+                  <PlanCard
+                    key={idx}
+                    nombre={plan.nombre}
+                    precio={`$${plan.precio}`}
+                    nota={plan.descripcion}
+                    selected={planSeleccionado === plan.id}
+                    onClick={() => setPlanSeleccionado(plan.id)}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Resumen */}
             <div
@@ -383,7 +384,11 @@ export function BookingFlowDynamic() {
               >
                 <span style={{ fontWeight: 'var(--weight-semibold)' }}>Total:</span>
                 <span style={{ fontSize: 'var(--text-h3)', fontWeight: 'var(--weight-bold)' }}>
-                  ${servicio?.precio || planes[planSeleccionado - 1]?.precio || '0'}
+                  ${
+                    tienePaquetes
+                      ? planes.find(p => p.id === planSeleccionado)?.precio || servicio?.precio || '0'
+                      : servicio?.precio || '0'
+                  }
                 </span>
               </div>
             </div>

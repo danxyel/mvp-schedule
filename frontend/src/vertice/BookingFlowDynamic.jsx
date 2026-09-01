@@ -265,6 +265,82 @@ export function BookingFlowDynamic() {
     )
   }
 
+  // Si el servicio requiere confirmación manual, mostrar mensaje informativo
+  if (servicio?.requiere_confirmacion) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          backgroundColor: 'var(--color-bg)',
+          padding: 'var(--gutter-movil)',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 500,
+            textAlign: 'center',
+            animation: 'riseIn var(--dur-enter) var(--ease-out)',
+          }}
+        >
+          <div style={{ fontSize: 60, marginBottom: 'var(--space-6)' }}>📋</div>
+
+          <h1
+            style={{
+              fontSize: 'var(--text-display-sm)',
+              fontWeight: 'var(--weight-bold)',
+              margin: '0 0 var(--space-3) 0',
+              color: 'var(--color-text)',
+            }}
+          >
+            Este servicio requiere confirmación
+          </h1>
+
+          <p
+            style={{
+              fontSize: 'var(--text-body)',
+              color: 'var(--color-text-muted)',
+              margin: '0 0 var(--space-8) 0',
+              lineHeight: 'var(--leading-normal)',
+            }}
+          >
+            Para este servicio, debes enviar una solicitud con tu fecha y hora propuesta. El equipo la revisará y te confirmará.
+          </p>
+
+          <p
+            style={{
+              fontSize: 'var(--text-body)',
+              color: 'var(--color-text)',
+              margin: '0 0 var(--space-8) 0',
+              fontWeight: 'var(--weight-semibold)',
+            }}
+          >
+            Acceso disponible para usuarios autenticados
+          </p>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 'var(--space-4)',
+              flexDirection: 'column',
+            }}
+          >
+            <Button
+              variant="ghost"
+              onClick={() => navigate(`/t/${tenantSlug}`)}
+              block
+            >
+              Volver al catálogo
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{

@@ -6,6 +6,7 @@ export { ConfirmationScreen } from './ConfirmationScreen'
 export { MyReservations } from './MyReservations'
 
 // Dynamic versions (with API integration)
+export { SeleccionServicioVertice } from './SeleccionServicioVertice'
 export { BookingFlowDynamic } from './BookingFlowDynamic'
 export { ConfirmationScreenDynamic } from './ConfirmationScreenDynamic'
 export { MyReservationsDynamic } from './MyReservationsDynamic'

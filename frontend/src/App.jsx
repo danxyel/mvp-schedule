@@ -21,7 +21,13 @@ import GestionTenants from './components/superadmin/GestionTenants'
 import GestionUsuariosGlobal from './components/superadmin/GestionUsuariosGlobal'
 import ProtectedRoute from './components/ProtectedRoute'
 import TenantThemeProvider from './components/TenantThemeProvider'
-import { TestPage, MyReservationsDynamic, ConfirmationScreenDynamic } from './vertice'
+import {
+  TestPage,
+  SeleccionServicioVertice,
+  BookingFlowDynamic,
+  ConfirmationScreenDynamic,
+  MyReservationsDynamic,
+} from './vertice'
 
 function App() {
   return (
@@ -38,11 +44,13 @@ function App() {
         {/* Ruta pública: detalle de reserva por folio + código */}
         <Route path="/t/:tenantSlug/r/:folio" element={<DetalleReservaPublica />} />
         
-        {/* Rutas públicas del tenant (sin login) */}
-        <Route path="/t/:tenantSlug" element={<SeleccionServicio />} />
+        {/* Rutas públicas del tenant (sin login) — Vértice */}
+        <Route path="/t/:tenantSlug" element={<SeleccionServicioVertice />} />
+        <Route path="/t/:tenantSlug/reservar/:servicioId" element={<BookingFlowDynamic />} />
+
+        {/* Rutas antiguas (fallback) */}
         <Route path="/t/:tenantSlug/servicio/:servicioId" element={<CalendarioDisponibilidad />} />
         <Route path="/t/:tenantSlug/servicio/:servicioId/sesiones-abiertas" element={<SesionesAbiertas />} />
-        <Route path="/t/:tenantSlug/reservar/:servicioId" element={<FlujReserva />} />
         <Route path="/t/:tenantSlug/reclamar" element={<Reclamar />} />
         <Route path="/t/:tenantSlug/activar" element={<Activar />} />
         <Route

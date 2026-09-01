@@ -33,9 +33,16 @@ export function CheckoutDynamic() {
   const handleProcesarPago = async () => {
     setProcesando(true)
     try {
-      console.log('Iniciando checkout para folio:', folio)
+      console.log('=== Iniciando checkout para folio:', folio)
       console.log('¿Tiene token?:', !!token)
       console.log('Token primeros 50 chars:', token ? token.substring(0, 50) + '...' : 'NO TOKEN')
+
+      if (!token) {
+        console.warn('⚠️ No hay token disponible en sessionStorage')
+        console.warn('sessionStorage keys:', Object.keys(sessionStorage))
+        setError('No se encontró token de autenticación. Por favor completa el formulario de reserva.')
+        return
+      }
 
       const { data: checkout, error: checkoutErr } = await client.POST(
         '/api/v2/{tenant_slug}/reservas/{folio}/checkout',
@@ -43,11 +50,11 @@ export function CheckoutDynamic() {
           params: {
             path: { tenant_slug: tenantSlug, folio },
           },
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: { Authorization: `Bearer ${token}` },
         }
       )
 
-      console.log('Respuesta checkout:', checkout)
+      console.log('✓ Respuesta checkout:', checkout)
       console.log('Error checkout:', checkoutErr)
 
       if (checkoutErr) throw checkoutErr
@@ -59,8 +66,9 @@ export function CheckoutDynamic() {
         setError('No se pudo obtener URL de pago')
       }
     } catch (err) {
-      console.error('Error al procesar pago:', err)
-      setError('No se pudo procesar el pago')
+      console.error('❌ Error al procesar pago:', err)
+      const errorDetail = err?.detail || err?.message || String(err)
+      setError(`No se pudo procesar el pago: ${errorDetail}`)
     } finally {
       setProcesando(false)
     }
@@ -143,14 +151,22 @@ export function CheckoutDynamic() {
             style={{
               display: 'flex',
               gap: 'var(--space-3)',
+              flexDirection: 'column',
             }}
           >
+            <Button
+              variant="ghost"
+              onClick={() => navigate(-1)}
+              block
+            >
+              Intentar de nuevo
+            </Button>
             <Button
               variant="ghost"
               onClick={() => navigate('/mis-reservas')}
               block
             >
-              Ir a reservas
+              Ir a mis reservas
             </Button>
           </div>
         </div>

@@ -903,7 +903,15 @@ def crear_reserva(
     if generar_token_activacion and usuario.password_hash is None:
         # Generate JWT for immediate API authentication (checkout)
         acceso_token_plano = crear_jwt_guest(usuario.id)
-        log.info(f"JWT generado para usuario invitado {usuario.id}: {'OK' if acceso_token_plano else 'FAIL'}")
+        log.info(
+            f"JWT generado para usuario invitado {usuario.id}: "
+            f"{'OK - ' + acceso_token_plano[:30] + '...' if acceso_token_plano else 'FAIL - token es null/empty'}"
+        )
+    else:
+        log.info(
+            f"JWT NO generado: generar_token_activacion={generar_token_activacion}, "
+            f"usuario.password_hash={usuario.password_hash is not None}"
+        )
 
     _lock_franja(db, tenant_id, servicio.id, inicio)
 

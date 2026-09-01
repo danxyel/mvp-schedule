@@ -209,6 +209,7 @@ export function BookingFlowDynamic() {
         }
 
         console.log('Response completo:', response)
+        console.log('Response keys:', Object.keys(response || {}))
 
         const reserva = response.reserva || response
         const checkout = response.checkout
@@ -216,6 +217,7 @@ export function BookingFlowDynamic() {
 
         console.log('Reserva:', reserva)
         console.log('Checkout:', checkout)
+        console.log('AccesoTokenPlano:', accesoTokenPlano)
         console.log('¿Tiene token de activación?:', !!accesoTokenPlano)
         console.log('¿Tiene URL de pago?:', !!checkout?.url)
         console.log('Estado de reserva:', reserva?.estado)
@@ -224,7 +226,11 @@ export function BookingFlowDynamic() {
         // Guardar el token de activación si se proporcionó (para usuarios invitados)
         if (accesoTokenPlano) {
           sessionStorage.setItem('acceso_token', accesoTokenPlano)
-          console.log('Token de activación guardado en sessionStorage')
+          console.log('✓ Token JWT guardado en sessionStorage')
+          console.log('Token primeros 50 chars:', accesoTokenPlano.substring(0, 50))
+        } else {
+          console.warn('⚠️ ADVERTENCIA: No se recibió token de activación en la respuesta')
+          console.warn('AccesoTokenPlano value:', accesoTokenPlano)
         }
 
         // Si hay checkout (pago requerido), redirigir al checkout externo

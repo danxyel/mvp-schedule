@@ -1,43 +1,34 @@
 import React, { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import client from '../api/client'
 import { Button } from '../design-system'
 
 export function CheckoutDynamic() {
   const { tenantSlug, folio } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const token = sessionStorage.getItem('acceso_token') || sessionStorage.getItem('token')
 
-  const [reserva, setReserva] = useState(null)
-  const [loading, setLoading] = useState(true)
+  // Si ya tenemos los datos de reserva del estado de navegación, úsalos
+  const [reserva, setReserva] = useState(location.state?.reserva || null)
+  const [loading, setLoading] = useState(!reserva)
   const [error, setError] = useState(null)
   const [procesando, setProcesando] = useState(false)
 
   useEffect(() => {
-    const fetchReserva = async () => {
-      try {
-        setLoading(true)
-        const { data, error: fetchErr } = await client.GET(
-          '/api/v2/{tenant_slug}/reservas/{folio}',
-          {
-            params: {
-              path: { tenant_slug: tenantSlug, folio }
-            },
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          }
-        )
-        if (fetchErr) throw fetchErr
-        setReserva(data)
-      } catch (err) {
-        console.error('Error:', err)
-        setError(err.message || 'Error al cargar reserva')
-      } finally {
-        setLoading(false)
-      }
+    if (reserva) {
+      // Ya tenemos los datos de la reserva del estado de navegación
+      console.log('Usando datos de reserva del estado:', reserva)
+      setLoading(false)
+      return
     }
 
-    fetchReserva()
-  }, [tenantSlug, folio, token])
+    // Si no tenemos la reserva, mostrar error
+    // (debería siempre venir del estado de navegación)
+    console.error('No hay datos de reserva. Deberías navegar desde BookingFlowDynamic o ConfirmationScreenDynamic')
+    setError('No se encontraron datos de la reserva. Por favor intenta desde el flujo de reserva.')
+    setLoading(false)
+  }, [reserva])
 
   const handleProcesarPago = async () => {
     setProcesando(true)

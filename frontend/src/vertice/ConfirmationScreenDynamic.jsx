@@ -92,7 +92,9 @@ export function ConfirmationScreenDynamic() {
                 lineHeight: 'var(--leading-normal)',
               }}
             >
-              Tu reserva ha sido confirmada. Recibirás un correo de confirmación en los próximos minutos.
+              {reserva?.estado === 'pendiente_pago'
+                ? 'Tu lugar está reservado. Por favor completa el pago para confirmar tu reserva.'
+                : 'Tu reserva ha sido confirmada. Recibirás un correo de confirmación en los próximos minutos.'}
             </p>
 
             {/* Detalles de la reserva */}
@@ -214,6 +216,14 @@ export function ConfirmationScreenDynamic() {
                 flexDirection: 'column',
               }}
             >
+              {reserva?.estado === 'pendiente_pago' && (
+                <Button
+                  onClick={() => navigate(`/t/${tenantSlug}/checkout/${reserva.folio}`, { state: { reserva } })}
+                  block
+                >
+                  Procesar pago
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 onClick={() => navigate('/mis-reservas')}

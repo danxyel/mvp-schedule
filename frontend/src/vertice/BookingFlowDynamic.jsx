@@ -200,18 +200,33 @@ export function BookingFlowDynamic() {
           throw reservaErr
         }
 
-        const reserva = response.reserva
+        console.log('Response completo:', response)
+
+        const reserva = response.reserva || response
         const checkout = response.checkout
+
+        console.log('Reserva:', reserva)
+        console.log('Checkout:', checkout)
+        console.log('¿Tiene URL de pago?:', !!checkout?.url)
 
         // Si hay checkout (pago requerido), redirigir al checkout
         if (checkout?.url) {
+          console.log('Redirigiendo a:', checkout.url)
           window.location.href = checkout.url
-        } else {
-          // Si no hay pago, ir a confirmación
-          navigate(
-            `/t/${tenantSlug}/confirmar/${reserva.folio}`,
-            { state: { reserva } }
-          )
+        } else if (reserva?.folio) {
+          // Si no hay pago, ir a confirmación o checkout (si tiene URL de estado)
+          if (reserva.estado === 'pendiente_pago' || reserva.requiere_pago) {
+            // Ir a pantalla de checkout interno
+            console.log('Redirigiendo a CheckoutDynamic para folio:', reserva.folio)
+            navigate(`/t/${tenantSlug}/checkout/${reserva.folio}`, { state: { reserva } })
+          } else {
+            // Ir a confirmación
+            console.log('Redirigiendo a confirmación')
+            navigate(
+              `/t/${tenantSlug}/confirmar/${reserva.folio}`,
+              { state: { reserva } }
+            )
+          }
         }
       } catch (err) {
         setError(err.message || err.detail?.detail || 'Error al crear reserva')

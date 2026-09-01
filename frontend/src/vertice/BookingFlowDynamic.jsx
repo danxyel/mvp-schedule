@@ -70,18 +70,30 @@ export function BookingFlowDynamic() {
 
     const fetchDisponibilidad = async () => {
       try {
-        const fecha = fechaSeleccionada.toISOString().split('T')[0]
+        // Formato RFC3339 con offset de timezone: 2026-08-01T00:00:00-06:00
+        const offset = -fechaSeleccionada.getTimezoneOffset()
+        const hours = Math.floor(Math.abs(offset) / 60)
+        const minutes = Math.abs(offset) % 60
+        const sign = offset >= 0 ? '+' : '-'
+        const tzOffset = `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+        const isoDate = fechaSeleccionada.toISOString().split('T')[0]
+        const fecha = `${isoDate}T00:00:00${tzOffset}`
 
-        // Intentar obtener disponibilidad del API
-        const { data: disp } = await client.GET(
-          '/servicios/{servicio_id}/disponibilidad',
+        // Intentar obtener disponibilidad del API con tenant_slug
+        const { data: disp, error: dispErr } = await client.GET(
+          '/api/v2/{tenant_slug}/servicios/{servicio_id}/disponibilidad',
           {
             params: {
-              path: { servicio_id: servicioId },
+              path: { tenant_slug: tenantSlug, servicio_id: servicioId },
               query: { fecha },
             },
           }
         )
+
+        if (dispErr) {
+          console.error('Error del API:', dispErr)
+          throw dispErr
+        }
 
         if (disp?.sesiones) {
           setDisponibilidad(disp)
@@ -113,7 +125,7 @@ export function BookingFlowDynamic() {
     }
 
     fetchDisponibilidad()
-  }, [fechaSeleccionada, servicioId])
+  }, [fechaSeleccionada, servicioId, tenantSlug])
 
   const handlePasoSelect = (n) => {
     if (n <= paso) setPaso(n)

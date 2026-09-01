@@ -208,20 +208,26 @@ export function BookingFlowDynamic() {
         console.log('Reserva:', reserva)
         console.log('Checkout:', checkout)
         console.log('¿Tiene URL de pago?:', !!checkout?.url)
+        console.log('Estado de reserva:', reserva?.estado)
+        console.log('Estado de pago:', reserva?.estado_pago)
 
-        // Si hay checkout (pago requerido), redirigir al checkout
+        // Si hay checkout (pago requerido), redirigir al checkout externo
         if (checkout?.url) {
-          console.log('Redirigiendo a:', checkout.url)
+          console.log('Redirigiendo a URL de pago externa:', checkout.url)
           window.location.href = checkout.url
         } else if (reserva?.folio) {
-          // Si no hay pago, ir a confirmación o checkout (si tiene URL de estado)
-          if (reserva.estado === 'pendiente_pago' || reserva.requiere_pago) {
-            // Ir a pantalla de checkout interno
+          // Si no hay checkout.url, verificar si la reserva requiere pago
+          // Estado EN_ESPERA significa que está esperando pago online
+          // Estado PENDIENTE_PAGO o estado_pago === PENDIENTE también requieren pago
+          if (
+            reserva.estado === 'en_espera' ||
+            reserva.estado_pago === 'pendiente'
+          ) {
             console.log('Redirigiendo a CheckoutDynamic para folio:', reserva.folio)
             navigate(`/t/${tenantSlug}/checkout/${reserva.folio}`, { state: { reserva } })
           } else {
-            // Ir a confirmación
-            console.log('Redirigiendo a confirmación')
+            // Ir a confirmación (reserva completamente confirmada)
+            console.log('Redirigiendo a pantalla de confirmación')
             navigate(
               `/t/${tenantSlug}/confirmar/${reserva.folio}`,
               { state: { reserva } }

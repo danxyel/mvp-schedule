@@ -92,7 +92,7 @@ export function ConfirmationScreenDynamic() {
                 lineHeight: 'var(--leading-normal)',
               }}
             >
-              {reserva?.estado === 'pendiente_pago'
+              {(reserva?.estado === 'en_espera' || reserva?.estado_pago === 'pendiente')
                 ? 'Tu lugar está reservado. Por favor completa el pago para confirmar tu reserva.'
                 : 'Tu reserva ha sido confirmada. Recibirás un correo de confirmación en los próximos minutos.'}
             </p>
@@ -216,7 +216,7 @@ export function ConfirmationScreenDynamic() {
                 flexDirection: 'column',
               }}
             >
-              {reserva?.estado === 'pendiente_pago' && (
+              {(reserva?.estado === 'en_espera' || reserva?.estado_pago === 'pendiente') && (
                 <Button
                   onClick={() => navigate(`/t/${tenantSlug}/checkout/${reserva.folio}`, { state: { reserva } })}
                   block

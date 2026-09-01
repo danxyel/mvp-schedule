@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Estados - Sistema Vértice</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            color: #1f2937;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 16px;
+            color: #6b7280;
+        }
+
+        .system-tones {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 60px;
+        }
+
+        .tone-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .tone-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .tone-swatch {
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .tone-accent { background: linear-gradient(135deg, #4f46e5, #6366f1); }
+        .tone-positive { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+        .tone-warn { background: linear-gradient(135deg, #d97706, #f59e0b); }
+        .tone-idle { background: linear-gradient(135deg, #64748b, #78909c); }
+
+        .tone-info {
+            padding: 20px;
+        }
+
+        .tone-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .tone-desc {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .tone-colors {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .color-sample {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 11px;
+            flex: 1;
+            min-width: 60px;
+        }
+
+        .color-box {
+            width: 100%;
+            height: 40px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .color-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .states-section {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-bottom: 60px;
+        }
+
+        .states-section h2 {
+            font-size: 24px;
+            color: #1f2937;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .states-section > p {
+            color: #6b7280;
+            margin-bottom: 32px;
+            font-size: 14px;
+        }
+
+        .states-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .state-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .state-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .state-tone-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .state-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .state-label {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
+
+        .state-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            border: 1px solid;
+            display: inline-block;
+            margin-bottom: 12px;
+        }
+
+        .state-meta {
+            font-size: 12px;
+            color: #6b7280;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .badge-positive {
+            background-color: #ccfbf1;
+            color: #0d7377;
+            border-color: #99f6e4;
+        }
+
+        .badge-warn {
+            background-color: #fef3c7;
+            color: #b45309;
+            border-color: #fde68a;
+        }
+
+        .badge-idle {
+            background-color: #e2e8f0;
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+        .badge-accent {
+            background-color: #e0e7ff;
+            color: #3730a3;
+            border-color: #c7d2fe;
+        }
+
+        .footer {
+            text-align: center;
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .footer p {
+            margin: 4px 0;
+        }
+
+        .code-block {
+            background: #f3f4f6;
+            border-left: 4px solid #4f46e5;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 11px;
+            color: #374151;
+            margin-top: 8px;
+            overflow-x: auto;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #1f2937;
+            }
+
+            .header {
+                color: #f3f4f6;
+            }
+
+            .header p {
+                color: #9ca3af;
+            }
+
+            .tone-card,
+            .states-section {
+                background: #374151;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            }
+
+            .tone-name,
+            .state-title,
+            .states-section h2 {
+                color: #f3f4f6;
+            }
+
+            .tone-desc,
+            .state-label,
+            .states-section > p,
+            .color-label {
+                color: #d1d5db;
+            }
+
+            .state-card {
+                background: #4b5563;
+                border-color: #6b7280;
+            }
+
+            .state-meta {
+                background: #374151;
+                border-color: #6b7280;
+                color: #d1d5db;
+            }
+
+            .code-block {
+                background: #1f2937;
+                border-left-color: #6366f1;
+                color: #e5e7eb;
+            }
+
+            .footer {
+                color: #d1d5db;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Sistema de Color de Estados</h1>
+            <p>Vértice Design System — MVP Schedule</p>
+        </div>
+
+        <!-- Tonos del Sistema -->
+        <div class="system-tones">
+            <!-- Accent -->
+            <div class="tone-card">
+                <div class="tone-swatch tone-accent">Accent</div>
+                <div class="tone-info">
+                    <div class="tone-name">Accent (Indigo)</div>
+                    <div class="tone-desc">Interacción, disponibilidad y llamadas a la acción. Usado para elementos interactivos y capacidad disponible.</div>
+                    <div class="tone-colors">
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #e0e7ff; border-color: #c7d2fe;"></div>
+                            <span class="color-label">100</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #4f46e5;"></div>
+                            <span class="color-label">600</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #3730a3;"></div>
+                            <span class="color-label">800</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Positive -->
+            <div class="tone-card">
+                <div class="tone-swatch tone-positive">Positive</div>
+                <div class="tone-info">
+                    <div class="tone-name">Positive (Teal)</div>
+                    <div class="tone-desc">Confirmación y éxito. Indica que una acción se completó correctamente o un estado positivo.</div>
+                    <div class="tone-colors">
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #ccfbf1; border-color: #99f6e4;"></div>
+                            <span class="color-label">100</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #0d9488;"></div>
+                            <span class="color-label">600</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #0d7377;"></div>
+                            <span class="color-label">800</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warn -->
+            <div class="tone-card">
+                <div class="tone-swatch tone-warn">Warn</div>
+                <div class="tone-info">
+                    <div class="tone-name">Warn (Amber)</div>
+                    <div class="tone-desc">Atención y estado pendiente. Indica que se requiere una acción del usuario o hay algo en espera.</div>
+                    <div class="tone-colors">
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #fef3c7; border-color: #fde68a;"></div>
+                            <span class="color-label">100</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #d97706;"></div>
+                            <span class="color-label">600</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #b45309;"></div>
+                            <span class="color-label">800</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Idle -->
+            <div class="tone-card">
+                <div class="tone-swatch tone-idle">Idle</div>
+                <div class="tone-info">
+                    <div class="tone-name">Idle (Slate)</div>
+                    <div class="tone-desc">Neutro e inactivo. Estados completados, cancelados o que no requieren acción inmediata del usuario.</div>
+                    <div class="tone-colors">
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #e2e8f0; border-color: #cbd5e1;"></div>
+                            <span class="color-label">100</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #64748b;"></div>
+                            <span class="color-label">600</span>
+                        </div>
+                        <div class="color-sample">
+                            <div class="color-box" style="background-color: #475569;"></div>
+                            <span class="color-label">800</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estados de Reserva -->
+        <div class="states-section">
+            <h2>Estados de Reserva</h2>
+            <p>Mapeo de estados de reserva a tonos del sistema Vértice. El sistema no define color de error; los estados inactivos usan tone <code>idle</code>.</p>
+
+            <div class="states-grid">
+                <!-- Confirmada -->
+                <div class="state-card">
+                    <div class="state-header">
+                        <div class="state-tone-indicator" style="background-color: #0d9488;"></div>
+                        <span class="state-title">Confirmada</span>
+                    </div>
+                    <div class="state-label">TONE: positive</div>
+                    <div class="state-badge badge-positive">Confirmada</div>
+                    <div class="state-meta">
+                        Reserva confirmada y lista. El usuario ya está inscrito y debe asistir a la sesión.
+                    </div>
+                    <div class="code-block">badgeClassForEstado('confirmada')</div>
+                </div>
+
+                <!-- En Espera -->
+                <div class="state-card">
+                    <div class="state-header">
+                        <div class="state-tone-indicator" style="background-color: #d97706;"></div>
+                        <span class="state-title">En Espera de Pago</span>
+                    </div>
+                    <div class="state-label">TONE: warn</div>
+                    <div class="state-badge badge-warn">En espera</div>
+                    <div class="state-meta">
+                        Reserva propuesta que requiere confirmación de pago. El usuario debe completar la acción de pago.
+                    </div>
+                    <div class="code-block">badgeClassForEstado('en_espera')</div>
+                </div>
+
+                <!-- Pendiente -->
+                <div class="state-card">
+                    <div class="state-header">
+                        <div class="state-tone-indicator" style="background-color: #64748b;"></div>
+                        <span class="state-title">Procesando</span>
+                    </div>
+                    <div class="state-label">TONE: idle</div>
+                    <div class="state-badge badge-idle">Procesando</div>
+                    <div class="state-meta">
+                        Reserva en proceso. Será confirmada por el administrador. No requiere acción del usuario.
+                    </div>
+                    <div class="code-block">badgeClassForEstado('pendiente')</div>
+                </div>
+
+                <!-- Completada -->
+                <div class="state-card">
+                    <div class="state-header">
+                        <div class="state-tone-indicator" style="background-color: #64748b;"></div>
+                        <span class="state-title">Completada</span>
+                    </div>
+                    <div class="state-label">TONE: idle</div>
+                    <div class="state-badge badge-idle">Completada</div>
+                    <div class="state-meta">
+                        Sesión finalizada exitosamente. El usuario ya asistió y se completó la actividad.
+                    </div>
+                    <div class="code-block">badgeClassForEstado('completada')</div>
+                </div>
+
+                <!-- Cancelada -->
+                <div class="state-card">
+                    <div class="state-header">
+                        <div class="state-tone-indicator" style="background-color: #64748b;"></div>
+                        <span class="state-title">Cancelada</span>
+                    </div>
+                    <div class="state-label">TONE: idle</div>
+                    <div class="state-badge badge-idle">Cancelada</div>
+                    <div class="state-meta">
+                        Reserva cancelada. El usuario no asistirá. No requiere acción adicional.
+                    </div>
+                    <div class="code-block">badgeClassForEstado('cancelada')</div>
+                </div>
+
+                <!-- No Show -->
+                <div class="state-card">
+                    <div class="state-header">
+                        <div class="state-tone-indicator" style="background-color: #64748b;"></div>
+                        <span class="state-title">No Asistió</span>
+                    </div>
+                    <div class="state-label">TONE: idle</div>
+                    <div class="state-badge badge-idle">No asistió</div>
+                    <div class="state-meta">
+                        Usuario no asistió a la sesión confirmada. Se registra la inasistencia en el sistema.
+                    </div>
+                    <div class="code-block">badgeClassForEstado('no_show')</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Implementación -->
+        <div class="states-section">
+            <h2>Implementación en Frontend</h2>
+            <p>Utiliza las funciones del módulo <code>frontend/src/utils/estado.js</code> para aplicar estilos consistentes:</p>
+
+            <div class="code-block">
+// Importar funciones del módulo de estado
+import { badgeClassForEstado, badgeClassForTone } from '../utils/estado'
+
+// Para un estado de reserva
+&lt;span className={badgeClassForEstado(r.estado)}&gt;
+  {ESTADO_LABEL[r.estado]}
+&lt;/span&gt;
+
+// Para un tono específico
+&lt;span className={badgeClassForTone('positive')}&gt;
+  Disponible
+&lt;/span&gt;
+            </div>
+
+            <div style="margin-top: 20px; padding: 16px; background: #f0f4ff; border-radius: 8px; border-left: 4px solid #4f46e5;">
+                <strong style="color: #3730a3;">Principios de aplicación:</strong>
+                <ul style="margin-top: 8px; margin-left: 20px; color: #4338ca; font-size: 13px;">
+                    <li>Un solo color para cada trabajo semántico</li>
+                    <li>Mantener consistencia visual en toda la app</li>
+                    <li>No inventar nuevos colores fuera del sistema</li>
+                    <li>Usar las constantes y funciones centralizadas</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Sistema Vértice | MVP Schedule</p>
+            <p>Última actualización: Septiembre 1, 2026</p>
+        </div>
+    </div>
+</body>
+</html>

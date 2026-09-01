@@ -26,14 +26,10 @@ import { TestPage } from './vertice/TestPage'
 function App() {
   return (
     <BrowserRouter>
-      {/* Ruta de prueba fuera del TenantThemeProvider */}
-      <Routes>
-        <Route path="/test/vertice" element={<TestPage />} />
-      </Routes>
-
       <TenantThemeProvider>
         <Routes>
         {/* Rutas públicas */}
+        <Route path="/test/vertice" element={<TestPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/recuperar-password" element={<RecuperarPassword />} />
         <Route path="/recuperar-password/confirmar" element={<RestablecerPassword />} />

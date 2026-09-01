@@ -9,13 +9,15 @@ export function TestPage() {
       {/* Sidebar de navegación */}
       <div
         style={{
-          width: 200,
+          width: 280,
+          minWidth: 280,
           backgroundColor: '#1a1a1a',
           color: 'white',
           padding: '20px',
           display: 'flex',
           flexDirection: 'column',
           gap: '10px',
+          overflowY: 'auto',
         }}
       >
         <h2 style={{ marginTop: 0 }}>Test Vértice</h2>

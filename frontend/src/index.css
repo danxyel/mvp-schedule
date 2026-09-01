@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
 @import "./design-system/tokens.css";
 
 @theme {
@@ -14,4 +15,10 @@
   --color-brand-900: var(--tenant-brand-900, var(--color-indigo-900));
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Vértice design system overrides */
+:root {
+  --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-heading: "Plus Jakarta Sans", system-ui, sans-serif;
 }

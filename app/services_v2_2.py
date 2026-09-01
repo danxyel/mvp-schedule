@@ -29,6 +29,7 @@ import mercadopago
 import jwt
 from urllib.parse import quote
 
+from app.dependencies import SECRET_KEY
 from sqlalchemy import and_, or_, func, select, update, text
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -197,7 +198,6 @@ def crear_jwt_guest(usuario_id: int, expires_hours: int = 48) -> str:
 
     El token es válido solo para endpoints que aceptan usuarios guest autenticados.
     """
-    SECRET_KEY = os.getenv("JWT_SECRET_KEY", "CAMBIA_ESTO_EN_PRODUCCION_MIN_32_CHARS")
     ALGORITHM = "HS256"
     payload = {
         "sub": str(usuario_id),

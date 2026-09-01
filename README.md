@@ -33,6 +33,30 @@ print(Fernet.generate_key().decode())
 3. `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 4. `celery -A app.tasks worker -l info -B`
 
+## Sistema de Diseño — Vértice
+
+### Guía de Colores de Estados
+El proyecto implementa el **sistema de diseño Vértice** con tonos semánticos para estados de reserva:
+
+- 🔵 **Accent (Indigo)**: Interacción y disponibilidad
+- 🟢 **Positive (Teal)**: Confirmación y éxito
+- 🟡 **Warn (Amber)**: Atención y estado pendiente
+- ⚪ **Idle (Slate)**: Neutro e inactivo
+
+**Acceder a la guía:**
+1. Panel Admin → Pestaña "Documentación" → "🎨 Guía de Colores"
+2. Página estática: `/public/guidelines/index.html`
+3. Componente React: `frontend/src/components/ui/GuiaColoresEstados.jsx`
+4. Archivo HTML: `guidelines/color-estados.card.html`
+
+**Implementar en código:**
+```javascript
+import { badgeClassForEstado } from '../utils/estado'
+<span className={badgeClassForEstado(r.estado)}>
+  {ESTADO_LABEL[r.estado]}
+</span>
+```
+
 ## Estructura
 ```
 app/
@@ -42,4 +66,10 @@ app/
   router_v2_2.py      # FastAPI endpoints
   tasks.py            # Celery workers
   migracion_v2_2_postgres.sql
+frontend/
+  src/
+    utils/estado.js   # Tonos y funciones de badge Vértice
+    components/ui/GuiaColoresEstados.jsx # Componente de referencia
+guidelines/
+  color-estados.card.html # Guía HTML autónoma (Claude Design)
 ```

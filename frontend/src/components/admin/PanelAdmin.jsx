@@ -9,6 +9,7 @@ import CrearSerieModal from './CrearSerieModal'
 import MercadoPagoTab from './MercadoPagoTab'
 import GoogleMeetTab from './GoogleMeetTab'
 import GestionPersonalizacion from './GestionPersonalizacion'
+import GuiaColoresEstados from '../ui/GuiaColoresEstados'
 import Modal from '../common/Modal'
 import SelectorFecha from '../common/SelectorFecha'
 import { getLocalOffset } from '../../utils/fechas'
@@ -1695,6 +1696,12 @@ export default function PanelAdmin() {
             Personalización
           </TabButton>
         </TabGroup>
+
+        <TabGroup label="Documentación">
+          <TabButton active={tab === 'guiaColores'} onClick={() => cambiarTab('guiaColores')}>
+            🎨 Guía de Colores
+          </TabButton>
+        </TabGroup>
       </div>
 
       {tab === 'reservas' ? (
@@ -1720,6 +1727,8 @@ export default function PanelAdmin() {
         <GoogleMeetTab tenantSlug={tenantSlug} token={token} />
       ) : tab === 'personalizacion' ? (
         <GestionPersonalizacion tenantSlug={tenantSlug} token={token} />
+      ) : tab === 'guiaColores' ? (
+        <GuiaColoresEstados />
       ) : (
         <GestionUsuarios tenantSlug={tenantSlug} token={token} />
       )}

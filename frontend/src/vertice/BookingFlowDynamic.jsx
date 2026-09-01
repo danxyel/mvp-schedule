@@ -140,12 +140,24 @@ export function BookingFlowDynamic() {
         const sesiones = disponibilidad.sesiones || []
         const slot = sesiones[horarioSeleccionado]
 
+        // Construir fecha_hora_inicio correctamente
+        const dateStr = fechaSeleccionada.toISOString().split('T')[0]
+        const offset = -fechaSeleccionada.getTimezoneOffset()
+        const hours = Math.floor(Math.abs(offset) / 60)
+        const minutes = Math.abs(offset) % 60
+        const sign = offset >= 0 ? '+' : '-'
+        const tzOffset = `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+        const fecha_hora_inicio = `${dateStr}T${slot.rango}:00${tzOffset}`
+
         const { data: reserva, error: reservaErr } = await client.POST(
-          '/reservas',
+          '/api/v2/{tenant_slug}/reservas',
           {
+            params: {
+              path: { tenant_slug: tenantSlug },
+            },
             body: {
               servicio_id: parseInt(servicioId),
-              fecha_inicio: `${fechaSeleccionada.toISOString().split('T')[0]}T${slot.rango}`,
+              fecha_hora_inicio,
             },
           }
         )
@@ -153,11 +165,12 @@ export function BookingFlowDynamic() {
         if (reservaErr) throw reservaErr
 
         navigate(
-          `/t/${tenantSlug}/confirmar/${reserva.codigo_reserva}`,
+          `/t/${tenantSlug}/confirmar/${reserva.codigo_confirmacion}`,
           { state: { reserva } }
         )
       } catch (err) {
         setError(err.message || 'Error al crear reserva')
+        console.error('Error creando reserva:', err)
       }
     }
   }

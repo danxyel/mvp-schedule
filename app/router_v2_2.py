@@ -3690,9 +3690,9 @@ def checkout_reserva(
     tenant: Tenant = Depends(get_current_tenant),
     usuario: Usuario = Depends(get_current_user),
 ):
-    """Cliente logueado: genera una preferencia de MercadoPago para una
-    reserva confirmada o en espera de pago con pago pendiente (auto-compra
-    post-asignación, o reintento del link de pago original)."""
+    """Cliente logueado (incluyendo usuarios guest con token de activación):
+    genera una preferencia de MercadoPago para una reserva confirmada o en
+    espera de pago con pago pendiente."""
     reserva = db.execute(
         select(Reserva).where(
             Reserva.tenant_id == tenant.id,
@@ -3701,8 +3701,21 @@ def checkout_reserva(
     ).scalar_one_or_none()
     if not reserva:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reserva no encontrada")
-    if reserva.creado_por_usuario_id != usuario.id:
+
+    # Validar que el usuario sea el dueño O que sea un administrador/staff del tenant
+    # Los usuarios guest autenticados con su token de activación pueden hacer checkout de su propia reserva
+    es_dueño = reserva.creado_por_usuario_id == usuario.id
+    es_staff = usuario.role in ("admin", "asesor", "superadmin")
+
+    log.info(
+        f"Checkout request: folio={folio}, usuario_id={usuario.id}, "
+        f"reserva.creado_por_usuario_id={reserva.creado_por_usuario_id}, "
+        f"es_dueño={es_dueño}, es_staff={es_staff}, usuario.role={usuario.role}"
+    )
+
+    if not es_dueño and not es_staff:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta reserva no te pertenece")
+
     if reserva.estado not in (EstadoReserva.CONFIRMADA, EstadoReserva.EN_ESPERA):
         raise _http_de(ReservaError("La reserva no admite pago en este estado", codigo="estado_invalido"))
     if reserva.estado_pago != EstadoPagoReserva.PENDIENTE:

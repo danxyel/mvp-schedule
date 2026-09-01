@@ -27,6 +27,11 @@ export function BookingFlowDynamic() {
   const [horarioSeleccionado, setHorarioSeleccionado] = useState(null)
   const [planSeleccionado, setPlanSeleccionado] = useState(null)
 
+  // Estado del usuario invitado (no autenticado)
+  const [nombreInvitado, setNombreInvitado] = useState('')
+  const [emailInvitado, setEmailInvitado] = useState('')
+  const [telefonoInvitado, setTelefonoInvitado] = useState('')
+
   // Planes del servicio si existen, si no usar confirmación directa
   const tienePaquetes = servicio?.paquetes?.length > 0
   const planes = tienePaquetes ? servicio.paquetes : []
@@ -130,7 +135,17 @@ export function BookingFlowDynamic() {
 
   const handleProximo = async () => {
     if (paso === 1 && (!fechaSeleccionada || horarioSeleccionado === null)) return
-    if (paso === 2 && tienePaquetes && !planSeleccionado) return
+    if (paso === 2) {
+      if (!nombreInvitado.trim()) {
+        setError('Por favor ingresa tu nombre')
+        return
+      }
+      if (!emailInvitado.trim()) {
+        setError('Por favor ingresa tu correo')
+        return
+      }
+      if (tienePaquetes && !planSeleccionado) return
+    }
 
     if (paso < 2) {
       setPaso(paso + 1)
@@ -163,6 +178,9 @@ export function BookingFlowDynamic() {
             body: {
               servicio_id: parseInt(servicioId),
               fecha_hora_inicio,
+              nombre_invitado: nombreInvitado.trim(),
+              email_invitado: emailInvitado.trim(),
+              ...(telefonoInvitado.trim() && { telefono_invitado: telefonoInvitado.trim() }),
             },
           }
         )
@@ -204,7 +222,7 @@ export function BookingFlowDynamic() {
 
   const botonDeshabilitado = {
     1: !fechaSeleccionada || horarioSeleccionado === null,
-    2: tienePaquetes ? !planSeleccionado : false,
+    2: !nombreInvitado.trim() || !emailInvitado.trim() || (tienePaquetes && !planSeleccionado),
   }
 
   if (loading) {
@@ -355,6 +373,62 @@ export function BookingFlowDynamic() {
             <h2 style={{ fontSize: 'var(--text-h3)', margin: '0 0 var(--space-5) 0' }}>
               Confirmar
             </h2>
+
+            {/* Formulario de datos personales */}
+            <div
+              style={{
+                border: 'var(--border-hairline)',
+                borderRadius: 'var(--radius-xl)',
+                padding: 'var(--space-6)',
+                backgroundColor: 'var(--color-surface)',
+                marginBottom: 'var(--space-6)',
+              }}
+            >
+              <h3 style={{ fontSize: 'var(--text-title)', margin: '0 0 var(--space-4) 0' }}>
+                Tu información
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                <input
+                  type="text"
+                  placeholder="Nombre completo"
+                  value={nombreInvitado}
+                  onChange={(e) => setNombreInvitado(e.target.value)}
+                  style={{
+                    padding: 'var(--space-3)',
+                    border: 'var(--border-hairline)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--text-body)',
+                    fontFamily: 'var(--font-body)',
+                  }}
+                />
+                <input
+                  type="email"
+                  placeholder="Correo electrónico"
+                  value={emailInvitado}
+                  onChange={(e) => setEmailInvitado(e.target.value)}
+                  style={{
+                    padding: 'var(--space-3)',
+                    border: 'var(--border-hairline)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--text-body)',
+                    fontFamily: 'var(--font-body)',
+                  }}
+                />
+                <input
+                  type="tel"
+                  placeholder="Teléfono (opcional)"
+                  value={telefonoInvitado}
+                  onChange={(e) => setTelefonoInvitado(e.target.value)}
+                  style={{
+                    padding: 'var(--space-3)',
+                    border: 'var(--border-hairline)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--text-body)',
+                    fontFamily: 'var(--font-body)',
+                  }}
+                />
+              </div>
+            </div>
 
             {tienePaquetes && (
               <div style={{ marginBottom: 'var(--space-6)' }}>

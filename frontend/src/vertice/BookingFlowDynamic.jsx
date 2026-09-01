@@ -178,6 +178,14 @@ export function BookingFlowDynamic() {
         const token = localStorage.getItem('acceso_token') || sessionStorage.getItem('acceso_token')
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
+        console.log('POST /reservas body:', {
+          servicio_id: parseInt(servicioId),
+          fecha_hora_inicio,
+          nombre_invitado: nombreInvitado.trim(),
+          email_invitado: emailInvitado.trim(),
+          telefono_invitado: telefonoInvitado.trim() || undefined,
+        })
+
         const { data: response, error: reservaErr } = await client.POST(
           '/api/v2/{tenant_slug}/reservas',
           {

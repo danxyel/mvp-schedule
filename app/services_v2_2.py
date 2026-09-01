@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import mercadopago
+import jwt
 from urllib.parse import quote
 
 from sqlalchemy import and_, or_, func, select, update, text
@@ -189,6 +190,21 @@ def generar_token_acceso(usuario: Usuario, horas_expira: int = 48) -> str:
     usuario.acceso_token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     usuario.acceso_token_expira_en = utcnow() + timedelta(hours=horas_expira)
     return token
+
+
+def crear_jwt_guest(usuario_id: int, expires_hours: int = 48) -> str:
+    """Crea un JWT para autenticar usuarios guest en endpoints específicos (checkout).
+
+    El token es válido solo para endpoints que aceptan usuarios guest autenticados.
+    """
+    SECRET_KEY = os.getenv("JWT_SECRET_KEY", "CAMBIA_ESTO_EN_PRODUCCION_MIN_32_CHARS")
+    ALGORITHM = "HS256"
+    payload = {
+        "sub": str(usuario_id),
+        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=expires_hours),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def _generar_token_encuesta(
@@ -885,8 +901,9 @@ def crear_reserva(
         f"usuario.password_hash={usuario.password_hash}, usuario.id={usuario.id}, usuario.es_invitado={usuario.es_invitado}"
     )
     if generar_token_activacion and usuario.password_hash is None:
-        acceso_token_plano = generar_token_acceso(usuario)
-        log.info(f"Token generado para usuario {usuario.id}: {'OK' if acceso_token_plano else 'FAIL'}")
+        # Generate JWT for immediate API authentication (checkout)
+        acceso_token_plano = crear_jwt_guest(usuario.id)
+        log.info(f"JWT generado para usuario invitado {usuario.id}: {'OK' if acceso_token_plano else 'FAIL'}")
 
     _lock_franja(db, tenant_id, servicio.id, inicio)
 

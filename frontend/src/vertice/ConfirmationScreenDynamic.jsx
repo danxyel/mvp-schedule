@@ -15,7 +15,7 @@ export function ConfirmationScreenDynamic() {
 
     const fetchReserva = async () => {
       try {
-        const token = sessionStorage.getItem('token')
+        const token = sessionStorage.getItem('acceso_token')
         const { data, error: fetchErr } = await client.GET(
           '/api/v2/{tenant_slug}/reservas/{folio}',
           {

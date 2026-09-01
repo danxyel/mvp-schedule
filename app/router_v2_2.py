@@ -599,9 +599,15 @@ def crear_nueva_reserva(
         except Exception:
             log.exception("Fallo al enviar confirmación para folio %s", reserva.folio)
 
+    acceso_token_plano = resultado.get("acceso_token_plano")
+    log.info(
+        f"POST /reservas response: acceso_token_plano={'OK' if acceso_token_plano else 'NONE'}, "
+        f"checkout={'OK' if checkout else 'NONE'}"
+    )
+
     activacion_url = None
-    if resultado.get("acceso_token_plano"):
-        activacion_url = svc._link_activacion(tenant, resultado["acceso_token_plano"])
+    if acceso_token_plano:
+        activacion_url = svc._link_activacion(tenant, acceso_token_plano)
 
     return ReservaCreateResponse(
         reserva=ReservaOut(
@@ -631,7 +637,7 @@ def crear_nueva_reserva(
         sesion_asignada_id=sesion.id,
         sesion_creada=resultado["sesion_creada"],
         activacion_url=activacion_url,
-        acceso_token_plano=resultado.get("acceso_token_plano"),
+        acceso_token_plano=acceso_token_plano,
     )
 
 

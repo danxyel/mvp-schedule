@@ -880,8 +880,13 @@ def crear_reserva(
     _vincular_a_tenant(db, usuario.id, tenant_id)
 
     acceso_token_plano = None
+    log.info(
+        f"Token generation: generar_token_activacion={generar_token_activacion}, "
+        f"usuario.password_hash={usuario.password_hash}, usuario.id={usuario.id}, usuario.es_invitado={usuario.es_invitado}"
+    )
     if generar_token_activacion and usuario.password_hash is None:
         acceso_token_plano = generar_token_acceso(usuario)
+        log.info(f"Token generado para usuario {usuario.id}: {'OK' if acceso_token_plano else 'FAIL'}")
 
     _lock_franja(db, tenant_id, servicio.id, inicio)
 

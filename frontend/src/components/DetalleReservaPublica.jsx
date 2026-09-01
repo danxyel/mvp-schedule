@@ -1,31 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import client from '../api/client'
-
-const BADGE = {
-  confirmada: 'bg-green-100 text-green-700 border-green-200',
-  en_espera: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  pendiente: 'bg-gray-100 text-gray-600 border-gray-200',
-  cancelada: 'bg-red-100 text-red-700 border-red-200',
-  completada: 'bg-blue-100 text-blue-700 border-blue-200',
-  no_show: 'bg-red-200 text-red-800 border-red-300',
-}
-
-const ESTADO_LABEL = {
-  confirmada: 'Confirmada',
-  en_espera: 'En espera de pago',
-  pendiente: 'Procesando...',
-  cancelada: 'Cancelada',
-  completada: 'Completada',
-  no_show: 'No asistió',
-}
-
-const PAGO_LABEL = {
-  pendiente: 'Pago pendiente',
-  completado: 'Pagado',
-  reembolsado: 'Reembolsado',
-  exento: 'Sin costo',
-}
+import { badgeClassForEstado, ESTADO_LABEL, PAGO_LABEL } from '../utils/estado'
 
 function toLocalTime(utcString, timezone) {
   return new Intl.DateTimeFormat('es-MX', {
@@ -127,11 +103,7 @@ export default function DetalleReservaPublica() {
           <h3 className="text-lg font-semibold text-gray-900">
             {data.servicio_nombre ?? 'Servicio'}
           </h3>
-          <span
-            className={`mt-2 inline-block rounded-full border px-3 py-1 text-xs font-medium ${
-              BADGE[data.estado] ?? 'bg-gray-100 text-gray-600'
-            }`}
-          >
+          <span className={`mt-2 ${badgeClassForEstado(data.estado)}`}>
             {ESTADO_LABEL[data.estado] ?? data.estado}
           </span>
         </div>

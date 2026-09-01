@@ -1,0 +1,17 @@
+<!-- @dsCard group="Spacing" viewport="700x200" subtitle="Gutter por breakpoint y alturas mínimas de toque" name="Márgenes y toque" -->
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body{margin:0;padding:18px 20px;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:var(--text-caption)}
+.row{display:flex;gap:var(--space-3);align-items:flex-start}
+.sw{flex:1;min-width:0}
+.chip{height:56px;border-radius:var(--radius-md);border:1px solid rgba(51,65,85,.08)}
+.lab{margin-top:var(--space-2);font-size:var(--text-micro);font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums}
+.hex{font-size:var(--text-micro);color:var(--color-text-muted);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.eyebrow{font-size:var(--text-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase;font-weight:var(--weight-semibold);color:var(--color-text-muted)}
+</style></head><body><div style="display:flex;gap:var(--space-9);flex-wrap:wrap">
+<div><div class="eyebrow">Móvil</div><div style="font-family:var(--font-heading);font-size:var(--text-h2);font-weight:var(--weight-bold);margin-top:var(--space-2);font-variant-numeric:tabular-nums">16px</div><div class="hex">< 640 px</div></div><div><div class="eyebrow">Tablet</div><div style="font-family:var(--font-heading);font-size:var(--text-h2);font-weight:var(--weight-bold);margin-top:var(--space-2);font-variant-numeric:tabular-nums">24px</div><div class="hex">640–1023 px</div></div><div><div class="eyebrow">Escritorio</div><div style="font-family:var(--font-heading);font-size:var(--text-h2);font-weight:var(--weight-bold);margin-top:var(--space-2);font-variant-numeric:tabular-nums">32px</div><div class="hex">≥ 1024 px</div></div>
+</div>
+<div style="display:flex;gap:var(--space-3);margin-top:var(--space-7);align-items:center">
+<div style="text-align:center"><div style="width:66px;height:44px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-pill)"></div><div class="hex" style="margin-top:var(--space-1)">toque mínimo</div></div><div style="text-align:center"><div style="width:66px;height:52px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-pill)"></div><div class="hex" style="margin-top:var(--space-1)">nav inferior</div></div><div style="text-align:center"><div style="width:66px;height:46px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-pill)"></div><div class="hex" style="margin-top:var(--space-1)">botón grande</div></div><div style="text-align:center"><div style="width:66px;height:38px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-pill)"></div><div class="hex" style="margin-top:var(--space-1)">chip</div></div><div style="text-align:center"><div style="width:66px;height:30px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-pill)"></div><div class="hex" style="margin-top:var(--space-1)">control pequeño</div></div>
+</div></body></html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vértice — Design System</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);
+       padding:var(--space-11) var(--gutter-escritorio) var(--space-12)}
+  .wrap{max-width:var(--width-content);margin:0 auto}
+  h1{margin:0;font-family:var(--font-heading);font-size:var(--text-h1);font-weight:var(--weight-bold);letter-spacing:var(--track-h1)}
+  .lede{margin:var(--space-4) 0 0;max-width:var(--width-prose);font-size:var(--text-body);line-height:var(--leading-normal);color:var(--color-text-muted)}
+  .eyebrow{font-size:var(--text-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase;
+           font-weight:var(--weight-semibold);color:var(--color-text-muted);margin:var(--space-11) 0 var(--space-5)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--space-5)}
+  .c{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-8) var(--space-9);
+     background:var(--color-surface);border:var(--border-hairline);border-radius:var(--radius-2xl);
+     text-decoration:none;color:inherit;transition:background var(--dur-fast) var(--ease-out)}
+  .c:hover{background:var(--color-accent-100);border-color:var(--color-accent-300)}
+  .c:focus-visible{outline:var(--focus-ring);outline-offset:2px}
+  .g{font-size:var(--text-eyebrow);letter-spacing:var(--track-badge);text-transform:uppercase;
+     font-weight:var(--weight-semibold);color:var(--color-accent-700)}
+  .n{font-family:var(--font-heading);font-size:var(--text-title);font-weight:var(--weight-semibold);letter-spacing:var(--track-title)}
+  .s{font-size:var(--text-meta);line-height:var(--leading-snug);color:var(--color-text-muted)}
+  .swatches{display:flex;gap:var(--space-3);margin-top:var(--space-7);flex-wrap:wrap}
+  .sw{width:76px}
+  .chipc{height:44px;border-radius:var(--radius-md);border:1px solid rgba(51,65,85,.08)}
+  .hex{margin-top:var(--space-2);font-size:var(--text-micro);color:var(--color-text-muted);font-variant-numeric:tabular-nums}
+  a{color:var(--color-accent-700)} a:hover{color:var(--color-accent-800)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-7)">
+    <span style="width:30px;height:30px;background:var(--color-text);color:var(--color-text-invert);display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-size:17px;font-weight:var(--weight-bold);border-radius:var(--radius-sm)">V</span>
+    <span style="font-family:var(--font-heading);font-size:19px;font-weight:var(--weight-bold);letter-spacing:-0.01em">Vértice</span>
+  </div>
+  <h1>Design system</h1>
+  <p class="lede">Agenda y reserva de servicios por cita. Derivado del producto real, no de una guía de marca previa: solo contiene lo que la app usa. Empieza por <a href="readme.md">readme.md</a>.</p>
+
+  <div class="swatches">
+    <div class="sw"><div class="chipc" style="background:var(--color-accent)"></div><div class="hex">Interacción<br>#4F46E5</div></div><div class="sw"><div class="chipc" style="background:var(--color-accent-2)"></div><div class="hex">Positivo<br>#14B8A6</div></div><div class="sw"><div class="chipc" style="background:var(--color-warn)"></div><div class="hex">Aviso<br>#F59E0B</div></div><div class="sw"><div class="chipc" style="background:var(--color-surface)"></div><div class="hex">Superficie<br>#FFFFFF</div></div><div class="sw"><div class="chipc" style="background:var(--color-text)"></div><div class="hex">Texto<br>#334155</div></div>
+  </div>
+
+  <div class="eyebrow">Fundamentos</div>
+  <div class="grid">
+    <a class="c" href="guidelines/color-roles.card.html"><span class="g">Color</span><span class="n">Roles semánticos</span><span class="s">Cada color con un solo trabajo asignado</span></a>
+    <a class="c" href="guidelines/color-acento-indigo.card.html"><span class="g">Color</span><span class="n">Acento · Indigo</span><span class="s">Rampa de interacción en OKLCH</span></a>
+    <a class="c" href="guidelines/color-acento-turquesa.card.html"><span class="g">Color</span><span class="n">Acento 2 · Turquesa</span><span class="s">Segundo acento y estado positivo</span></a>
+    <a class="c" href="guidelines/color-aviso-ambar.card.html"><span class="g">Color</span><span class="n">Aviso · Ámbar</span><span class="s">Un solo trabajo: avisar</span></a>
+    <a class="c" href="guidelines/color-neutrales-slate.card.html"><span class="g">Color</span><span class="n">Neutrales · Slate</span><span class="s">Texto, bordes y lienzo</span></a>
+    <a class="c" href="guidelines/color-estados.card.html"><span class="g">Color</span><span class="n">Estados en uso</span><span class="s">Relleno 100 + borde 300 + texto 700</span></a>
+    <a class="c" href="guidelines/tipo-display.card.html"><span class="g">Type</span><span class="n">Display</span><span class="s">Solo confirmaciones y portadas</span></a>
+    <a class="c" href="guidelines/tipo-titulos.card.html"><span class="g">Type</span><span class="n">Títulos</span><span class="s">H1 33/27 · H2 20 · H3 18</span></a>
+    <a class="c" href="guidelines/tipo-cuerpo.card.html"><span class="g">Type</span><span class="n">Cuerpo y meta</span><span class="s">15 cuerpo · 13 meta · 12 condiciones</span></a>
+    <a class="c" href="guidelines/tipo-etiquetas.card.html"><span class="g">Type</span><span class="n">Etiquetas</span><span class="s">10px versalitas, tracking abierto</span></a>
+    <a class="c" href="guidelines/tipo-cifras.card.html"><span class="g">Type</span><span class="n">Cifras tabulares</span><span class="s">Toda cifra que cambie va en tabular</span></a>
+    <a class="c" href="guidelines/espacio-escala.card.html"><span class="g">Spacing</span><span class="n">Escala de espacio</span><span class="s">Base 4 con densidad amplia</span></a>
+    <a class="c" href="guidelines/espacio-en-uso.card.html"><span class="g">Spacing</span><span class="n">Márgenes y toque</span><span class="s">Gutter por breakpoint, mínimos de toque</span></a>
+    <a class="c" href="guidelines/radios.card.html"><span class="g">Spacing</span><span class="n">Escala de radios</span><span class="s">Escalonado por tamaño de bloque</span></a>
+    <a class="c" href="guidelines/elevacion.card.html"><span class="g">Spacing</span><span class="n">Elevación</span><span class="s">El borde separa, no la sombra</span></a>
+    <a class="c" href="guidelines/marca.card.html"><span class="g">Brand</span><span class="n">Marca</span><span class="s">No hay logotipo: la marca es tipo</span></a>
+    <a class="c" href="guidelines/iconos.card.html"><span class="g">Brand</span><span class="n">Iconografía</span><span class="s">Glifos Unicode, sin icon font</span></a>
+  </div>
+
+  <div class="eyebrow">Componentes</div>
+  <div class="grid">
+    <a class="c" href="components/core/core.card.html"><span class="g">Core</span><span class="n">Button · Chip · Badge · CapacityBar</span><span class="s">Acciones, filtros, estados y ocupación</span></a>
+    <a class="c" href="components/navigation/navigation.card.html"><span class="g">Navegación</span><span class="n">NavItem · Stepper · StepArrow · ActionBar</span><span class="s">Nav en tres modos y avance del flujo</span></a>
+    <a class="c" href="components/booking/booking.card.html"><span class="g">Reserva</span><span class="n">ServiceRow · SlotCard · PlanCard · CalendarMonth</span><span class="s">Catálogo, calendario, horarios y pago</span></a>
+    <a class="c" href="components/records/records.card.html"><span class="g">Registros</span><span class="n">StatCard · BookingRow · MovementRow</span><span class="s">Saldo, reservas y movimientos</span></a>
+  </div>
+
+  <div class="eyebrow">UI kit</div>
+  <div class="grid">
+    <a class="c" href="ui_kits/agenda/index.html"><span class="g">Agenda</span><span class="n">Agenda Vértice</span><span class="s">App completa e interactiva, compuesta solo con los primitivos</span></a>
+    <a class="c" href="Agenda Responsive.dc.html"><span class="g">Producto</span><span class="n">Agenda Responsive</span><span class="s">El producto vivo del que salió el sistema</span></a>
+  </div>
+</div>
+</body>
+</html>

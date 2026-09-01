@@ -1,0 +1,38 @@
+:root {
+  /* Escala de 4, con densidad amplia: el aire hace la jerarquía. */
+  --space-1:  4px;
+  --space-2:  6px;
+  --space-3:  8px;
+  --space-4:  10px;
+  --space-5:  12px;
+  --space-6:  14px;
+  --space-7:  16px;
+  --space-8:  18px;
+  --space-9:  22px;
+  --space-10: 26px;
+  --space-11: 32px;
+  --space-12: 44px;
+
+  /* Márgenes de pantalla por punto de ruptura */
+  --gutter-movil:      16px;
+  --gutter-tablet:     24px;
+  --gutter-escritorio: 32px;
+
+  /* Puntos de ruptura */
+  --bp-movil:      640px;   /* < : una columna, nav inferior */
+  --bp-escritorio: 1024px;  /* >= : sidebar con etiquetas */
+  --bp-real:       720px;   /* < : la app ocupa toda la pantalla */
+
+  /* Anchos */
+  --width-content: 1180px;
+  --width-prose:   620px;
+  --nav-rail:      84px;
+  --nav-sidebar:   244px;
+
+  /* Alturas mínimas de toque */
+  --touch-min:  44px;
+  --touch-nav:  52px;
+  --control-sm: 30px;
+  --control-md: 38px;
+  --control-lg: 46px;
+}

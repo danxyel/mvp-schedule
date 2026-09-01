@@ -1,0 +1,15 @@
+<!-- @dsCard group="Colors" viewport="700x150" subtitle="Relleno 100 + borde 300 + texto 700/800" name="Estados en uso" -->
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body{margin:0;padding:18px 20px;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:var(--text-caption)}
+.row{display:flex;gap:var(--space-3);align-items:flex-start}
+.sw{flex:1;min-width:0}
+.chip{height:56px;border-radius:var(--radius-md);border:1px solid rgba(51,65,85,.08)}
+.lab{margin-top:var(--space-2);font-size:var(--text-micro);font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums}
+.hex{font-size:var(--text-micro);color:var(--color-text-muted);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.eyebrow{font-size:var(--text-eyebrow);letter-spacing:var(--track-eyebrow);text-transform:uppercase;font-weight:var(--weight-semibold);color:var(--color-text-muted)}
+</style></head><body><div style="display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:center">
+<span style="padding:4px 10px;border-radius:var(--radius-pill);font-size:var(--text-eyebrow);font-weight:var(--weight-semibold);letter-spacing:var(--track-badge);text-transform:uppercase;background:var(--state-positive-fill);color:var(--state-positive-ink);border:1px solid var(--state-positive-border)">Confirmada</span><span style="padding:4px 10px;border-radius:var(--radius-pill);font-size:var(--text-eyebrow);font-weight:var(--weight-semibold);letter-spacing:var(--track-badge);text-transform:uppercase;background:var(--state-warn-fill);color:var(--state-warn-ink);border:1px solid var(--state-warn-border)">Pago pendiente · 08:42</span><span style="padding:4px 10px;border-radius:var(--radius-pill);font-size:var(--text-eyebrow);font-weight:var(--weight-semibold);letter-spacing:var(--track-badge);text-transform:uppercase;background:var(--state-idle-fill);color:var(--state-idle-ink);border:1px solid var(--state-idle-border)">En lista de espera · nº 2</span><span style="padding:4px 10px;border-radius:var(--radius-pill);font-size:var(--text-eyebrow);font-weight:var(--weight-semibold);letter-spacing:var(--track-badge);text-transform:uppercase;background:var(--color-accent-100);color:var(--color-accent-700);border:1px solid var(--color-accent-300)">4 lugares</span><span style="padding:4px 10px;border-radius:var(--radius-pill);font-size:var(--text-eyebrow);font-weight:var(--weight-semibold);letter-spacing:var(--track-badge);text-transform:uppercase;background:var(--state-idle-fill);color:var(--state-idle-ink);border:1px solid var(--state-idle-border)">Completo</span>
+</div>
+<div style="margin-top:var(--space-7)" class="hex">Seleccionado: relleno accent-100 + borde accent · Foco: outline 2px accent, offset 2px · Deshabilitado: opacidad .5 y el motivo escrito</div></body></html>

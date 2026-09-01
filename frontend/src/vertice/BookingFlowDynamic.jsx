@@ -204,12 +204,20 @@ export function BookingFlowDynamic() {
 
         const reserva = response.reserva || response
         const checkout = response.checkout
+        const accesoTokenPlano = response.acceso_token_plano
 
         console.log('Reserva:', reserva)
         console.log('Checkout:', checkout)
+        console.log('¿Tiene token de activación?:', !!accesoTokenPlano)
         console.log('¿Tiene URL de pago?:', !!checkout?.url)
         console.log('Estado de reserva:', reserva?.estado)
         console.log('Estado de pago:', reserva?.estado_pago)
+
+        // Guardar el token de activación si se proporcionó (para usuarios invitados)
+        if (accesoTokenPlano) {
+          sessionStorage.setItem('acceso_token', accesoTokenPlano)
+          console.log('Token de activación guardado en sessionStorage')
+        }
 
         // Si hay checkout (pago requerido), redirigir al checkout externo
         if (checkout?.url) {

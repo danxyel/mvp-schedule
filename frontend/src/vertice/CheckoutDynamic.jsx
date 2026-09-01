@@ -6,7 +6,7 @@ import { Button } from '../design-system'
 export function CheckoutDynamic() {
   const { tenantSlug, folio } = useParams()
   const navigate = useNavigate()
-  const token = sessionStorage.getItem('token')
+  const token = sessionStorage.getItem('acceso_token') || sessionStorage.getItem('token')
 
   const [reserva, setReserva] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +42,9 @@ export function CheckoutDynamic() {
   const handleProcesarPago = async () => {
     setProcesando(true)
     try {
+      console.log('Iniciando checkout para folio:', folio)
+      console.log('¿Tiene token?:', !!token)
+
       const { data: checkout, error: checkoutErr } = await client.POST(
         '/api/v2/{tenant_slug}/reservas/{folio}/checkout',
         {
@@ -52,14 +55,19 @@ export function CheckoutDynamic() {
         }
       )
 
+      console.log('Respuesta checkout:', checkout)
+      console.log('Error checkout:', checkoutErr)
+
       if (checkoutErr) throw checkoutErr
       if (checkout?.url) {
+        console.log('Redirigiendo a:', checkout.url)
         window.location.href = checkout.url
       } else {
+        console.log('No se recibió URL de pago')
         setError('No se pudo obtener URL de pago')
       }
     } catch (err) {
-      console.error('Error:', err)
+      console.error('Error al procesar pago:', err)
       setError('No se pudo procesar el pago')
     } finally {
       setProcesando(false)

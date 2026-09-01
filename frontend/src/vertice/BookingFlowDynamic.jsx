@@ -132,11 +132,10 @@ export function BookingFlowDynamic() {
   }
 
   const handleProximo = async () => {
-    if (paso === 1 && !fechaSeleccionada) return
-    if (paso === 2 && horarioSeleccionado === null) return
-    if (paso === 3 && !planSeleccionado) return
+    if (paso === 1 && (!fechaSeleccionada || horarioSeleccionado === null)) return
+    if (paso === 2 && !planSeleccionado) return
 
-    if (paso < 3) {
+    if (paso < 2) {
       setPaso(paso + 1)
     } else {
       // Crear reserva
@@ -167,23 +166,25 @@ export function BookingFlowDynamic() {
   }
 
   const handleAnterior = () => {
-    if (paso > 1) setPaso(paso - 1)
+    if (paso > 1) {
+      setPaso(paso - 1)
+    } else {
+      navigate(`/t/${tenantSlug}`)
+    }
   }
 
   const sesiones = disponibilidad.sesiones || []
 
   const resumenPaso = {
-    1: fechaSeleccionada
-      ? `${fechaSeleccionada.getDate()}/${fechaSeleccionada.getMonth() + 1}`
-      : 'Elige una fecha',
-    2: horarioSeleccionado !== null ? sesiones[horarioSeleccionado]?.rango : 'Elige una hora',
-    3: planSeleccionado ? planes[planSeleccionado - 1]?.nombre : 'Elige un plan',
+    1: fechaSeleccionada && horarioSeleccionado !== null
+      ? `${fechaSeleccionada.getDate()}/${fechaSeleccionada.getMonth() + 1} - ${sesiones[horarioSeleccionado]?.rango}`
+      : 'Selecciona fecha y hora',
+    2: planSeleccionado ? planes[planSeleccionado - 1]?.nombre : 'Elige un plan',
   }
 
   const botonDeshabilitado = {
-    1: !fechaSeleccionada,
-    2: horarioSeleccionado === null,
-    3: !planSeleccionado,
+    1: !fechaSeleccionada || horarioSeleccionado === null,
+    2: !planSeleccionado,
   }
 
   if (loading) {
@@ -245,7 +246,7 @@ export function BookingFlowDynamic() {
           {servicio?.nombre}
         </p>
         <Stepper
-          steps={['Fecha', 'Hora', 'Plan']}
+          steps={['Fecha y Hora', 'Plan']}
           current={paso}
           onSelect={handlePasoSelect}
         />
@@ -278,7 +279,7 @@ export function BookingFlowDynamic() {
         {paso === 1 && (
           <div>
             <h2 style={{ fontSize: 'var(--text-h3)', margin: '0 0 var(--space-5) 0' }}>
-              Elige una fecha
+              Elige fecha y hora
             </h2>
 
             <CalendarMonth
@@ -289,50 +290,50 @@ export function BookingFlowDynamic() {
               availability={() => 2}
               footer="Selecciona una fecha para ver horarios disponibles"
             />
+
+            {fechaSeleccionada && (
+              <div style={{ marginTop: 'var(--space-8)' }}>
+                <h3 style={{ fontSize: 'var(--text-title)', margin: '0 0 var(--space-4) 0' }}>
+                  {fechaSeleccionada?.toLocaleDateString('es-MX', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                  })}
+                </h3>
+
+                {sesiones.length === 0 ? (
+                  <p style={{ color: 'var(--color-text-muted)' }}>
+                    No hay horarios disponibles para esta fecha.
+                  </p>
+                ) : (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                      gap: 'var(--space-3)',
+                    }}
+                  >
+                    {sesiones.map((slot, idx) => (
+                      <SlotCard
+                        key={idx}
+                        rango={slot.rango}
+                        estado={slot.estado}
+                        disponible={slot.disponible !== false}
+                        selected={horarioSeleccionado === idx}
+                        onClick={() => setHorarioSeleccionado(idx)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {paso === 2 && (
           <div>
             <h2 style={{ fontSize: 'var(--text-h3)', margin: '0 0 var(--space-5) 0' }}>
-              {fechaSeleccionada?.toLocaleDateString('es-MX', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-              })}
-            </h2>
-
-            {sesiones.length === 0 ? (
-              <p style={{ color: 'var(--color-text-muted)' }}>
-                No hay horarios disponibles para esta fecha.
-              </p>
-            ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                  gap: 'var(--space-3)',
-                }}
-              >
-                {sesiones.map((slot, idx) => (
-                  <SlotCard
-                    key={idx}
-                    rango={slot.rango}
-                    estado={slot.estado}
-                    disponible={slot.disponible !== false}
-                    selected={horarioSeleccionado === idx}
-                    onClick={() => setHorarioSeleccionado(idx)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {paso === 3 && (
-          <div>
-            <h2 style={{ fontSize: 'var(--text-h3)', margin: '0 0 var(--space-5) 0' }}>
-              Elige tu plan
+              Selecciona tu plan
             </h2>
 
             <div style={{ marginBottom: 'var(--space-6)' }}>
@@ -395,7 +396,7 @@ export function BookingFlowDynamic() {
         summary={resumenPaso[paso]}
         action={
           <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-            <Button variant="ghost" onClick={handleAnterior} disabled={paso === 1}>
+            <Button variant="ghost" onClick={handleAnterior}>
               Atrás
             </Button>
             <Button
@@ -403,7 +404,7 @@ export function BookingFlowDynamic() {
               onClick={handleProximo}
               disabled={botonDeshabilitado[paso]}
             >
-              {paso === 3 ? 'Confirmar' : 'Siguiente'}
+              {paso === 2 ? 'Confirmar' : 'Siguiente'}
             </Button>
           </div>
         }

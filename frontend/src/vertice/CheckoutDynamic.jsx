@@ -35,6 +35,7 @@ export function CheckoutDynamic() {
     try {
       console.log('Iniciando checkout para folio:', folio)
       console.log('¿Tiene token?:', !!token)
+      console.log('Token primeros 50 chars:', token ? token.substring(0, 50) + '...' : 'NO TOKEN')
 
       const { data: checkout, error: checkoutErr } = await client.POST(
         '/api/v2/{tenant_slug}/reservas/{folio}/checkout',

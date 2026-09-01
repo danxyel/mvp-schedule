@@ -541,6 +541,12 @@ def crear_nueva_reserva(
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
 
+    log.info(
+        f"POST /reservas: usuario_autenticado={'SI' if usuario else 'NO'}, "
+        f"usuario_id={usuario.id if usuario else 'None'}, "
+        f"tiene_authorization_header={bool(request.headers.get('authorization'))}"
+    )
+
     try:
         resultado = svc.crear_reserva(db, tenant, payload, usuario, ip=ip, user_agent=ua)
         db.commit()

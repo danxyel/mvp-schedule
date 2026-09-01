@@ -178,7 +178,7 @@ export function BookingFlowDynamic() {
         const token = localStorage.getItem('acceso_token') || sessionStorage.getItem('acceso_token')
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
-        const { data: reserva, error: reservaErr } = await client.POST(
+        const { data: response, error: reservaErr } = await client.POST(
           '/api/v2/{tenant_slug}/reservas',
           {
             params: {
@@ -200,13 +200,16 @@ export function BookingFlowDynamic() {
           throw reservaErr
         }
 
+        const reserva = response.reserva
+        const checkout = response.checkout
+
         // Si hay checkout (pago requerido), redirigir al checkout
-        if (reserva.checkout?.url) {
-          window.location.href = reserva.checkout.url
+        if (checkout?.url) {
+          window.location.href = checkout.url
         } else {
           // Si no hay pago, ir a confirmación
           navigate(
-            `/t/${tenantSlug}/confirmar/${reserva.codigo_confirmacion}`,
+            `/t/${tenantSlug}/confirmar/${reserva.folio}`,
             { state: { reserva } }
           )
         }

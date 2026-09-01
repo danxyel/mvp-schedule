@@ -70,7 +70,7 @@ function App() {
           element={<ConfirmationScreenDynamic />}
         />
         <Route
-          path="/t/:tenantSlug/checkout/:codigoConfirmacion"
+          path="/t/:tenantSlug/checkout/:folio"
           element={<CheckoutDynamic />}
         />
 

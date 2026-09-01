@@ -4,7 +4,7 @@ import client from '../api/client'
 import { Button } from '../design-system'
 
 export function ConfirmationScreenDynamic() {
-  const { codigo } = useParams()
+  const { codigo, tenantSlug } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const [reserva, setReserva] = useState(location.state?.reserva || null)
@@ -15,7 +15,16 @@ export function ConfirmationScreenDynamic() {
 
     const fetchReserva = async () => {
       try {
-        const { data, error: fetchErr } = await client.GET(`/reservas/${codigo}`)
+        const token = sessionStorage.getItem('token')
+        const { data, error: fetchErr } = await client.GET(
+          '/api/v2/{tenant_slug}/reservas/{folio}',
+          {
+            params: {
+              path: { tenant_slug: tenantSlug, folio: codigo }
+            },
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }
+        )
         if (fetchErr) throw fetchErr
         setReserva(data)
       } catch (err) {
@@ -26,7 +35,7 @@ export function ConfirmationScreenDynamic() {
     }
 
     fetchReserva()
-  }, [codigo, reserva])
+  }, [codigo, tenantSlug, reserva])
 
   return (
     <div
@@ -193,7 +202,7 @@ export function ConfirmationScreenDynamic() {
                   wordBreak: 'break-all',
                 }}
               >
-                {reserva?.codigo_reserva || codigo}
+                {reserva?.codigo_confirmacion || codigo}
               </div>
             </div>
 

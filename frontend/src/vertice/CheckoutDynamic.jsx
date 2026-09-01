@@ -4,7 +4,7 @@ import client from '../api/client'
 import { Button } from '../design-system'
 
 export function CheckoutDynamic() {
-  const { tenantSlug, codigoConfirmacion } = useParams()
+  const { tenantSlug, folio } = useParams()
   const navigate = useNavigate()
   const token = sessionStorage.getItem('token')
 
@@ -18,9 +18,11 @@ export function CheckoutDynamic() {
       try {
         setLoading(true)
         const { data, error: fetchErr } = await client.GET(
-          `/api/v2/{tenant_slug}/reservas/${codigoConfirmacion}`,
+          '/api/v2/{tenant_slug}/reservas/{folio}',
           {
-            params: { path: { tenant_slug: tenantSlug } },
+            params: {
+              path: { tenant_slug: tenantSlug, folio }
+            },
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           }
         )
@@ -35,7 +37,7 @@ export function CheckoutDynamic() {
     }
 
     fetchReserva()
-  }, [tenantSlug, codigoConfirmacion, token])
+  }, [tenantSlug, folio, token])
 
   const handleProcesarPago = async () => {
     setProcesando(true)
@@ -44,7 +46,7 @@ export function CheckoutDynamic() {
         '/api/v2/{tenant_slug}/reservas/{folio}/checkout',
         {
           params: {
-            path: { tenant_slug: tenantSlug, folio: reserva.folio },
+            path: { tenant_slug: tenantSlug, folio },
           },
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
@@ -53,6 +55,8 @@ export function CheckoutDynamic() {
       if (checkoutErr) throw checkoutErr
       if (checkout?.url) {
         window.location.href = checkout.url
+      } else {
+        setError('No se pudo obtener URL de pago')
       }
     } catch (err) {
       console.error('Error:', err)
